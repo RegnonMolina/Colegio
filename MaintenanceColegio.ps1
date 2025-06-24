@@ -176,13 +176,13 @@ function Disable-Services {
 function Configure-Privacy {
     Write-Log "🔸 Configurando políticas de privacidade..." Yellow
     $pols = @{
-        'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'                = @{AllowTelemetry=0}
-        'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search'                 = @{AllowCortana   =0}
-        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'    = @{
-            ContentDeliveryAllowed    =0
-            SubscribedContent-338388Enabled =0
-        }
+    'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' = @{ AllowTelemetry = 0 }
+    'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' = @{ AllowCortana = 0 }
+    'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager' = @{
+        ContentDeliveryAllowed = 0
+        'SubscribedContent-338388Enabled' = 0  # <- Aspas adicionadas aqui
     }
+}
     foreach ($path in $pols.Keys) {
         foreach ($name in $pols[$path].Keys) {
             New-ItemProperty -Path $path -Name $name `
