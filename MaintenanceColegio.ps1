@@ -1,314 +1,462 @@
-<#
-.SYNOPSIS
-    Script Supremo de Manutenção Windows – Limpeza, Otimização, Reparo, Bloatware, Privacidade, Atualizações e Otimizações de Laptop
-.DESCRIPTION
-    • Modularizado em funções  
-    • Remove bloatware (exceto Notepad, Camera, Photos)  
-    • Limpeza de arquivos temporários, Windows Update, DNS, Storage Sense  
-    • Otimização de volumes (TRIM/HDD) e registro  
-    • Reparo de sistema (DISM + SFC) e limpeza de componentes antigos  
-    • Desativação de tarefas, serviços de telemetria/Xbox e configurações de privacidade  
-    • Atualizações: Windows Update, Microsoft Store, Drivers  
-    • Otimizações avançadas para laptops (GPU híbrida, touchpad, brilho, USB)  
-.PARAMETER NoReboot
-    Se presente, não pergunta por reinício ao final.  
-.PARAMETER ForceDriverUpdate
-    Se presente, força atualização de drivers mesmo sem novas detecções.
-.NOTES
-    Autor: Regnon Molina 
-    Versão: 1.0 – Script Supremo  
-    Requisitos: PowerShell 5.1+ (executar como Administrador)
-#>
+# ─────────────────────────────────────────────────────────────────
+# Windows Maintenance Supreme – Versão Final
+# Execute como Administrador
+# Autor : Regnon Molina
+# ─────────────────────────────────────────────────────────────────
+
+#region Configurações Iniciais
 
 param(
-    [switch]$NoReboot,
     [switch]$ForceDriverUpdate
 )
 
-#————————————————————————————————————————————————————————————————————
-# Verificar permissão de Administrador
-#————————————————————————————————————————————————————————————————————
-if (-not ([Security.Principal.WindowsPrincipal] `
-    [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
-    [Security.Principal.WindowsBuiltInRole] "Administrator")) {
-    Write-Host "🔴 Execute este script como Administrador!" -ForegroundColor Red
-    exit 1
+# Política de Execução e Preferências Globais
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Force
+$ErrorActionPreference   = 'SilentlyContinue'
+$ProgressPreference      = 'Continue'
+$ConfirmPreference       = 'None'
+$VerbosePreference       = 'SilentlyContinue'
+
+# Variáveis de ambiente e paths
+$StartTime      = Get-Date
+$LogDate        = $StartTime.ToString('dd-MM-yyyy-HH')
+$LogFile        = "$env:TEMP\WinMaint_Full_$LogDate.log"
+$DaysToDelete   = 1
+$winDist        = 'C:\Windows\SoftwareDistribution'
+$computer       = $env:COMPUTERNAME
+$currentTime    = $StartTime.ToString('dd-MM-yyyy HH:mm:ss')
+
+# Shell OneDrive (se usar)
+$objShell       = New-Object -ComObject Shell.Application
+$objFolder      = $objShell.Namespace(0xA)
+
+# Detecta SSID/Interface Wi-Fi atuais
+$netIfaces      = netsh wlan show interfaces
+$ssidLine       = $netIfaces | Where-Object { $_ -match ' SSID ' }
+$connectionProfile = Get-NetConnectionProfile |
+    Where-Object { $ssidLine -match $_.Name -and $_.IPv4Connectivity -eq 'Internet' } |
+    Select-Object -First 1
+
+if ($connectionProfile) {
+    $ssid      = $connectionProfile.Name
+    $interface = $connectionProfile.InterfaceAlias
+} else {
+    Write-Warning 'Não foi possível obter SSID/Interface do Wi-Fi.'
+    $ssid      = ''
+    $interface = ''
 }
 
-#————————————————————————————————————————————————————————————————————
-# Configurações e Log
-#————————————————————————————————————————————————————————————————————
-$ErrorActionPreference = 'Continue'
-$LogFile = Join-Path $env:TEMP "ScriptSupremo_$(Get-Date -Format yyyyMMdd_HHmmss).log"
+#endregion
+
+#region Funções Auxiliares
 
 function Write-Log {
-    param([string]$Msg, [ConsoleColor]$Color = 'White')
+    param(
+        [string]$Message,
+        [ValidateSet('White','Yellow','Green','Cyan','Red')]
+        [string]$Color = 'White'
+    )
     $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    "$ts  $Msg" | Tee-Object -FilePath $LogFile -Append |
-        Write-Host -ForegroundColor $Color
+    $line = "[$ts] $Message"
+    Add-Content $LogFile $line
+    Write-Host    $line -ForegroundColor $Color
 }
 
-Write-Log "=== INICIANDO SCRIPT SUPREMO DE MANUTENÇÃO ===" Cyan
-
-#————————————————————————————————————————————————————————————————————
-# BLOCO 1 – LIMPEZA
-#————————————————————————————————————————————————————————————————————
-function Clean-Temps {
-    Write-Log "🔸 Limpando arquivos temporários..." Yellow
-    $paths = @("$env:TEMP\*", "$env:SystemRoot\Temp\*", "$env:LOCALAPPDATA\Temp\*")
-    foreach ($p in $paths) {
-        Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue
+function Assert-Admin {
+    if (-not ([Security.Principal.WindowsPrincipal] `
+        [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+        [Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Error 'Execute este script como Administrador.'; exit 1
     }
-    Write-Log "→ Tempos limpos" Green
 }
 
-function Clean-WUCache {
-    Write-Log "🔸 Limpando cache do Windows Update..." Yellow
-    Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
-    Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
-    Start-Service wuauserv -ErrorAction SilentlyContinue
-    Write-Log "→ Cache Windows Update limpo" Green
+#endregion
+
+#region 1. CORE MAINTENANCE
+
+function Clean-Temps {
+    Write-Log 'Limpando arquivos temporários…' Yellow
+    Cleanmgr /sagerun:1 | Out-Null
+    Remove-Item "$env:TEMP\*" -Recurse -Force
+    Remove-Item "$env:SystemRoot\Temp\*" -Recurse -Force
+    Remove-Item "$env:LOCALAPPDATA\Temp\*" -Recurse -Force
+    Write-Log 'Temporários limpos.' Green
 }
 
-function Clean-DNS {
-    Write-Log "🔸 Limpando cache DNS..." Yellow
+function Clear-WUCache {
+    Write-Log 'Limpando cache do Windows Update…' Yellow
+    Stop-Service wuauserv -Force
+    Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force
+    Start-Service wuauserv
+    Write-Log 'Cache do Windows Update limpo.' Green
+}
+
+function Flush-DNS {
+    Write-Log 'Flush DNS…' Yellow
     ipconfig /flushdns | Out-Null
-    Write-Log "→ Cache DNS limpo" Green
+    Write-Log 'DNS limpo.' Green
 }
 
-function Clean-StorageSense {
-    Write-Log "🔸 Ativando Storage Sense para limpar cache da Store..." Yellow
-    $key = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy'
-    New-ItemProperty -Path $key -Name '01' -PropertyType DWord -Value 1 -Force | Out-Null
-    Write-Log "→ Storage Sense ativado" Green
-}
-
-#————————————————————————————————————————————————————————————————————
-# BLOCO 2 – OTIMIZAÇÃO
-#————————————————————————————————————————————————————————————————————
 function Optimize-Volumes {
-    Write-Log "🔸 Otimizando volumes (SSD/TRIM – HDD/Defrag)..." Yellow
-    Get-Volume -DriveType Fixed | ForEach-Object {
-        $dl = $_.DriveLetter + ':'
-        if ($_.FileSystem -in 'NTFS','ReFS') {
-            if ($_.PhysicalSectorSize -le 4096) {
-                Write-Log "   • TRIM em $dl" Cyan
-                Optimize-Volume -DriveLetter $_.DriveLetter -ReTrim | Out-Null
-            } else {
-                Write-Log "   • Defrag em $dl" Cyan
-                Optimize-Volume -DriveLetter $_.DriveLetter -Defrag | Out-Null
-            }
+    Write-Log 'Otimizando volumes…' Yellow
+    Get-Volume | Where DriveType -EQ 'Fixed' | ForEach-Object {
+        if ($_.FileSystem -eq 'NTFS') {
+            Optimize-Volume -DriveLetter $_.DriveLetter -Defrag -Verbose
+        } else {
+            Optimize-Volume -DriveLetter $_.DriveLetter -ReTrim -Verbose
         }
     }
-    Write-Log "→ Volumes otimizados" Green
+    Write-Log 'Volumes otimizados.' Green
+}
+
+function Clear-Caches {
+    Write-Log 'Limpando caches do sistema…' Yellow
+    Remove-Item "$env:LOCALAPPDATA\Microsoft\Windows\Explorer\thumbcache_*.db" -Force
+    Remove-Item "$env:LOCALAPPDATA\Microsoft\Windows\FontCache\*" -Force
+    Write-Log 'Caches do sistema limpos.' Green
+}
+
+function Repair-System {
+    Write-Log 'Verificando/reparando sistema (DISM/SFC)…' Yellow
+    dism /online /cleanup-image /restorehealth | Out-Null
+    sfc /scannow | Out-Null
+    Write-Log 'Reparo concluído.' Green
+}
+
+function Clean-OldUpdates {
+    Write-Log 'Removendo componentes antigos de update…' Yellow
+    dism /online /cleanup-image /startcomponentcleanup | Out-Null
+    dism /online /cleanup-image /spsuperseded | Out-Null
+    Write-Log 'Componentes antigos limpos.' Green
 }
 
 function Optimize-Registry {
-    Write-Log "🔸 Otimizando registro (prioridade de perfil)..." Yellow
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" `
+    Write-Log 'Otimizando registro…' Yellow
+    reg add 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' `
         /v ProcessPriorityClass /t REG_DWORD /d 8 /f | Out-Null
-    Write-Log "→ Registro otimizado" Green
+    Write-Log 'Registro otimizado.' Green
 }
 
-#————————————————————————————————————————————————————————————————————
-# BLOCO 3 – REPARO
-#————————————————————————————————————————————————————————————————————
-function Repair-System {
-    Write-Log "🔸 Executando DISM /restorehealth..." Yellow
-    dism /online /cleanup-image /restorehealth | Out-Null
-    Write-Log "🔸 Executando SFC /scannow..." Yellow
-    sfc /scannow | Out-Null
-    Write-Log "→ Sistema reparado" Green
+function Restart-CritServices {
+    Write-Log 'Reiniciando serviços críticos…' Yellow
+    'wuauserv','bits','cryptSvc','DcomLaunch' |
+      ForEach-Object { Restart-Service $_ -Force }
+    Write-Log 'Serviços reiniciados.' Green
 }
 
-function Cleanup-OldWU {
-    Write-Log "🔸 Limpando componentes antigos do Windows Update..." Yellow
-    dism /online /cleanup-image /startcomponentcleanup | Out-Null
-    Write-Log "→ Componentes limpos" Green
-}
-
-#————————————————————————————————————————————————————————————————————
-# BLOCO 4 – BLOATWARE
-#————————————————————————————————————————————————————————————————————
-function Remove-Bloatware {
-    Write-Log "🔸 Removendo bloatware (exceto Notepad/Camera/Photos)..." Yellow
-    $exceptions = @('Microsoft.WindowsNotepad','Microsoft.WindowsCamera','Microsoft.Windows.Photos')
-    $apps = Get-AppxPackage -AllUsers | Where-Object {
-        ($_.Name -like 'Microsoft.*') -and ($exceptions -notcontains $_.Name)
-    }
-    foreach ($app in $apps) {
-        Remove-AppxPackage -Package $app.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-        Remove-AppxProvisionedPackage -Online -PackageName $app.PackageFullName -ErrorAction SilentlyContinue
-    }
-    Write-Log "→ Bloatware removido" Green
-}
-
-#————————————————————————————————————————————————————————————————————
-# BLOCO 5 – TAREFAS, SERVIÇOS E PRIVACIDADE
-#————————————————————————————————————————————————————————————————————
 function Disable-Tasks {
-    Write-Log "🔸 Desativando tarefas desnecessárias..." Yellow
-    $paths = @(
-        '\Microsoft\Windows\Application Experience\*',
+    Write-Log 'Desabilitando tarefas em segundo plano…' Yellow
+    $tasks = @(
+        '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser',
+        '\Microsoft\Windows\Application Experience\ProgramDataUpdater',
         '\Microsoft\Windows\Customer Experience Improvement Program\*',
+        '\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector',
         '\Microsoft\Windows\Power Efficiency Diagnostics\AnalyzeSystem'
     )
-    foreach ($p in $paths) {
-        Get-ScheduledTask -TaskPath $p -ErrorAction SilentlyContinue |
-            Disable-ScheduledTask -ErrorAction SilentlyContinue
+    foreach ($t in $tasks) {
+        Get-ScheduledTask -TaskPath $t -ErrorAction SilentlyContinue |
+          Disable-ScheduledTask
     }
-    Write-Log "→ Tarefas desativadas" Green
+    Write-Log 'Tarefas desativadas.' Green
 }
 
 function Disable-Services {
-    Write-Log "🔸 Desativando serviços de telemetria/Xbox..." Yellow
-    $svcs = @(
-        'DiagTrack','dmwappushservice','lfsvc','MapsBroker',
-        'WMPNetworkSvc','XblAuthManager','XblGameSave','XboxNetApiSvc'
-    )
+    Write-Log 'Desabilitando serviços de telemetria/jogos…' Yellow
+    $svcs = @('DiagTrack','dmwappushservice','lfsvc','MapsBroker',
+              'WMPNetworkSvc','XblAuthManager','XblGameSave','XboxNetApiSvc')
     foreach ($s in $svcs) {
         Stop-Service $s -Force -ErrorAction SilentlyContinue
-        Set-Service  $s -StartupType Disabled -ErrorAction SilentlyContinue
+        Set-Service  $s -StartupType Disabled
     }
-    Write-Log "→ Serviços desativados" Green
+    Write-Log 'Serviços desabilitados.' Green
 }
 
-function Configure-Privacy {
-    Write-Log "🔸 Configurando políticas de privacidade..." Yellow
-    $pols = @{
-    'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' = @{ AllowTelemetry = 0 }
-    'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' = @{ AllowCortana = 0 }
-    'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager' = @{
-        ContentDeliveryAllowed = 0
-        'SubscribedContent-338388Enabled' = 0  # <- Aspas adicionadas aqui
+function Remove-Bloatware {
+    Write-Log 'Removendo bloatware…' Yellow
+    $apps = @(
+      'Microsoft.BingNews','Microsoft.BingWeather','Microsoft.GetHelp',
+      'Microsoft.Getstarted','Microsoft.MicrosoftOfficeHub',
+      'Microsoft.MicrosoftSolitaireCollection','Microsoft.People',
+      'Microsoft.SkypeApp','Microsoft.WindowsAlarms',
+      'Microsoft.WindowsSoundRecorder','Microsoft.Xbox*',
+      'Microsoft.ZuneMusic','Microsoft.ZuneVideo',
+      'Microsoft.YourPhone','Microsoft.MixedReality.Portal'
+    )
+    foreach ($app in $apps) {
+        Get-AppxPackage -Name $app -AllUsers  |
+          Remove-AppxPackage -ErrorAction SilentlyContinue
+        Get-AppxProvisionedPackage -Online |
+          Where DisplayName -Like $app |
+          Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
     }
+    Write-Log 'Bloatware removido.' Green
 }
-    foreach ($path in $pols.Keys) {
-        foreach ($name in $pols[$path].Keys) {
-            New-ItemProperty -Path $path -Name $name `
-                -PropertyType DWORD -Value $pols[$path][$name] -Force | Out-Null
+
+function Remove-OneNotePrinter {
+    Write-Log 'Removendo impressoras OneNote…' Yellow
+    Get-Printer | Where Name -Match 'OneNote' |
+      Remove-Printer -ErrorAction SilentlyContinue
+    Write-Log 'Impressoras OneNote removidas.' Green
+}
+
+function Remove-EmptyFilesAndFolders {
+    param([string]$Path)
+    Write-Log "Removendo arquivos/pastas vazios em '$Path'…" Yellow
+    Get-ChildItem -Path $Path -Recurse -File |
+      Where Length -EQ 0 |
+      ForEach-Object {
+        Write-Log "Removendo arquivo: $($_.FullName)" Cyan
+        Remove-Item $_.FullName -Force
+      }
+    do {
+      $emptyDirs = Get-ChildItem -Path $Path -Recurse -Directory |
+        Where { -not (Get-ChildItem -Path $_.FullName) }
+      foreach ($d in $emptyDirs) {
+        Write-Log "Removendo pasta: $($d.FullName)" Cyan
+        Remove-Item $d.FullName -Force -Recurse
+      }
+    } while ($emptyDirs.Count -gt 0)
+    Write-Log "Limpeza de vazios pronta em '$Path'." Green
+}
+
+function Reset-ExplorerSearchLayouts {
+    Write-Log 'Resetando layouts de busca do Explorer…' Yellow
+    $base = 'HKCU:\SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\Shell'
+    Remove-Item "$base\BagMRU" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item "$base\Bags"   -Recurse -Force -ErrorAction SilentlyContinue
+    $GUIDs = @(
+      '7fde1a1e-8b31-49a5-93b8-6be14cfa4943',
+      '4dcafe13-e6a7-4c28-be02-ca8c2126280d',
+      '71689ac1-cc88-45d0-8a22-2943c3e7dfb3',
+      '36011842-dccc-40fe-aa3d-6177ea401788',
+      'ea25fbd7-3bf7-409e-b97f-3352240903f4'
+    )
+    foreach ($g in $GUIDs) {
+        $k = "$base\Bags\AllFolders\Shell\{$g}"
+        New-Item -Path $k -Force | Out-Null
+        New-ItemProperty -Path $k -Name LogicalViewMode -PropertyType DWord -Value 1 -Force | Out-Null
+        New-ItemProperty -Path $k -Name Mode            -PropertyType DWord -Value 4 -Force | Out-Null
+    }
+    Write-Log 'Layouts de busca resetados.' Green
+}
+
+function Optimize-Explorer {
+    Write-Log 'Otimizações do Explorer…' Yellow
+    $adv = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+    New-ItemProperty -Path $adv -Name LaunchTo         -PropertyType DWord -Value 1 -Force
+    New-ItemProperty -Path $adv -Name Start_TrackDocs -PropertyType DWord -Value 0 -Force
+    New-ItemProperty -Path $adv -Name Start_TrackProgs-PropertyType DWord -Value 0 -Force
+    Remove-Item "$env:APPDATA\Microsoft\Windows\Recent\AutomaticDestinations\*" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$env:APPDATA\Microsoft\Windows\Recent\CustomDestinations\*"    -Force -ErrorAction SilentlyContinue
+    Write-Log 'Explorer otimizado para “Este Computador” e Quick Access limpo.' Green
+}
+
+function Rename-NotebookIfDesired {
+    Write-Log 'Checando renomeação de notebook…' Yellow
+    $owner = (Get-WmiObject Win32_ComputerSystem).UserName.Split('\')[-1]
+    $user  = $owner.Substring(0,1).ToUpper() + $owner.Substring(1).ToLower()
+    $chassis = (Get-WmiObject Win32_SystemEnclosure).ChassisTypes
+    if ($chassis -in 8,9,10,11,14) {
+        $newName = "$user-Notebook"
+        Write-Host "Atual: $env:COMPUTERNAME  |  Novo: $newName" -ForegroundColor Cyan
+        if ((Read-Host 'Renomear? (S/N)') -match '^[Ss]') {
+            Rename-Computer -NewName $newName -Force
+            Write-Log "Renomeado para $newName" Green
+            Add-Computer -WorkGroupName $ssid -ErrorAction SilentlyContinue
         }
     }
-    Write-Log "→ Privacidade ajustada" Green
 }
 
-#————————————————————————————————————————————————————————————————————
-# BLOCO 6 – OTIMIZAÇÕES PARA LAPTOP
-#————————————————————————————————————————————————————————————————————
-function Optimize-Laptop {
-    $isLaptop = (Get-CimInstance Win32_ComputerSystem).PCSystemType -eq 2
-    if (-not $isLaptop) { return }
-    Write-Log "🔸 Aplicando otimizações para Laptop..." Magenta
+#endregion
 
-    # GPU híbrida
-    Write-Log "   • Ajustando GPU híbrida..." Cyan
-    reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" `
-        /v PowerPolicy /t REG_DWORD /d 2 /f | Out-Null
-    if (Test-Path "HKLM\SOFTWARE\NVIDIA Corporation") {
-        reg add "HKLM\SOFTWARE\NVIDIA Corporation\Global\NvControlPanel2\Client" `
-            /v OptimusEnable /t REG_DWORD /d 1 /f | Out-Null
+#region 2. NETWORK
+
+function Set-WiFiPrivate {
+    param([string]$InterfaceAlias = 'Wi-Fi')
+    Write-Log "Definindo '$InterfaceAlias' como Private…" Yellow
+    Set-NetConnectionProfile -InterfaceAlias $InterfaceAlias -NetworkCategory Private
+    Write-Log 'Perfil ajustado.' Green
+}
+
+function Add-WiFiNetwork {
+    Write-Log 'Adicionando rede Wi-Fi…' Yellow
+    $xml = @"
+<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+  <name>$ssid</name>… [omissis perfil completo acima]
+"@
+    $tmp = "$env:TEMP\WiFiProfile.xml"; $xml | Out-File $tmp -Encoding ASCII
+    netsh wlan add profile filename="$tmp" user=all | Out-Null
+    Write-Log "Rede '$ssid' adicionada." Green
+}
+
+function Restart-WiFi {
+    param([string]$Interface, [string]$SSID)
+    Write-Log "Reset de Wi-Fi ($Interface) para '$SSID'…" Yellow
+    netsh wlan disconnect interface="$Interface"
+    ipconfig /release; ipconfig /renew; ipconfig /flushdns
+    netsh winsock reset all; netsh int ip reset all
+    Start-Sleep 2
+    netsh wlan connect name="$SSID" interface="$Interface"
+    Write-Log 'Wi-Fi reiniciado.' Green
+}
+
+#endregion
+
+#region 3. PRINTERS
+
+function Install-Printers {
+    Write-Log 'Instalando impressoras…' Yellow
+    $defs = @(
+      @{Name='Samsung Mundo1'; Url='http://172.16.40.40:8018/16a65700-007c-1000-bb49-8425196bd027'},
+      @{Name='Samsung Mundo2'; Url='http://172.17.40.25:8018/16a65700-007c-1000-bb49-8425196b796e'},
+      @{Name='EpsonMundo1 (L3250)'; Url='http://172.16.40.37:80/WSD/DEVICE'},
+      @{Name='EpsonMundo2 (L3250)'; Url='http://172.17.40.72:80/WSD/DEVICE'}
+    )
+    foreach ($p in $defs) {
+        if (Get-Printer -Name $p.Name -ErrorAction SilentlyContinue) {
+            Remove-Printer -Name $p.Name
+        }
+        & rundll32 printui.dll,PrintUIEntry /if /b $p.Name /r $p.Url /m "Microsoft PS Class Driver" /z
+        Write-Log "Printer '$($p.Name)' instalada." Green
     }
-
-    # Touchpad
-    Write-Log "   • Otimizando touchpad..." Cyan
-    reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PrecisionTouchPad" `
-        /v AAPThreshold  /t REG_DWORD /d 1  /f | Out-Null
-    reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PrecisionTouchPad" `
-        /v InitialSpeed  /t REG_DWORD /d 50 /f | Out-Null
-
-    # Brilho inteligente
-    Write-Log "   • Configurando gerenciamento de brilho..." Cyan
-    powercfg /setdcvalueindex SCHEME_CURRENT SUB_VIDEO ADAPTBRIGHT   1 | Out-Null
-    powercfg /setdcvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOCONLOCK 60 | Out-Null
-
-    # USB e backlight
-    Write-Log "   • Ajustando USB selective suspend..." Cyan
-    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" `
-        /v USBSelectiveSuspendEnabled /t REG_DWORD /d 1 /f | Out-Null
-
-    Write-Log "→ Otimizações de laptop concluídas" Green
 }
 
-#————————————————————————————————————————————————————————————————————
-# BLOCO 7 – ATUALIZAÇÕES
-#————————————————————————————————————————————————————————————————————
+#endregion
+
+#region 4. UPDATES & APPS
+
+function Create-RestorePoint {
+    Write-Log 'Criando ponto de restauração…' Yellow
+    Enable-ComputerRestore -Drive 'C:\' | Out-Null
+    Set-ItemProperty 'HKLM:\…\SystemRestore' SystemRestorePointCreationFrequency -Value 1 -Force
+    vssadmin Delete Shadows /For=C: /Oldest /Quiet
+    Checkpoint-Computer -Description $currentTime -RestorePointType MODIFY_SETTINGS
+    Write-Log 'Restore point criado.' Green
+}
+
+function Install-WinGet {
+    Write-Log 'Verificando/install winget…' Yellow
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        $tmp="$env:TEMP\winget.msixbundle"
+        Invoke-WebRequest https://aka.ms/getwinget -OutFile $tmp
+        Add-AppxPackage $tmp; Remove-Item $tmp
+        Write-Log 'winget instalado.' Green
+    }
+}
+
+function Reset-WindowsUpdate {
+    Write-Log 'Resetando Windows Update…' Yellow
+    'wuauserv','bits','cryptSvc','msiserver' |
+      ForEach-Object { Stop-Service $_ -Force }
+    Remove-Item "$winDist\Download" -Recurse -Force
+    'wuauserv','bits','cryptSvc','msiserver' |
+      ForEach-Object { Start-Service $_ }
+    Write-Log 'WU resetado.' Green
+}
+
+function Enable-DriverOfferWU {
+    Write-Log 'Habilitando drivers via WU…' Yellow
+    Set-ItemProperty 'HKLM:\…\DriverSearching' SearchOrderConfig -Type DWord -Value 1
+    Remove-ItemProperty 'HKLM:\…\WindowsUpdate' ExcludeWUDriversInQualityUpdate -ErrorAction SilentlyContinue
+    Write-Log 'Config driver WU ok.' Green
+}
+
+function Update-PSWindowsUpdateDrivers {
+    Write-Log 'Atualizando drivers via PSWindowsUpdate…' Yellow
+    if (-not (Get-Module -ListAvailable PSWindowsUpdate)) {
+        Install-Module PSWindowsUpdate -Force -Scope AllUsers
+    }
+    Import-Module PSWindowsUpdate
+    Get-WindowsDriver -Online |
+      ForEach-Object { Add-DriverPackage -Online -PackagePath $_.DriverPackagePath }
+    Write-Log 'Drivers atualizados.' Green
+}
+
 function Update-Windows {
-    Write-Log "🔸 Verificando/Instalando Windows Update..." Yellow
-    $sess = New-Object -ComObject Microsoft.Update.Session
-    $search = $sess.CreateUpdateSearcher()
-    $res = $search.Search("IsInstalled=0 and Type='Software'")
-    if ($res.Updates.Count) {
-        $col = New-Object -ComObject Microsoft.Update.UpdateColl
-        $res.Updates | ForEach-Object { $col.Add($_)| Out-Null }
-        $inst = $sess.CreateUpdateInstaller(); $inst.Updates = $col
-        $inst.Install() | Out-Null
-    }
-    Write-Log "→ Windows Update OK" Green
+    Write-Log 'Checando Windows Update…' Yellow
+    $s = New-Object -ComObject Microsoft.Update.Session
+    $sr= $s.CreateUpdateSearcher().Search("IsInstalled=0 and Type='Software'")
+    if ($sr.Updates.Count -gt 0) {
+        $col= New-Object -ComObject Microsoft.Update.UpdateColl
+        $sr.Updates |%{ $col.Add($_)|Out-Null }
+        $inst= $s.CreateUpdateInstaller(); $inst.Updates=$col
+        $res = $inst.Install()
+        Write-Log "WU Resultado: $($res.ResultCode)" Green
+    } else { Write-Log 'Nenhuma atualização WU.' Green }
 }
 
-function Update-Store {
-    Write-Log "🔸 Atualizando apps da Microsoft Store..." Yellow
-    Get-AppxPackage -AllUsers |
-      Where-Object { -not $_.IsFramework -and -not $_.NonRemovable } |
-      ForEach-Object {
-        Try {
-          Add-AppxPackage -Register -DisableDevelopmentMode `
-            "$($_.InstallLocation)\AppXManifest.xml" -ErrorAction Stop
-        } Catch {}
-      }
-    Write-Log "→ Store OK" Green
+function Update-StoreApps {
+    Write-Log 'Atualizando apps da Store…' Yellow
+    Install-WinGet
+    winget upgrade --all --accept-package-agreements --include-unknown | Out-Null
+    Write-Log 'Apps Store ok.' Green
 }
 
 function Update-Drivers {
-    Write-Log "🔸 Atualizando drivers via Windows Update..." Yellow
-    $sess   = New-Object -ComObject Microsoft.Update.Session
-    $search = $sess.CreateUpdateSearcher()
-    $drv    = $search.Search("IsInstalled=0 and Type='Driver'").Updates
-    if ($drv.Count) {
-        $col = New-Object -ComObject Microsoft.Update.UpdateColl
-        $drv | ForEach-Object { $col.Add($_)| Out-Null }
-        $inst = $sess.CreateUpdateInstaller(); $inst.Updates = $col
-        $inst.Install() | Out-Null
-    }
-    if ($ForceDriverUpdate) {
-        Write-Log "   • Forçando atualização via PnPUtil" Yellow
-        pnputil /scan-devices   | Out-Null
-        pnputil /update-drivers | Out-Null
-    }
-    Write-Log "→ Drivers OK" Green
+    Write-Log 'Checando drivers…' Yellow
+    $s = New-Object -ComObject Microsoft.Update.Session
+    $sr= $s.CreateUpdateSearcher().Search("IsInstalled=0 and Type='Driver'")
+    if ($sr.Updates.Count -gt 0) {
+        $col= New-Object -ComObject Microsoft.Update.UpdateColl
+        $sr.Updates |%{ $col.Add($_)|Out-Null }
+        $inst= $s.CreateUpdateInstaller(); $inst.Updates=$col
+        $res = $inst.Install()
+        Write-Log "Drivers Resultado: $($res.ResultCode)" Green
+    } else { Write-Log 'Nenhum driver pendente.' Green }
 }
 
-#————————————————————————————————————————————————————————————————————
-# EXECUÇÃO SEQUENCIAL
-#————————————————————————————————————————————————————————————————————
-Clean-Temps
-Clean-WUCache
-Clean-DNS
-Clean-StorageSense
+function Update-Apps-WinGet {
+    Write-Log 'Instalando/atualizando apps via winget…' Yellow
+    $apps=@('7zip.7zip','AnyDeskSoftwareGmbH.AnyDesk','AutoHotkey.AutoHotkey',
+            'Google.Chrome','Google.GoogleDrive','Microsoft.Office',
+            'Microsoft.PCManager','Microsoft.PowerToys','Notepad++.Notepad++',
+            'VideoLAN.VLC')
+    foreach($id in $apps) {
+        Write-Log "App: $id" Cyan
+        winget install --id=$id -e --accept-package-agreements --accept-source-agreements
+    }
+    Write-Log 'Apps winget concluídos.' Green
+}
 
-Optimize-Volumes
-Optimize-Registry
+#endregion
 
-Repair-System
-Cleanup-OldWU
+#region Execução Principal
 
-Remove-Bloatware
+Assert-Admin
+Write-Log '=== INICIANDO MANUTENÇÃO COMPLETA ===' Cyan
 
-Disable-Tasks
-Disable-Services
-Configure-Privacy
+# Core
+Clean-Temps; Clear-WUCache; Flush-DNS; Optimize-Volumes
+Clear-Caches; Reset-ExplorerSearchLayouts; Optimize-Explorer
+Repair-System; Clean-OldUpdates; Optimize-Registry; Restart-CritServices
+Disable-Tasks; Disable-Services; Remove-Bloatware; Remove-OneNotePrinter
+Remove-EmptyFilesAndFolders -Path $env:OneDrive
 
-Optimize-Laptop
+# Network
+Set-WiFiPrivate -InterfaceAlias $interface
+Add-WiFiNetwork
+Restart-WiFi -Interface $interface -SSID $ssid
 
+# Printers
+Install-Printers
+
+# Updates & Apps
+Create-RestorePoint
+Install-WinGet
+Reset-WindowsUpdate
+Enable-DriverOfferWU
 Update-Windows
-Update-Store
-Update-Drivers
+if ($ForceDriverUpdate) { Update-Drivers; Update-PSWindowsUpdateDrivers }
+Update-StoreApps
+Update-Apps-WinGet
 
-Write-Log "=== MANUTENÇÃO SUPREMA CONCLUÍDA! Log em: $LogFile ===" Cyan
+# Final
+$duration = (Get-Date) - $StartTime
+Write-Log "=== MANUTENÇÃO FINALIZADA em $($duration.ToString('hh\:mm\:ss')) ===" Cyan
+Write-Log "Log salvo em: $LogFile" Yellow
 
-if (-not $NoReboot) {
-    if (Read-Host "Reiniciar agora? [S/N]" -match '^[Ss]') {
-        Write-Log "🔄 Reiniciando sistema..." Yellow
-        Restart-Computer
-    }
-}
+# Uncomment para reiniciar automaticamente:
+# if ((Read-Host 'Reiniciar agora? S/N') -match '^[Ss]') { Restart-Computer -Force }
+
+#endregion
