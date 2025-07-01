@@ -118,15 +118,15 @@ function Clear-Caches {
 
 function Repair-System {
     Write-Log 'Verificando/reparando sistema (DISM/SFC)…' Yellow
-    dism /online /cleanup-image /restorehealth | Out-Null
-    sfc /scannow | Out-Null
+    #dism /online /cleanup-image /restorehealth | Out-Null
+    #sfc /scannow | Out-Null
     Write-Log 'Reparo concluído.' Green
 }
 
 function Clean-OldUpdates {
     Write-Log 'Removendo componentes antigos de update…' Yellow
-    dism /online /cleanup-image /startcomponentcleanup | Out-Null
-    dism /online /cleanup-image /spsuperseded | Out-Null
+    #dism /online /cleanup-image /startcomponentcleanup | Out-Null
+    #dism /online /cleanup-image /spsuperseded | Out-Null
     Write-Log 'Componentes antigos limpos.' Green
 }
 
