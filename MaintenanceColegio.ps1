@@ -322,6 +322,39 @@ function Install-Printers {
     }
 }
 
+# Função para detectar e instalar impressoras de rede automaticamente
+function Install-NetworkPrinters {
+    Write-Log "Detectando e instalando impressoras de rede..." Yellow
+    $printers = @(
+        @{Name = "Samsung Mundo1"; IP = "172.16.40.40"},
+        @{Name = "Samsung Mundo2"; IP = "172.17.40.25"},
+        @{Name = "EpsonMundo1 (L3250 Series)"; IP = "172.16.40.37"},
+        @{Name = "EpsonMundo2 (L3250 Series)"; IP = "172.17.40.72"}
+    )
+    foreach ($printer in $printers) {
+        $ip = $printer.IP
+        $name = $printer.Name
+        $portName = "IP_$($ip.Replace('.','_'))"
+        try {
+            # Cria porta TCP/IP se não existir
+            if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
+                Add-PrinterPort -Name $portName -PrinterHostAddress $ip
+                Write-Log "Porta $portName criada para $ip." Green
+            }
+            # Instala impressora se não existir
+            if (-not (Get-Printer -Name $name -ErrorAction SilentlyContinue)) {
+                Add-Printer -Name $name -DriverName "Generic / Text Only" -PortName $portName
+                Write-Log "Impressora $name ($ip) instalada." Green
+            } else {
+                Write-Log "Impressora $name já está instalada." Cyan
+            }
+        } catch {
+            Write-Log "Erro ao instalar impressora $name ($ip): $_" Red
+        }
+    }
+    Write-Log "Instalação de impressoras de rede concluída." Green
+}
+
 # 5. Diagnóstico e Informações
 function Show-SystemInfo {
     Write-Log "Exibindo informações do sistema..." Cyan
@@ -604,6 +637,45 @@ function Install-DevTools {
         Write-Log "Erro ao instalar ferramentas de desenvolvimento: $_" Red
     }
 }
+
+# Função para desativar serviços desnecessários
+function Disable-UnnecessaryServices {
+    Write-Log "Desativando serviços desnecessários..." Yellow
+    $services = @(
+        'DiagTrack',            # Telemetria
+        'dmwappushservice',     # Telemetria
+        'WMPNetworkSvc',        # Compartilhamento Windows Media Player
+        'XblAuthManager',       # Xbox Live Auth
+        'XblGameSave',          # Xbox Live Game Save
+        'XboxNetApiSvc',        # Xbox Live Networking
+        'MapsBroker',           # Mapas
+        'Fax',                  # Fax
+        'PrintNotify',          # Notificações de Impressora
+        'Spooler',              # Spooler de Impressão (desative só se não usar impressora local)
+        'RemoteRegistry',       # Registro Remoto
+        'RetailDemo',           # Modo Demo
+        'SharedAccess',         # Compartilhamento de Internet
+        'WSearch',              # Indexação de Pesquisa (desative se não usar pesquisa do Windows)
+        'WerSvc',               # Relatório de Erros
+        'PhoneSvc',             # Telefone
+        'MessagingService',     # Mensagens
+        'WalletService',        # Carteira
+        'OneSyncSvc',           # Sincronização
+        'PimIndexMaintenanceSvc', # Contatos/Calendário
+        'SEMgrSvc',             # Pagamentos NFC
+        'WbioSrvc'              # Biometria
+    )
+    foreach ($svc in $services) {
+        try {
+            Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
+            Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+            Write-Log "Serviço ${svc} desativado." Green
+        } catch {
+            Write-Log "Erro ao desativar serviço ${svc}: $_" Red
+        }
+    }
+    Write-Log "Desativação de serviços concluída." Green
+}
 #endregion
 
 #region → Menus Hierárquicos
@@ -638,31 +710,35 @@ function Show-BloatwareMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " BLOATWARE, PRIVACIDADE E ATUALIZAÇÕES" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Remover bloatware padrão" -ForegroundColor Yellow
-        Write-Host " 2. Remover aplicativos adicionais" -ForegroundColor Yellow
-        Write-Host " 3. Remover UWP bloatware (exceto essenciais)" -ForegroundColor Yellow
-        Write-Host " 4. Remover Microsoft Edge" -ForegroundColor Yellow
-        Write-Host " 5. Tweaks de privacidade" -ForegroundColor Yellow
-        Write-Host " 6. Remover pins do Menu Iniciar/Barra de Tarefas" -ForegroundColor Yellow
-        Write-Host " 7. Remover tarefas agendadas (agressivo)" -ForegroundColor Yellow
-        Write-Host " 8. Desativar tarefas agendadas de bloatware/telemetria" -ForegroundColor Yellow
-        Write-Host " 9. Encerrar processos dispensáveis em segundo plano" -ForegroundColor Yellow
-        Write-Host "10. Verificar e instalar atualizações" -ForegroundColor Yellow
+        Write-Host " 1. Aplicar tweaks de privacidade" -ForegroundColor Yellow
+        Write-Host " 2. Desativar tarefas agendadas de bloatware/telemetria" -ForegroundColor Yellow
+        Write-Host " 3. Encerrar processos dispensáveis em segundo plano" -ForegroundColor Yellow
+        Write-Host " 4. Hardening de segurança" -ForegroundColor Yellow
+        Write-Host " 5. Remover bloatware padrão" -ForegroundColor Yellow
+        Write-Host " 6. Remover bloatware adicional" -ForegroundColor Yellow
+        Write-Host " 7. Remover bloatware (whitelist)" -ForegroundColor Yellow
+        Write-Host " 8. Remover Microsoft Edge" -ForegroundColor Yellow
+        Write-Host " 9. Remover pins do Menu Iniciar/Barra de Tarefas" -ForegroundColor Yellow
+        Write-Host "10. Remover tarefas agendadas (agressivo)" -ForegroundColor Yellow
+        Write-Host "11. Remover UWP bloatware (exceto essenciais)" -ForegroundColor Yellow
+        Write-Host "12. Verificar e instalar atualizações" -ForegroundColor Yellow
         Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
-            '1' { Remove-Bloatware; Pause-Script }
-            '2' { Remove-AdditionalBloatware; Pause-Script }
-            '3' { Remove-UWPBloatware; Pause-Script }
-            '4' { Remove-Edge; Pause-Script }
-            '5' { Apply-PrivacyTweaks; Pause-Script }
-            '6' { Remove-StartAndTaskbarPins; Pause-Script }
-            '7' { Remove-ScheduledTasksAggressive; Pause-Script }
-            '8' { Disable-BloatwareScheduledTasks; Pause-Script }
-            '9' { Stop-BloatwareProcesses; Pause-Script }
-            '10' { Update-WindowsAndDrivers; Pause-Script }
+            '1' { Apply-PrivacyTweaks; Pause-Script }
+            '2' { Disable-BloatwareScheduledTasks; Pause-Script }
+            '3' { Stop-BloatwareProcesses; Pause-Script }
+            '4' { Enable-WindowsHardening; Pause-Script }
+            '5' { Remove-Bloatware; Pause-Script }
+            '6' { Remove-AdditionalBloatware; Pause-Script }
+            '7' { Remove-ProvisionedBloatware; Pause-Script }
+            '8' { Remove-Edge; Pause-Script }
+            '9' { Remove-StartAndTaskbarPins; Pause-Script }
+            '10' { Remove-ScheduledTasksAggressive; Pause-Script }
+            '11' { Remove-UWPBloatware; Pause-Script }
+            '12' { Update-WindowsAndDrivers; Pause-Script }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
@@ -721,7 +797,7 @@ function Show-NetworkMenu {
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
             '1' { Add-WiFiNetwork; Pause-Script }
-            '2' { Install-Printers; Pause-Script }
+            '2' { Install-NetworkPrinters; Pause-Script }
             '3' { Flush-DNS; Pause-Script }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
@@ -758,38 +834,38 @@ function Show-MainMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " SCRIPT DE MANUTENÇÃO WINDOWS - MENU PRINCIPAL" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Limpeza e Otimização" -ForegroundColor Yellow
-        Write-Host " 2. Bloatware, Privacidade e Atualizações" -ForegroundColor Yellow
-        Write-Host " 3. Instalação de Programas" -ForegroundColor Yellow
-        Write-Host " 4. Rede e Impressoras" -ForegroundColor Yellow
+        Write-Host " 1. Ajustar tema do Windows para desempenho" -ForegroundColor Yellow
+        Write-Host " 2. Aplicar hardening de segurança" -ForegroundColor Yellow
+        Write-Host " 3. Automação: criar ponto de restauração" -ForegroundColor Yellow
+        Write-Host " 4. Bloatware, Privacidade e Atualizações" -ForegroundColor Yellow
         Write-Host " 5. Diagnóstico e Informações" -ForegroundColor Yellow
-        Write-Host " 6. Criar ponto de restauração" -ForegroundColor Yellow
-        Write-Host " 7. Hardening de segurança" -ForegroundColor Yellow
-        Write-Host " 8. Remover bloatware (whitelist)" -ForegroundColor Yellow
-        Write-Host " 9. Tweaks de interface do Explorer" -ForegroundColor Yellow
-        Write-Host "10. Otimizações para jogos" -ForegroundColor Yellow
-        Write-Host "11. Instalar ferramentas de desenvolvimento" -ForegroundColor Yellow
-        Write-Host "12. Ajustar tema do Windows para desempenho" -ForegroundColor Yellow
-        Write-Host "13. Otimizar Windows Explorer para desempenho" -ForegroundColor Yellow
+        Write-Host " 6. Instalação de Programas" -ForegroundColor Yellow
+        Write-Host " 7. Limpeza e Otimização" -ForegroundColor Yellow
+        Write-Host " 8. Otimizações para jogos" -ForegroundColor Yellow
+        Write-Host " 9. Otimizar Windows Explorer para desempenho" -ForegroundColor Yellow
+        Write-Host "10. Rede e Impressoras" -ForegroundColor Yellow
+        Write-Host "11. Tweaks de interface do Explorer" -ForegroundColor Yellow
+        Write-Host "12. Instalar ferramentas de desenvolvimento" -ForegroundColor Yellow
+        Write-Host "13. Desativar serviços desnecessários" -ForegroundColor Yellow
         Write-Host "14. Abrir pasta de logs" -ForegroundColor Magenta
         Write-Host " 0. Sair" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
-            '1' { Show-CleanupMenu }
-            '2' { Show-BloatwareMenu }
-            '3' { Show-InstallationMenu }
-            '4' { Show-NetworkMenu }
+            '1' { Set-PerformanceTheme; Pause-Script }
+            '2' { Enable-WindowsHardening; Pause-Script }
+            '3' { Create-SystemRestorePoint; Pause-Script }
+            '4' { Show-BloatwareMenu }
             '5' { Show-DiagnosticsMenu }
-            '6' { Create-SystemRestorePoint; Pause-Script }
-            '7' { Enable-WindowsHardening; Pause-Script }
-            '8' { Remove-ProvisionedBloatware; Pause-Script }
-            '9' { Show-ExplorerTweaksMenu }
-            '10' { Enable-GameOptimizations; Pause-Script }
-            '11' { Install-DevTools; Pause-Script }
-            '12' { Set-PerformanceTheme; Pause-Script }
-            '13' { Optimize-ExplorerPerformance; Pause-Script }
+            '6' { Show-InstallationMenu }
+            '7' { Show-CleanupMenu }
+            '8' { Enable-GameOptimizations; Pause-Script }
+            '9' { Optimize-ExplorerPerformance; Pause-Script }
+            '10' { Show-NetworkMenu }
+            '11' { Show-ExplorerTweaksMenu }
+            '12' { Install-DevTools; Pause-Script }
+            '13' { Disable-UnnecessaryServices; Pause-Script }
             '14' { 
                 Start-Process explorer.exe -ArgumentList "/select,`"$logFile`""
                 Pause-Script
