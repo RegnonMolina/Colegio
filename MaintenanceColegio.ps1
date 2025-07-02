@@ -326,24 +326,23 @@ function Install-Printers {
 function Install-NetworkPrinters {
     Write-Log "Detectando e instalando impressoras de rede..." Yellow
     $printers = @(
-        @{Name = "Samsung Mundo1"; IP = "172.16.40.40"},
-        @{Name = "Samsung Mundo2"; IP = "172.17.40.25"},
-        @{Name = "EpsonMundo1 (L3250 Series)"; IP = "172.16.40.37"},
-        @{Name = "EpsonMundo2 (L3250 Series)"; IP = "172.17.40.72"}
+        @{Name = "Samsung Mundo1"; IP = "172.16.40.40"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
+        @{Name = "Samsung Mundo2"; IP = "172.17.40.25"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
+        @{Name = "EpsonMundo1 (L3250 Series)"; IP = "172.16.40.37"; Driver = "L3250"},
+        @{Name = "EpsonMundo2 (L3250 Series)"; IP = "172.17.40.72"; Driver = "L3250"}
     )
     foreach ($printer in $printers) {
         $ip = $printer.IP
         $name = $printer.Name
+        $driver = $printer.Driver
         $portName = "IP_$($ip.Replace('.','_'))"
         try {
-            # Cria porta TCP/IP se não existir
             if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
                 Add-PrinterPort -Name $portName -PrinterHostAddress $ip
                 Write-Log "Porta $portName criada para $ip." Green
             }
-            # Instala impressora se não existir
             if (-not (Get-Printer -Name $name -ErrorAction SilentlyContinue)) {
-                Add-Printer -Name $name -DriverName "Generic / Text Only" -PortName $portName
+                Add-Printer -Name $name -DriverName $driver -PortName $portName
                 Write-Log "Impressora $name ($ip) instalada." Green
             } else {
                 Write-Log "Impressora $name já está instalada." Cyan
@@ -351,6 +350,15 @@ function Install-NetworkPrinters {
         } catch {
             Write-Log "Erro ao instalar impressora $name ($ip): $_" Red
         }
+    }
+    # Remover impressora OneNote Desktop se existir
+    try {
+        if (Get-Printer -Name "OneNote (Desktop)" -ErrorAction SilentlyContinue) {
+            Remove-Printer -Name "OneNote (Desktop)"
+            Write-Log "Impressora OneNote (Desktop) removida." Green
+        }
+    } catch {
+        Write-Log "Erro ao remover impressora OneNote (Desktop): $_" Red
     }
     Write-Log "Instalação de impressoras de rede concluída." Green
 }
@@ -675,6 +683,28 @@ function Disable-UnnecessaryServices {
         }
     }
     Write-Log "Desativação de serviços concluída." Green
+}
+
+# Função para atualizar Windows e drivers
+function Update-WindowsAndDrivers {
+    Write-Log "Verificando e instalando atualizações do Windows..." Yellow
+    try {
+        # Atualizações do Windows
+        Install-Module PSWindowsUpdate -Force -Scope CurrentUser -ErrorAction SilentlyContinue
+        Import-Module PSWindowsUpdate
+        Get-WindowsUpdate -AcceptAll -Install -AutoReboot
+        Write-Log "Atualizações do Windows concluídas." Green
+    } catch {
+        Write-Log "Erro ao atualizar o Windows: $_" Red
+    }
+    try {
+        # Atualização de drivers via winget (opcional, depende do suporte do fabricante)
+        Write-Log "Verificando atualizações de drivers via winget..." Yellow
+        winget upgrade --all --accept-package-agreements --accept-source-agreements
+        Write-Log "Atualização de drivers via winget concluída." Green
+    } catch {
+        Write-Log "Erro ao atualizar drivers via winget: $_" Red
+    }
 }
 #endregion
 
