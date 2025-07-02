@@ -437,7 +437,7 @@ function Remove-ScheduledTasksAggressive {
             schtasks.exe /delete /TN $task /f | Out-Null
             Write-Log "Tarefa $task desativada e removida." Green
         } catch {
-            Write-Log "Erro ao remover/desativar $task: $_" Red
+            Write-Log "Erro ao remover/desativar ${task}: $_" Red
         }
     }
     Write-Log "Remoção agressiva de tarefas agendadas concluída." Green
