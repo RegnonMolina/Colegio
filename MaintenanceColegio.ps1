@@ -122,7 +122,7 @@ function Remove-AdditionalBloatware {
                 Write-Log "$app removido com sucesso." Green
             }
         } catch {
-            Write-Log ("Erro ao remover " + $app + ": " + $_) Red
+				Write-Log "Erro ao remover ${app}: $_" Red
         }
     }
 
@@ -185,7 +185,7 @@ function Disable-BloatwareScheduledTasks {
                 Write-Log "Tarefa $task desativada." Green
             }
         } catch {
-            Write-Log "Erro ao desativar $task: $_" Red
+            Write-Log "Erro ao desativar ${task}: $_" Red
         }
     }
     Write-Log "Desativação de tarefas agendadas concluída." Green
@@ -211,7 +211,7 @@ function Stop-BloatwareProcesses {
             Get-Process -Name $proc -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             Write-Log "Processo $proc encerrado." Green
         } catch {
-            Write-Log "Erro ao encerrar $proc: $_" Red
+            Write-Log "Erro ao encerrar ${proc}: $_" Red
         }
     }
     Write-Log "Encerramento de processos dispensáveis concluído." Green
