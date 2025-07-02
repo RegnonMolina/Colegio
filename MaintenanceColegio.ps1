@@ -103,14 +103,13 @@ function Remove-Bloatware {
 
 function Remove-AdditionalBloatware {
     Write-Log "Removendo aplicativos adicionais..." Yellow
-}
-    
     $additionalBloatware = @(
-        "Microsoft.549981C3F5F10",       # Copilot
-        "Microsoft.Windows.CommunicationsApps",  # Outlook (Classic)
-        "Microsoft.OneDrive",             # OneDrive
-        "Microsoft.QuickAssist",          # Assistência Rápida
-        "Microsoft.Teams"                 # Microsoft Teams
+        "Microsoft.QuickAssist",                # Assistência Rápida
+        "Microsoft.549981C3F5F10",             # Copilot
+        "Microsoft.Windows.CommunicationsApps", # Outlook (Classic)
+        "Microsoft.OneDrive",                  # Microsoft OneDrive
+        "Microsoft.Teams",                     # Microsoft Teams
+        "Microsoft.WindowsFeedbackHub"         # Hub de Comentários
     )
 
     foreach ($app in $additionalBloatware) {
@@ -123,7 +122,8 @@ function Remove-AdditionalBloatware {
                 Write-Log "$app removido com sucesso." Green
             }
         } catch {
-			Write-Log ("Erro ao remover " + $app + ": " + $_) Red
+            Write-Log ("Erro ao remover " + $app + ": " + $_) Red
+        }
     }
 
     # Remoção especial do OneDrive
@@ -151,6 +151,70 @@ function Remove-AdditionalBloatware {
     }
 
     Write-Log "Remoção de aplicativos adicionais concluída." Green
+}
+
+# Função para desativar tarefas agendadas de bloatware/telemetria
+function Disable-BloatwareScheduledTasks {
+    Write-Log "Desativando tarefas agendadas de bloatware e telemetria..." Yellow
+    $tasks = @(
+        # Telemetria e coleta de dados
+        "\Microsoft\Windows\Application Experience\ProgramDataUpdater",
+        "\Microsoft\Windows\Autochk\Proxy",
+        "\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
+        "\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
+        "\Microsoft\Windows\Customer Experience Improvement Program\Uploader",
+        "\Microsoft\Windows\Feedback\Siuf\DmClient",
+        "\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
+        "\Microsoft\Windows\Windows Error Reporting\QueueReporting",
+        # OneDrive
+        "\Microsoft\Windows\OneDrive\Standalone Update Task",
+        # Xbox
+        "\Microsoft\XblGameSave\XblGameSaveTask",
+        # Feedback Hub
+        "\Microsoft\Windows\Feedback\FeedbackUpload",
+        # Outras tarefas dispensáveis
+        "\Microsoft\Windows\Shell\FamilySafetyMonitor",
+        "\Microsoft\Windows\Shell\FamilySafetyRefreshTask"
+    )
+    foreach ($task in $tasks) {
+        try {
+            $taskName = ($task.Split('\\'))[-1]
+            $taskPath = $task.Substring(0, [string]::LastIndexOf($task, '\\') + 1)
+            if (Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue) {
+                Disable-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue
+                Write-Log "Tarefa $task desativada." Green
+            }
+        } catch {
+            Write-Log "Erro ao desativar $task: $_" Red
+        }
+    }
+    Write-Log "Desativação de tarefas agendadas concluída." Green
+}
+
+# Função para encerrar processos dispensáveis
+function Stop-BloatwareProcesses {
+    Write-Log "Encerrando processos dispensáveis em segundo plano..." Yellow
+    $processes = @(
+        "OneDrive",
+        "YourPhone",
+        "XboxAppServices",
+        "GameBar",
+        "GameBarFTServer",
+        "GameBarPresenceWriter",
+        "FeedbackHub",
+        "PeopleApp",
+        "SkypeApp",
+        "Teams"
+    )
+    foreach ($proc in $processes) {
+        try {
+            Get-Process -Name $proc -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Write-Log "Processo $proc encerrado." Green
+        } catch {
+            Write-Log "Erro ao encerrar $proc: $_" Red
+        }
+    }
+    Write-Log "Encerramento de processos dispensáveis concluído." Green
 }
 
 # 3. Instalação de Programas
@@ -184,6 +248,18 @@ function Install-Applications {
     }
 
     Write-Log "Instalação de aplicativos concluída." Green
+}
+
+# Função para instalar/atualizar o PowerShell
+function Update-PowerShell {
+    Write-Log "Instalando/Atualizando PowerShell..." Yellow
+    try {
+        Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Force
+        iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI"
+        Write-Log "PowerShell instalado/atualizado com sucesso." Green
+    } catch {
+        Write-Log "Erro ao instalar/atualizar PowerShell: $_" Red
+    }
 }
 
 # 4. Rede e Impressoras
@@ -298,7 +374,9 @@ function Show-BloatwareMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " 1. Remover bloatware padrão" -ForegroundColor Yellow
         Write-Host " 2. Remover aplicativos adicionais" -ForegroundColor Yellow
-        Write-Host " 3. Verificar e instalar atualizações" -ForegroundColor Yellow
+        Write-Host " 3. Desativar tarefas agendadas de bloatware/telemetria" -ForegroundColor Yellow
+        Write-Host " 4. Encerrar processos dispensáveis em segundo plano" -ForegroundColor Yellow
+        Write-Host " 5. Verificar e instalar atualizações" -ForegroundColor Yellow
         Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
@@ -306,7 +384,9 @@ function Show-BloatwareMenu {
         switch ($choice) {
             '1' { Remove-Bloatware; Pause-Script }
             '2' { Remove-AdditionalBloatware; Pause-Script }
-            '3' { Update-WindowsAndDrivers; Pause-Script }
+            '3' { Disable-BloatwareScheduledTasks; Pause-Script }
+            '4' { Stop-BloatwareProcesses; Pause-Script }
+            '5' { Update-WindowsAndDrivers; Pause-Script }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
@@ -328,6 +408,7 @@ function Show-InstallationMenu {
         Write-Host " 7. Instalar AnyDesk" -ForegroundColor Yellow
         Write-Host " 8. Instalar Notepad++" -ForegroundColor Yellow
         Write-Host " 9. Instalar 7-Zip" -ForegroundColor Yellow
+        Write-Host "10. Instalar/Atualizar PowerShell" -ForegroundColor Yellow
         Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
@@ -342,6 +423,7 @@ function Show-InstallationMenu {
             '7' { winget install --id AnyDesk.AnyDesk -e --accept-package-agreements --accept-source-agreements; Pause-Script }
             '8' { winget install --id Notepad++.Notepad++ -e --accept-package-agreements --accept-source-agreements; Pause-Script }
             '9' { winget install --id 7zip.7zip -e --accept-package-agreements --accept-source-agreements; Pause-Script }
+            '10' { Update-PowerShell; Pause-Script }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
