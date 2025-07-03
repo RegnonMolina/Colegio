@@ -91,7 +91,8 @@ function Remove-Bloatware {
         "Microsoft.WindowsMaps", "Microsoft.WindowsSoundRecorder", "Microsoft.Xbox.TCUI",
         "Microsoft.XboxApp", "Microsoft.XboxGameOverlay", "Microsoft.XboxIdentityProvider",
         "Microsoft.XboxSpeechToTextOverlay", "Microsoft.ZuneMusic", "Microsoft.ZuneVideo",
-        "Microsoft.YourPhone", "Microsoft.MixedReality.Portal"
+        "Microsoft.YourPhone", "Microsoft.MixedReality.Portal",
+        "Microsoft.LinkedIn"
     )
     
     foreach ($app in $bloatware) {
@@ -109,7 +110,8 @@ function Remove-AdditionalBloatware {
         "Microsoft.Windows.CommunicationsApps", # Outlook (Classic)
         "Microsoft.OneDrive",                  # Microsoft OneDrive
         "Microsoft.Teams",                     # Microsoft Teams
-        "Microsoft.WindowsFeedbackHub"         # Hub de Comentários
+        "Microsoft.WindowsFeedbackHub",         # Hub de Comentários
+        "Microsoft.LinkedIn"
     )
 
     foreach ($app in $additionalBloatware) {
@@ -403,22 +405,6 @@ function Remove-UWPBloatware {
     Write-Log "Remoção de UWP bloatware concluída." Green
 }
 
-# Remover Microsoft Edge
-function Remove-Edge {
-    Write-Log "Removendo Microsoft Edge..." Yellow
-    try {
-        $edge = Get-AppxPackage -AllUsers | Where-Object { $_.Name -like 'Microsoft.MicrosoftEdge*' }
-        if ($edge) {
-            $edge | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
-            Write-Log "Microsoft Edge removido." Green
-        } else {
-            Write-Log "Microsoft Edge não encontrado ou já removido." Cyan
-        }
-    } catch {
-        Write-Log "Erro ao remover Edge: $_" Red
-    }
-}
-
 # Tweaks de privacidade via registro
 function Apply-PrivacyTweaks {
     Write-Log "Aplicando tweaks de privacidade..." Yellow
@@ -706,6 +692,119 @@ function Update-WindowsAndDrivers {
         Write-Log "Erro ao atualizar drivers via winget: $_" Red
     }
 }
+
+# Funções de ajustes do Painel de Controle/Configurações
+function Enable-DarkTheme {
+    Write-Log "Ativando tema escuro..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f | Out-Null
+        Write-Log "Tema escuro ativado." Green
+    } catch {
+        Write-Log "Erro ao ativar tema escuro: $_" Red
+    }
+}
+
+function Enable-ClipboardHistory {
+    Write-Log "Ativando histórico da área de transferência..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Microsoft\Clipboard" /v EnableClipboardHistory /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Histórico da área de transferência ativado." Green
+    } catch {
+        Write-Log "Erro ao ativar histórico da área de transferência: $_" Red
+    }
+}
+
+function Enable-WindowsUpdateFast {
+    Write-Log "Ativando atualizações antecipadas do Windows Update..." Yellow
+    try {
+        reg.exe add "HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" /v IsContinuousInnovationOptedIn /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Atualizações antecipadas ativadas." Green
+    } catch {
+        Write-Log "Erro ao ativar atualizações antecipadas: $_" Red
+    }
+}
+
+function Enable-RestartAppsAfterReboot {
+    Write-Log "Ativando restauração de apps após reinicialização..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RestartApps" /v RestartApps /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Restauração de apps ativada." Green
+    } catch {
+        Write-Log "Erro ao ativar restauração de apps: $_" Red
+    }
+}
+
+function Enable-OtherMicrosoftUpdates {
+    Write-Log "Ativando updates para outros produtos Microsoft..." Yellow
+    try {
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update" /v EnableFeaturedSoftware /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Updates para outros produtos Microsoft ativados." Green
+    } catch {
+        Write-Log "Erro ao ativar updates para outros produtos Microsoft: $_" Red
+    }
+}
+
+function Enable-Sudo {
+    Write-Log "Habilitando Sudo embutido do Windows..." Yellow
+    try {
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo" /v EnableSudo /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Sudo embutido habilitado." Green
+    } catch {
+        Write-Log "Erro ao habilitar Sudo: $_" Red
+    }
+}
+
+function Enable-TaskbarEndTask {
+    Write-Log "Ativando 'Finalizar Tarefa' na barra de tarefas..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarEndTask /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "'Finalizar Tarefa' ativado na barra de tarefas." Green
+    } catch {
+        Write-Log "Erro ao ativar 'Finalizar Tarefa': $_" Red
+    }
+}
+
+function Enable-TaskbarSeconds {
+    Write-Log "Ativando segundos no relógio da barra de tarefas..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowSecondsInSystemClock /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Segundos ativados no relógio da barra de tarefas." Green
+    } catch {
+        Write-Log "Erro ao ativar segundos no relógio: $_" Red
+    }
+}
+
+function Show-ControlPanelTweaksMenu {
+    do {
+        Clear-Host
+        Write-Host "==================== AJUSTES DO PAINEL DE CONTROLE/CONFIGURAÇÕES ====================" -ForegroundColor Cyan
+        Write-Host " 1. Ativar tema escuro" -ForegroundColor Yellow
+        Write-Host " 2. Ativar histórico da área de transferência" -ForegroundColor Yellow
+        Write-Host " 3. Ativar atualizações antecipadas do Windows Update" -ForegroundColor Yellow
+        Write-Host " 4. Ativar restauração de apps após reinicialização" -ForegroundColor Yellow
+        Write-Host " 5. Ativar updates para outros produtos Microsoft" -ForegroundColor Yellow
+        Write-Host " 6. Habilitar Sudo embutido" -ForegroundColor Yellow
+        Write-Host " 7. Ativar 'Finalizar Tarefa' na barra de tarefas" -ForegroundColor Yellow
+        Write-Host " 8. Ativar segundos no relógio da barra de tarefas" -ForegroundColor Yellow
+        Write-Host " 9. Reiniciar PC" -ForegroundColor Yellow
+        Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
+        $choice = Read-Host "\nSelecione uma opção"
+        switch ($choice) {
+            '1' { Enable-DarkTheme; Pause-Script }
+            '2' { Enable-ClipboardHistory; Pause-Script }
+            '3' { Enable-WindowsUpdateFast; Pause-Script }
+            '4' { Enable-RestartAppsAfterReboot; Pause-Script }
+            '5' { Enable-OtherMicrosoftUpdates; Pause-Script }
+            '6' { Enable-Sudo; Pause-Script }
+            '7' { Enable-TaskbarEndTask; Pause-Script }
+            '8' { Enable-TaskbarSeconds; Pause-Script }
+            '9' { Write-Log "Reiniciando o computador..." Cyan; Restart-Computer -Force }
+            '0' { return }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+        }
+    } while ($true)
+}
 #endregion
 
 #region → Menus Hierárquicos
@@ -878,6 +977,8 @@ function Show-MainMenu {
         Write-Host "12. Instalar ferramentas de desenvolvimento" -ForegroundColor Yellow
         Write-Host "13. Desativar serviços desnecessários" -ForegroundColor Yellow
         Write-Host "14. Abrir pasta de logs" -ForegroundColor Magenta
+        Write-Host "15. Ajustes do Painel de Controle/Configurações" -ForegroundColor Yellow
+        Write-Host "16. Reiniciar PC" -ForegroundColor Yellow
         Write-Host " 0. Sair" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
@@ -900,6 +1001,8 @@ function Show-MainMenu {
                 Start-Process explorer.exe -ArgumentList "/select,`"$logFile`""
                 Pause-Script
             }
+            '15' { Show-ControlPanelTweaksMenu }
+            '16' { Write-Log "Reiniciando o computador..." Cyan; Restart-Computer -Force }
             '0' { 
                 $duration = (Get-Date) - $startTime
                 Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
