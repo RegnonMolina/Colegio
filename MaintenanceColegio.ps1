@@ -803,6 +803,35 @@ function Show-ControlPanelTweaksMenu {
         }
     } while ($true)
 }
+
+# Função para renomear o notebook
+function Renomear-Notebook {
+    Write-Log "Deseja renomear este notebook? (S/N)" Yellow
+    $timeout = 15
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $input = $null
+    Write-Host "Digite o novo nome do notebook e pressione ENTER (ou aguarde $timeout segundos para cancelar):" -ForegroundColor Cyan
+    while ($sw.Elapsed.TotalSeconds -lt $timeout -and !$input) {
+        if ([System.Console]::KeyAvailable) {
+            $input = Read-Host
+        } else {
+            Start-Sleep -Milliseconds 200
+        }
+    }
+    $sw.Stop()
+    if ([string]::IsNullOrWhiteSpace($input)) {
+        Write-Log "Tempo esgotado. Renomeação cancelada." Red
+        Start-Sleep -Seconds 2
+        return
+    }
+    try {
+        Rename-Computer -NewName $input -Force
+        Write-Log "Nome do notebook alterado para: $input. Reinicie para aplicar." Green
+    } catch {
+        Write-Log "Erro ao renomear o notebook: $_" Red
+    }
+    Start-Sleep -Seconds 2
+}
 #endregion
 
 #region → Menus Hierárquicos
@@ -849,6 +878,7 @@ function Show-BloatwareMenu {
         Write-Host "10. Remover tarefas agendadas (agressivo)" -ForegroundColor Yellow
         Write-Host "11. Remover UWP bloatware (exceto essenciais)" -ForegroundColor Yellow
         Write-Host "12. Verificar e instalar atualizações" -ForegroundColor Yellow
+        Write-Host "13. Renomear notebook" -ForegroundColor Yellow
         Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
@@ -866,6 +896,7 @@ function Show-BloatwareMenu {
             '10' { Remove-ScheduledTasksAggressive; Pause-Script }
             '11' { Remove-UWPBloatware; Pause-Script }
             '12' { Update-WindowsAndDrivers; Pause-Script }
+            '13' { Renomear-Notebook }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
@@ -977,6 +1008,7 @@ function Show-MainMenu {
         Write-Host "14. Abrir pasta de logs" -ForegroundColor Magenta
         Write-Host "15. Ajustes do Painel de Controle/Configurações" -ForegroundColor Yellow
         Write-Host "16. Reiniciar PC" -ForegroundColor Yellow
+        Write-Host "17. Renomear notebook" -ForegroundColor Yellow
         Write-Host " 0. Sair" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
@@ -1001,6 +1033,7 @@ function Show-MainMenu {
             }
             '15' { Show-ControlPanelTweaksMenu }
             '16' { Write-Log "Reiniciando o computador..." Cyan; Restart-Computer -Force }
+            '17' { Renomear-Notebook }
             '0' { 
                 $duration = (Get-Date) - $startTime
                 Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
