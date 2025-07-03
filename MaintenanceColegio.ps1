@@ -787,7 +787,6 @@ function Show-ControlPanelTweaksMenu {
         Write-Host " 6. Habilitar Sudo embutido" -ForegroundColor Yellow
         Write-Host " 7. Ativar 'Finalizar Tarefa' na barra de tarefas" -ForegroundColor Yellow
         Write-Host " 8. Ativar segundos no relógio da barra de tarefas" -ForegroundColor Yellow
-        Write-Host " 9. Reiniciar PC" -ForegroundColor Yellow
         Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
         $choice = Read-Host "\nSelecione uma opção"
         switch ($choice) {
@@ -799,7 +798,6 @@ function Show-ControlPanelTweaksMenu {
             '6' { Enable-Sudo; Pause-Script }
             '7' { Enable-TaskbarEndTask; Pause-Script }
             '8' { Enable-TaskbarSeconds; Pause-Script }
-            '9' { Write-Log "Reiniciando o computador..." Cyan; Restart-Computer -Force }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
@@ -1026,5 +1024,9 @@ try {
 } catch {
     Write-Host "Erro fatal: $_" -ForegroundColor Red
     Write-Host "Consulte o log em: $logFile" -ForegroundColor Yellow
+    Pause-Script
+}
+finally {
+    # Garante que o script sempre pausa antes de sair, mesmo em caso de erro
     Pause-Script
 }
