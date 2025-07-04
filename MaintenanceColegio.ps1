@@ -1465,7 +1465,7 @@ function Show-AutoLoginMenu {
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
     } while ($true)
-}
+
 
 function Show-InstallationMenu {
     do {
