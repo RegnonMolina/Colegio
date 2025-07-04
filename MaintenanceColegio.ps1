@@ -1444,29 +1444,6 @@ function Show-AutoLoginMenu {
     Enable-AutoLogin
 }
 
-
-
-        $choice = Read-Host "`nSelecione uma opção"
-        switch ($choice) {
-            '1' { Apply-PrivacyTweaks; Pause-Script }
-            '2' { Disable-BloatwareScheduledTasks; Pause-Script }
-            '3' { Stop-BloatwareProcesses; Pause-Script }
-            '4' { Enable-WindowsHardening; Pause-Script }
-            '5' { Remove-Bloatware; Pause-Script }
-            '6' { Remove-AdditionalBloatware; Pause-Script }
-            '7' { Remove-ProvisionedBloatware; Pause-Script }
-            '8' { Remove-Edge; Pause-Script }
-            '9' { Remove-StartAndTaskbarPins; Pause-Script }
-            '10' { Remove-ScheduledTasksAggressive; Pause-Script }
-            '11' { Remove-UWPBloatware; Pause-Script }
-            '12' { Update-WindowsAndDrivers; Pause-Script }
-            '13' { Renomear-Notebook }
-            '0' { return }
-            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
-        }
-    
-
-
 function Show-InstallationMenu {
     do {
         Clear-Host
