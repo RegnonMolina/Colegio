@@ -1285,7 +1285,7 @@ function Show-RestoreUndoMenu {
 }
 
 #region → Menus Hierárquicos
-f# ==== PARTE 2: Menus Avançados e Execução em Lote ====
+# ==== PARTE 2: Menus Avançados e Execução em Lote ====
 # Cole abaixo dos outros menus, antes da chamada Show-MainMenu ou substitua/complete os menus existentes se desejar.
 
 # ---------------------- BLOCO: Limpeza e Otimização (menu incrementado) ----------------------
@@ -1464,8 +1464,8 @@ function Show-AutoLoginMenu {
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
-     while ($true)
-}
+    
+
 
 function Show-InstallationMenu {
     do {
