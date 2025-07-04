@@ -85,7 +85,7 @@ function Optimize-Volumes {
     Write-Log "Otimização de volumes concluída." Green
 }
 
-# 2. Bloatware
+# 2. Bloatwarefunction Install
 function Remove-Bloatware {
     Write-Log "Removendo bloatware padrão..." Yellow
     $bloatware = @(
@@ -232,6 +232,7 @@ function Install-Applications {
     }
 
     $apps = @(
+	    @{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
         @{Name = "Google Chrome"; Id = "Google.Chrome"},
         @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
         @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"},
@@ -370,7 +371,46 @@ function Install-NetworkPrinters {
     Write-Log "Instalação de impressoras de rede concluída." Green
 }
 
+function Run-All-NetworkAdvanced {
+    Flush-DNS
+    Optimize-NetworkPerformance
+    Set-DnsGoogleCloudflare
+    Test-InternetSpeed
+    Clear-ARP
+    Show-SuccessMessage
+}
+
+function Set-DnsGoogleCloudflare {
+    Write-Log "Configurando DNS para Google (8.8.8.8) e Cloudflare (1.1.1.1)..." Yellow
+    try {
+        Get-NetIPConfiguration | Where-Object {$_.IPv4Address -and $_.InterfaceAlias -notmatch "Loopback"} | ForEach-Object {
+            Set-DnsClientServerAddress -InterfaceAlias $_.InterfaceAlias -ServerAddresses ("1.1.1.1","8.8.8.8")
+        }
+        Write-Log "DNS configurado para Cloudflare/Google." Green
+    } catch { Write-Log "Erro ao configurar DNS: $_" Red }
+}
+
+function Test-InternetSpeed {
+    Write-Log "Testando velocidade de internet usando PowerShell..." Yellow
+    try {
+        if (-not (Get-Command speedtest -ErrorAction SilentlyContinue)) {
+            winget install --id Ookla.Speedtest -e --accept-package-agreements --accept-source-agreements
+        }
+        speedtest
+        Write-Log "Teste de velocidade concluído." Green
+    } catch { Write-Log "Erro ao testar velocidade: $_" Red }
+}
+
+function Clear-ARP {
+    Write-Log "Limpando cache ARP..." Yellow
+    try {
+        arp -d *
+        Write-Log "Cache ARP limpo." Green
+    } catch { Write-Log "Erro ao limpar cache ARP: $_" Red }
+}
+
 # 5. Diagnóstico e Informações
+
 function Show-SystemInfo {
     Write-Log "Exibindo informações do sistema..." Cyan
     systeminfo | Out-Host
@@ -837,56 +877,575 @@ function Renomear-Notebook {
     }
     Start-Sleep -Seconds 2
 }
+# ==== Funções Avançadas/Extras - Cole este bloco após as funções de manutenção originais ====
+
+function Disable-ActionCenter-Notifications {
+    Write-Log "Desabilitando Action Center e notificações..." Yellow
+    try {
+        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Action Center e notificações desativados." Green
+    } catch { Write-Log "Erro ao desativar Action Center: $_" Red }
+}
+
+function Clean-WinSxS {
+    Write-Log "Limpando WinSxS..." Yellow
+    try {
+        Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase | Out-Null
+        Write-Log "WinSxS limpo." Green
+    } catch { Write-Log "Erro ao limpar WinSxS: $_" Red }
+}
+
+function Schedule-ChkDsk {
+    Write-Log "Agendando chkdsk /f /r no próximo reboot..." Yellow
+    try {
+        chkdsk $env:SystemDrive /f /r
+        Write-Log "chkdsk agendado (confirme no prompt, se solicitado)." Green
+    } catch { Write-Log "Erro ao agendar chkdsk: $_" Red }
+}
+
+function Remove-WindowsOld {
+    Write-Log "Removendo Windows.old..." Yellow
+    try {
+        Remove-Item "$env:SystemDrive\Windows.old" -Force -Recurse -ErrorAction SilentlyContinue
+        Write-Log "Windows.old removido." Green
+    } catch { Write-Log "Erro ao remover Windows.old: $_" Red }
+}
+
+function Deep-SystemCleanup {
+    Write-Log "Fazendo limpeza profunda (cache de update, logs, drivers antigos)..." Yellow
+    try {
+        Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:SystemRoot\Logs\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:SystemRoot\System32\LogFiles\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:SystemRoot\INF\*.log" -Force -ErrorAction SilentlyContinue
+        Write-Log "Limpeza profunda realizada." Green
+    } catch { Write-Log "Erro na limpeza profunda: $_" Red }
+}
+
+function Clean-PrintSpooler {
+    Write-Log "Limpando spooler de impressão..." Yellow
+    try {
+        Stop-Service -Name Spooler -Force
+        Remove-Item -Path "$env:SystemRoot\System32\spool\PRINTERS\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Start-Service -Name Spooler
+        Write-Log "Spooler de impressão limpo." Green
+    } catch { Write-Log "Erro ao limpar spooler: $_" Red }
+}
+
+function Clean-Prefetch {
+    Write-Log "Limpando Prefetch..." Yellow
+    try {
+        Remove-Item "$env:SystemRoot\Prefetch\*" -Force -Recurse -ErrorAction SilentlyContinue
+        Write-Log "Prefetch limpo." Green
+    } catch { Write-Log "Erro ao limpar Prefetch: $_" Red }
+}
+
+function Enable-ClassicContextMenu {
+    Write-Log "Restaurando menu de contexto clássico (Win11)..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" /f /ve | Out-Null
+        Write-Log "Menu de contexto clássico habilitado." Green
+    } catch { Write-Log "Erro ao restaurar menu clássico: $_" Red }
+}
+
+function Remove-Copilot {
+    Write-Log "Removendo Copilot (Win11)..." Yellow
+    try {
+        Get-AppxPackage -Name "Microsoft.549981C3F5F10" -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
+        Write-Log "Copilot removido." Green
+    } catch { Write-Log "Erro ao remover Copilot: $_" Red }
+}
+
+function Remove-OneDrive-AndRestoreFolders {
+    Write-Log "Removendo OneDrive e restaurando pastas padrão..." Yellow
+    try {
+        taskkill /f /im OneDrive.exe
+        if (Test-Path "$env:SystemRoot\System32\OneDriveSetup.exe") {
+            Start-Process "$env:SystemRoot\System32\OneDriveSetup.exe" -ArgumentList "/uninstall" -Wait
+        }
+        $folders = @("Documents", "Desktop", "Pictures", "Music", "Videos")
+        foreach ($folder in $folders) {
+            $regPath = "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+            Set-ItemProperty -Path $regPath -Name $folder -Value ("%%USERPROFILE%%\" + $folder)
+        }
+        Write-Log "OneDrive removido e pastas restauradas." Green
+    } catch { Write-Log "Erro ao remover Onedrive/restaurar pastas: $_" Red }
+}
+
+function Backup-Registry {
+    Write-Log "Fazendo backup do registro (SOFTWARE, SYSTEM, HKCU)..." Yellow
+    try {
+        $bkpPath = "$env:USERPROFILE\Desktop\reg_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+        New-Item -Path $bkpPath -ItemType Directory | Out-Null
+        reg.exe save HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" /y | Out-Null
+        reg.exe save HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" /y | Out-Null
+        reg.exe save HKCU "$bkpPath\HKCU.reg" /y | Out-Null
+        Write-Log "Backup do registro salvo em: $bkpPath" Green
+    } catch { Write-Log "Erro ao fazer backup do registro: $_" Red }
+}
+
+function Restore-Registry {
+    Write-Host "Digite o caminho da pasta onde está o backup do registro:" -ForegroundColor Cyan
+    $bkpPath = Read-Host "Exemplo: C:\Users\SeuUsuario\Desktop\reg_backup_20250704_140000"
+    try {
+        reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
+        reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
+        reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
+        Write-Log "Registro restaurado a partir de $bkpPath." Green
+    } catch { Write-Log "Erro ao restaurar o registro: $_" Red }
+}
+
+function Run-ExternalDebloaters {
+    $scripts = @("Win11Debloat.ps1", "WinUtil.ps1", "OOSU10.exe", "OpenShellSetup.exe", "SpeedyFox.exe", "_Win10-BlackViper.bat")
+    foreach ($scr in $scripts) {
+        $path = Join-Path $PSScriptRoot $scr
+        if (Test-Path $path) {
+            Write-Log "Executando $scr..." Yellow
+            if ($scr -like "*.ps1") {
+                powershell.exe -ExecutionPolicy Bypass -File $path
+            } elseif ($scr -like "*.exe") {
+                Start-Process $path -Wait
+            } elseif ($scr -like "*.bat") {
+                Start-Process "cmd.exe" -ArgumentList "/c `"$path`"" -Wait
+            }
+            Write-Log "$scr executado." Green
+        } else {
+            Write-Log "$scr não encontrado, pulando." Cyan
+        }
+    }
+}
+
+function Apply-ExtraTweaks {
+    Write-Log "Aplicando tweaks extras..." Yellow
+    try {
+        # Bloqueio de anúncios
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338393Enabled /t REG_DWORD /d 0 /f | Out-Null
+        # F8 no boot
+        bcdedit /set {current} bootmenupolicy Legacy | Out-Null
+        # Desativar sons do sistema
+        reg.exe add "HKCU\AppEvents\Schemes" /ve /d ".None" /f | Out-Null
+        # Desativar web search
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" /v BingSearchEnabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" /v CortanaConsent /t REG_DWORD /d 0 /f | Out-Null
+        # Remover "Cast to Device"
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked" /V "{7AD84985-87B4-4a16-BE58-8B72A5B390F7}" /T REG_SZ /D "Play to Menu" /F | Out-Null
+        Write-Log "Tweaks extras aplicados." Green
+    } catch { Write-Log "Erro ao aplicar tweaks extras: $_" Red }
+}
+
+function Disable-Cortana-AndSearch {
+    Write-Log "Desativando Cortana, Windows Search, Telemetria e Relatórios de Erro..." Yellow
+    try {
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCloudSearch /t REG_DWORD /d 0 /f | Out-Null
+        Stop-Service WSearch -Force -ErrorAction SilentlyContinue
+        Set-Service WSearch -StartupType Disabled -ErrorAction SilentlyContinue
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\ErrorReporting" /v Disabled /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Cortana, Search, Telemetria e Relatório de Erro desativados." Green
+    } catch { Write-Log "Erro ao desativar Cortana/Search: $_" Red }
+}
+
+function Disable-UAC {
+    Write-Log "Desabilitando UAC..." Yellow
+    try {
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 0 /f | Out-Null
+        Write-Log "UAC desativado." Green
+    } catch { Write-Log "Erro ao desativar UAC: $_" Red }
+}
+
+function Enable-PrivacyHardening {
+    Write-Log "Aplicando privacidade agressiva..." Yellow
+    try {
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /t REG_DWORD /d 1 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /t REG_DWORD /d 1 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /t REG_DWORD /d 0 /f | Out-Null
+        Write-Log "Privacidade agressiva aplicada." Green
+    } catch { Write-Log "Erro ao aplicar privacidade agressiva: $_" Red }
+}
+
+function Optimize-NetworkPerformance {
+    Write-Log "Otimizando rede (TCP tweaks, DNS customizado)..." Yellow
+    try {
+        netsh int tcp set global autotuninglevel=normal
+        netsh int tcp set global rss=enabled
+        netsh int tcp set global chimney=enabled
+        Set-DnsClientServerAddress -InterfaceAlias "Wi-Fi" -ServerAddresses ("1.1.1.1","8.8.8.8")
+        Write-Log "Rede otimizada (TCP+DNS)." Green
+    } catch { Write-Log "Erro ao otimizar rede: $_" Red }
+}
+
+function Disable-IPv6 {
+    Write-Log "Desabilitando IPv6..." Yellow
+    try {
+        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Name "DisabledComponents" -PropertyType DWord -Value 0xFF -Force | Out-Null
+        Write-Log "IPv6 desativado." Green
+    } catch { Write-Log "Erro ao desativar IPv6: $_" Red }
+}
+
+function Set-VisualPerformance {
+    Write-Log "Ajustando visual para melhor performance..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f | Out-Null
+        reg.exe add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f | Out-Null
+        Write-Log "Visual ajustado para performance." Green
+    } catch { Write-Log "Erro ao ajustar visual: $_" Red }
+}
+# ==== Diagnóstico Avançado ====
+function Run-All-DiagnosticsAdvanced {
+    Show-SystemInfo
+    Show-DiskUsage
+    Show-NetworkInfo
+    Run-SFC-Scan
+    Run-DISM-Scan
+    Test-SMART-Drives
+    Test-Memory
+    Show-SuccessMessage
+}
+
+function Run-SFC-Scan {
+    Write-Log "Executando verificação SFC..." Yellow
+    sfc /scannow | Out-Host
+    Write-Log "Verificação SFC concluída." Green
+}
+function Run-DISM-Scan {
+    Write-Log "Executando verificação DISM..." Yellow
+    DISM /Online /Cleanup-Image /RestoreHealth | Out-Host
+    Write-Log "Verificação DISM concluída." Green
+}
+function Test-SMART-Drives {
+    Write-Log "Verificando saúde dos discos (SMART)..." Yellow
+    Get-WmiObject -Namespace root\wmi -Class MSStorageDriver_FailurePredictStatus | ForEach-Object {
+        if ($_.PredictFailure) {
+            Write-Log "Disco com problemas: $($_.InstanceName)" Red
+        } else {
+            Write-Log "Disco OK: $($_.InstanceName)" Green
+        }
+    }
+}
+function Test-Memory {
+    Write-Log "Agendando teste de memória na próxima inicialização..." Yellow
+    mdsched.exe
+    Write-Log "Teste de memória agendado." Green
+}
+
+# Autologin seguro
+function Enable-AutoLogin {
+    Write-Host "=== Configurar Autologin ===" -ForegroundColor Cyan
+    $username = Read-Host "Digite o usuário para autologin (ex: Administrator ou SeuUsuario)"
+    $password = Read-Host "Digite a senha para autologin (não aparecerá na tela)" -AsSecureString
+    $passwordPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+    $domain = $env:USERDOMAIN
+    reg export "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "$env:TEMP\backup_winlogon_autologin.reg" /y | Out-Null
+    try {
+        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "AutoAdminLogon" -Value "1"
+        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultUserName" -Value $username
+        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultDomainName" -Value $domain
+        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultPassword" -Value $passwordPlain
+        Write-Log "Autologin configurado para o usuário $username." Green
+    } catch { Write-Log "Erro ao configurar autologin: $_" Red }
+    Show-SuccessMessage
+}
 #endregion
 
-#region → Menus Hierárquicos
-function Show-CleanupMenu {
+# ==== PARTE 6: Bloco de Reversão/Desfazer Tweaks e Segurança Extra ====
+
+function Restore-DefaultUAC {
+    Write-Log "Restaurando UAC para padrão..." Yellow
+    try {
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "UAC restaurado." Green
+    } catch { Write-Log "Erro ao restaurar UAC: $_" Red }
+}
+
+function Restore-DefaultIPv6 {
+    Write-Log "Reabilitando IPv6..." Yellow
+    try {
+        Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Name "DisabledComponents" -ErrorAction SilentlyContinue
+        Write-Log "IPv6 reabilitado." Green
+    } catch { Write-Log "Erro ao reabilitar IPv6: $_" Red }
+}
+
+function Restore-Registry-FromBackup {
+    Write-Host "Digite o caminho do backup do registro para restaurar (pasta):" -ForegroundColor Cyan
+    $bkpPath = Read-Host
+    try {
+        reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
+        reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
+        reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
+        Write-Log "Registro restaurado a partir de $bkpPath." Green
+    } catch { Write-Log "Erro ao restaurar o registro: $_" Red }
+}
+
+function Undo-PrivacyHardening {
+    Write-Log "Desfazendo ajustes de privacidade agressivos..." Yellow
+    try {
+        reg.exe delete "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /f | Out-Null
+        reg.exe delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /f | Out-Null
+        reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /f | Out-Null
+        reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /f | Out-Null
+        reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /f | Out-Null
+        Write-Log "Ajustes de privacidade revertidos." Green
+    } catch { Write-Log "Erro ao desfazer privacidade: $_" Red }
+}
+
+function Restore-VisualPerformanceDefault {
+    Write-Log "Restaurando configurações visuais para o padrão..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 0 /f | Out-Null
+        Write-Log "Configurações visuais restauradas." Green
+    } catch { Write-Log "Erro ao restaurar visual: $_" Red }
+}
+
+function ReEnable-ActionCenter-Notifications {
+    Write-Log "Reabilitando Action Center e notificações..." Yellow
+    try {
+        reg.exe delete "HKCU\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 1 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 0 /f | Out-Null
+        Write-Log "Action Center e notificações reabilitados." Green
+    } catch { Write-Log "Erro ao reabilitar Action Center: $_" Red }
+}
+
+function Enable-SMBv1 {
+    Write-Log "Habilitando SMBv1 (NÃO RECOMENDADO em redes modernas)..." Yellow
+    try {
+        Enable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -All -NoRestart
+        Write-Log "SMBv1 habilitado." Green
+    } catch { Write-Log "Erro ao habilitar SMBv1: $_" Red }
+}
+
+function Disable-SMBv1 {
+    Write-Log "Desabilitando SMBv1 (recomendado para segurança)..." Yellow
+    try {
+        Disable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart
+        Write-Log "SMBv1 desabilitado." Green
+    } catch { Write-Log "Erro ao desabilitar SMBv1: $_" Red }
+}
+
+function Harden-OfficeMacros {
+    Write-Log "Desabilitando macros perigosos do Office..." Yellow
+    try {
+        # Word
+        reg.exe add "HKCU\Software\Microsoft\Office\16.0\Word\Security" /v VBAWarnings /t REG_DWORD /d 4 /f | Out-Null
+        # Excel
+        reg.exe add "HKCU\Software\Microsoft\Office\16.0\Excel\Security" /v VBAWarnings /t REG_DWORD /d 4 /f | Out-Null
+        Write-Log "Macros do Office bloqueados." Green
+    } catch { Write-Log "Erro ao bloquear macros: $_" Red }
+}
+
+function Restore-OfficeMacros {
+    Write-Log "Restaurando comportamento padrão de macros do Office..." Yellow
+    try {
+        reg.exe delete "HKCU\Software\Microsoft\Office\16.0\Word\Security" /v VBAWarnings /f | Out-Null
+        reg.exe delete "HKCU\Software\Microsoft\Office\16.0\Excel\Security" /v VBAWarnings /f | Out-Null
+        Write-Log "Macros do Office retornaram ao padrão." Green
+    } catch { Write-Log "Erro ao restaurar macros: $_" Red }
+}
+
+function Show-RestoreUndoMenu {
     do {
         Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " LIMPEZA E OTIMIZAÇÃO" -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Limpar arquivos temporários" -ForegroundColor Yellow
-        Write-Host " 2. Limpar cache do Windows Update" -ForegroundColor Yellow
-        Write-Host " 3. Limpar cache DNS" -ForegroundColor Yellow
-        Write-Host " 4. Otimizar volumes" -ForegroundColor Yellow
-        Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
-        
+        Write-Host "=============================================" -ForegroundColor Magenta
+        Write-Host " REVERTER AJUSTES & SEGURANÇA" -ForegroundColor Magenta
+        Write-Host "=============================================" -ForegroundColor Magenta
+        Write-Host " 1. Restaurar UAC para padrão"
+        Write-Host " 2. Reabilitar IPv6"
+        Write-Host " 3. Restaurar backup do registro"
+        Write-Host " 4. Desfazer privacidade agressiva"
+        Write-Host " 5. Restaurar visual padrão"
+        Write-Host " 6. Reabilitar Action Center/Notificações"
+        Write-Host " 7. Habilitar SMBv1 (NÃO RECOMENDADO)"
+        Write-Host " 8. Desabilitar SMBv1 (RECOMENDADO)"
+        Write-Host " 9. Bloquear macros Office (segurança)"
+        Write-Host "10. Restaurar macros Office (padrão)"
+        Write-Host " 0. Voltar ao menu principal"
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
-            '1' { Clean-TemporaryFiles; Pause-Script }
-            '2' { Clear-WUCache; Pause-Script }
-            '3' { Flush-DNS; Pause-Script }
-            '4' { Optimize-Volumes; Pause-Script }
+            '1' { Restore-DefaultUAC; Show-SuccessMessage }
+            '2' { Restore-DefaultIPv6; Show-SuccessMessage }
+            '3' { Restore-Registry-FromBackup; Show-SuccessMessage }
+            '4' { Undo-PrivacyHardening; Show-SuccessMessage }
+            '5' { Restore-VisualPerformanceDefault; Show-SuccessMessage }
+            '6' { ReEnable-ActionCenter-Notifications; Show-SuccessMessage }
+            '7' { Enable-SMBv1; Show-SuccessMessage }
+            '8' { Disable-SMBv1; Show-SuccessMessage }
+            '9' { Harden-OfficeMacros; Show-SuccessMessage }
+            '10' { Restore-OfficeMacros; Show-SuccessMessage }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
     } while ($true)
 }
 
+#region → Menus Hierárquicos
+f# ==== PARTE 2: Menus Avançados e Execução em Lote ====
+# Cole abaixo dos outros menus, antes da chamada Show-MainMenu ou substitua/complete os menus existentes se desejar.
+
+# ---------------------- BLOCO: Limpeza e Otimização (menu incrementado) ----------------------
+
+function Run-All-CleanupAdvanced {
+    Clean-TemporaryFiles
+    Clear-WUCache
+    Flush-DNS
+    Optimize-Volumes
+    Clean-WinSxS
+    Schedule-ChkDsk
+    Remove-WindowsOld
+    Deep-SystemCleanup
+    Clean-PrintSpooler
+    Clean-Prefetch
+    Show-SuccessMessage
+}
+
+function Show-CleanupMenu {
+    do {
+        Clear-Host
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " LIMPEZA E OTIMIZAÇÃO" -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " 1. Executar todas as tarefas abaixo em sequência" -ForegroundColor Green
+        Write-Host " 2. Limpar arquivos temporários" -ForegroundColor Yellow
+        Write-Host " 3. Limpar cache do Windows Update" -ForegroundColor Yellow
+        Write-Host " 4. Limpar cache DNS" -ForegroundColor Yellow
+        Write-Host " 5. Otimizar volumes" -ForegroundColor Yellow
+        Write-Host " 6. Limpar WinSxS" -ForegroundColor Yellow
+        Write-Host " 7. Agendar chkdsk /f /r" -ForegroundColor Yellow
+        Write-Host " 8. Remover Windows.old" -ForegroundColor Yellow
+        Write-Host " 9. Limpeza profunda de cache, logs, drivers antigos" -ForegroundColor Yellow
+        Write-Host "10. Limpar spooler de impressão" -ForegroundColor Yellow
+        Write-Host "11. Limpar Prefetch" -ForegroundColor Yellow
+        Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
+        Write-Host "=============================================" -ForegroundColor Cyan
+        
+        $choice = Read-Host "`nSelecione uma opção"
+        switch ($choice) {
+            '1' { Run-All-CleanupAdvanced }
+            '2' { Clean-TemporaryFiles; Show-SuccessMessage }
+            '3' { Clear-WUCache; Show-SuccessMessage }
+            '4' { Flush-DNS; Show-SuccessMessage }
+            '5' { Optimize-Volumes; Show-SuccessMessage }
+            '6' { Clean-WinSxS; Show-SuccessMessage }
+            '7' { Schedule-ChkDsk; Show-SuccessMessage }
+            '8' { Remove-WindowsOld; Show-SuccessMessage }
+            '9' { Deep-SystemCleanup; Show-SuccessMessage }
+            '10' { Clean-PrintSpooler; Show-SuccessMessage }
+            '11' { Clean-Prefetch; Show-SuccessMessage }
+            '0' { return }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+        }
+    } while ($true)
+}
+
+# ---------------------- BLOCO: Bloatware, Privacidade, Hardening (menu incrementado) ----------------------
+
+function Run-All-BloatwareAdvanced {
+    Remove-Bloatware
+    Remove-AdditionalBloatware
+    Remove-UWPBloatware
+    Remove-ProvisionedBloatware
+    Remove-Copilot
+    Remove-OneDrive-AndRestoreFolders
+    Remove-Edge
+    Disable-ActionCenter-Notifications
+    Disable-BloatwareScheduledTasks
+    Stop-BloatwareProcesses
+    Remove-StartAndTaskbarPins
+    Remove-ScheduledTasksAggressive
+    Enable-ClassicContextMenu
+    Apply-ExtraTweaks
+    Disable-Cortana-AndSearch
+    Disable-UAC
+    Enable-PrivacyHardening
+    Optimize-NetworkPerformance
+    Disable-IPv6
+    Set-VisualPerformance
+    Run-ExternalDebloaters
+    Backup-Registry
+    Show-SuccessMessage
+}
+
 function Show-BloatwareMenu {
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " BLOATWARE, PRIVACIDADE E ATUALIZAÇÕES" -ForegroundColor Cyan
+        Write-Host " BLOATWARE, PRIVACIDADE, HARDENING, EXTRAS" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Aplicar tweaks de privacidade" -ForegroundColor Yellow
-        Write-Host " 2. Desativar tarefas agendadas de bloatware/telemetria" -ForegroundColor Yellow
-        Write-Host " 3. Encerrar processos dispensáveis em segundo plano" -ForegroundColor Yellow
-        Write-Host " 4. Hardening de segurança" -ForegroundColor Yellow
-        Write-Host " 5. Remover bloatware padrão" -ForegroundColor Yellow
-        Write-Host " 6. Remover bloatware adicional" -ForegroundColor Yellow
-        Write-Host " 7. Remover bloatware (whitelist)" -ForegroundColor Yellow
-        Write-Host " 8. Remover Microsoft Edge" -ForegroundColor Yellow
-        Write-Host " 9. Remover pins do Menu Iniciar/Barra de Tarefas" -ForegroundColor Yellow
-        Write-Host "10. Remover tarefas agendadas (agressivo)" -ForegroundColor Yellow
-        Write-Host "11. Remover UWP bloatware (exceto essenciais)" -ForegroundColor Yellow
-        Write-Host "12. Verificar e instalar atualizações" -ForegroundColor Yellow
-        Write-Host "13. Renomear notebook" -ForegroundColor Yellow
+        Write-Host " 1. Executar todas as tarefas abaixo em sequência" -ForegroundColor Green
+        Write-Host " 2. Remover bloatware padrão"
+        Write-Host " 3. Remover aplicativos adicionais"
+        Write-Host " 4. Remover UWP bloatware (exceto essenciais)"
+        Write-Host " 5. Remover bloatware (whitelist)"
+        Write-Host " 6. Remover Copilot"
+        Write-Host " 7. Remover OneDrive e restaurar pastas"
+        Write-Host " 8. Remover Microsoft Edge"
+        Write-Host " 9. Desabilitar Action Center/Notificações"
+        Write-Host "10. Desativar tarefas agendadas de bloatware"
+        Write-Host "11. Encerrar processos dispensáveis"
+        Write-Host "12. Remover pins do Menu Iniciar/Barra de Tarefas"
+        Write-Host "13. Remover tarefas agendadas (agressivo)"
+        Write-Host "14. Restaurar menu de contexto clássico"
+        Write-Host "15. Aplicar tweaks extras (bloqueio anúncios, F8, sons, web search, Cast to Device)"
+        Write-Host "16. Desativar Cortana, Search, Telemetria, Relatórios de Erro"
+        Write-Host "17. Desabilitar UAC"
+        Write-Host "18. Aplicar privacidade agressiva"
+        Write-Host "19. Otimizar rede (TCP/DNS)"
+        Write-Host "20. Desabilitar IPv6"
+        Write-Host "21. Ajustar visual para performance"
+        Write-Host "22. Executar debloaters de terceiros"
+        Write-Host "23. Backup do registro"
+        Write-Host "24. Restaurar backup do registro"
         Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
+        $choice = Read-Host "`nSelecione uma opção"
+        switch ($choice) {
+            '1' { Run-All-BloatwareAdvanced }
+            '2' { Remove-Bloatware; Show-SuccessMessage }
+            '3' { Remove-AdditionalBloatware; Show-SuccessMessage }
+            '4' { Remove-UWPBloatware; Show-SuccessMessage }
+            '5' { Remove-ProvisionedBloatware; Show-SuccessMessage }
+            '6' { Remove-Copilot; Show-SuccessMessage }
+            '7' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
+            '8' { Remove-Edge; Show-SuccessMessage }
+            '9' { Disable-ActionCenter-Notifications; Show-SuccessMessage }
+            '10' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
+            '11' { Stop-BloatwareProcesses; Show-SuccessMessage }
+            '12' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
+            '13' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
+            '14' { Enable-ClassicContextMenu; Show-SuccessMessage }
+            '15' { Apply-ExtraTweaks; Show-SuccessMessage }
+            '16' { Disable-Cortana-AndSearch; Show-SuccessMessage }
+            '17' { Disable-UAC; Show-SuccessMessage }
+            '18' { Enable-PrivacyHardening; Show-SuccessMessage }
+            '19' { Optimize-NetworkPerformance; Show-SuccessMessage }
+            '20' { Disable-IPv6; Show-SuccessMessage }
+            '21' { Set-VisualPerformance; Show-SuccessMessage }
+            '22' { Run-ExternalDebloaters; Show-SuccessMessage }
+            '23' { Backup-Registry; Show-SuccessMessage }
+            '24' { Restore-Registry; Show-SuccessMessage }
+            '0' { return }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+        }
+    } while ($true)
+}
+
+# ---------------------- BLOCO: Menu Autologin (inclua no menu principal) ----------------------
+
+function Show-AutoLoginMenu {
+    Clear-Host
+    Write-Host "===== AUTOLOGIN =====" -ForegroundColor Cyan
+    Enable-AutoLogin
+}
+
+
+
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
             '1' { Apply-PrivacyTweaks; Pause-Script }
@@ -924,6 +1483,7 @@ function Show-InstallationMenu {
         Write-Host " 8. Instalar Notepad++" -ForegroundColor Yellow
         Write-Host " 9. Instalar 7-Zip" -ForegroundColor Yellow
         Write-Host "10. Instalar/Atualizar PowerShell" -ForegroundColor Yellow
+		Write-Host "11. Instalar AutoHotKey" -ForegroundColor Yellow
         Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
@@ -939,6 +1499,7 @@ function Show-InstallationMenu {
             '8' { winget install --id Notepad++.Notepad++ -e --accept-package-agreements --accept-source-agreements; Pause-Script }
             '9' { winget install --id 7zip.7zip -e --accept-package-agreements --accept-source-agreements; Pause-Script }
             '10' { Update-PowerShell; Pause-Script }
+			'11' {winget install --id AutoHotkey.AutoHotkey -e --accept-package-agreements --accept-source-agreements; Pause-Script}
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
@@ -949,19 +1510,25 @@ function Show-NetworkMenu {
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " REDE E IMPRESSORAS" -ForegroundColor Cyan
+        Write-Host " REDE E OTIMIZAÇÃO" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Configurar rede Wi-Fi" -ForegroundColor Yellow
-        Write-Host " 2. Instalar impressoras de rede" -ForegroundColor Yellow
-        Write-Host " 3. Limpar cache DNS" -ForegroundColor Yellow
+        Write-Host " 1. Executar todas as tarefas abaixo em sequência" -ForegroundColor Green
+        Write-Host " 2. Limpar cache DNS" -ForegroundColor Yellow
+        Write-Host " 3. Otimizar TCP/DNS" -ForegroundColor Yellow
+        Write-Host " 4. Definir DNS Google/Cloudflare" -ForegroundColor Yellow
+        Write-Host " 5. Testar velocidade de internet" -ForegroundColor Yellow
+        Write-Host " 6. Limpar cache ARP" -ForegroundColor Yellow
         Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
-        
+
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
-            '1' { Add-WiFiNetwork; Pause-Script }
-            '2' { Install-NetworkPrinters; Pause-Script }
-            '3' { Flush-DNS; Pause-Script }
+            '1' { Run-All-NetworkAdvanced }
+            '2' { Flush-DNS; Show-SuccessMessage }
+            '3' { Optimize-NetworkPerformance; Show-SuccessMessage }
+            '4' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
+            '5' { Test-InternetSpeed; Show-SuccessMessage }
+            '6' { Clear-ARP; Show-SuccessMessage }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
@@ -972,24 +1539,35 @@ function Show-DiagnosticsMenu {
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " DIAGNÓSTICO E INFORMAÇÕES" -ForegroundColor Cyan
+        Write-Host " DIAGNÓSTICO E INFORMAÇÕES AVANÇADO" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Exibir informações do sistema" -ForegroundColor Yellow
-        Write-Host " 2. Exibir uso do disco" -ForegroundColor Yellow
-        Write-Host " 3. Exibir informações de rede" -ForegroundColor Yellow
+        Write-Host " 1. Executar todos os diagnósticos abaixo" -ForegroundColor Green
+        Write-Host " 2. Exibir informações do sistema" -ForegroundColor Yellow
+        Write-Host " 3. Exibir uso do disco" -ForegroundColor Yellow
+        Write-Host " 4. Exibir informações de rede" -ForegroundColor Yellow
+        Write-Host " 5. SFC /scannow" -ForegroundColor Yellow
+        Write-Host " 6. DISM /RestoreHealth" -ForegroundColor Yellow
+        Write-Host " 7. Verificar saúde dos discos (SMART)" -ForegroundColor Yellow
+        Write-Host " 8. Teste de memória RAM" -ForegroundColor Yellow
         Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
-            '1' { Show-SystemInfo; Pause-Script }
-            '2' { Show-DiskUsage; Pause-Script }
-            '3' { Show-NetworkInfo; Pause-Script }
+            '1' { Run-All-DiagnosticsAdvanced }
+            '2' { Show-SystemInfo; Show-SuccessMessage }
+            '3' { Show-DiskUsage; Show-SuccessMessage }
+            '4' { Show-NetworkInfo; Show-SuccessMessage }
+            '5' { Run-SFC-Scan; Show-SuccessMessage }
+            '6' { Run-DISM-Scan; Show-SuccessMessage }
+            '7' { Test-SMART-Drives; Show-SuccessMessage }
+            '8' { Test-Memory; Show-SuccessMessage }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
         }
     } while ($true)
 }
+
 
 function Show-MainMenu {
     do {
@@ -1014,6 +1592,8 @@ function Show-MainMenu {
         Write-Host "15. Ajustes do Painel de Controle/Configurações" -ForegroundColor Yellow
         Write-Host "16. Reiniciar PC" -ForegroundColor Yellow
         Write-Host "17. Renomear notebook" -ForegroundColor Yellow
+		Write-Host "18. Configurar Autologin" -ForegroundColor Yellow
+		Write-Host "19. Reverter ajustes / Segurança extra" -ForegroundColor Magenta
         Write-Host " 0. Sair" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
         
@@ -1039,6 +1619,8 @@ function Show-MainMenu {
             '15' { Show-ControlPanelTweaksMenu }
             '16' { Write-Log "Reiniciando o computador..." Cyan; Restart-Computer -Force }
             '17' { Renomear-Notebook }
+			'18' { Show-AutoLoginMenu }
+			'19' { Show-RestoreUndoMenu }
             '0' { 
                 $duration = (Get-Date) - $startTime
                 Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
