@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Script Supremo de Manutenção Windows - Menu Hierárquico Completo
+    Script Supremo de Manutenção Windows - Versão Intermediária Completa
 .DESCRIPTION
-    Versão completa com todos os menus e submenus funcionais
+    Script completo para automação de manutenção, ajustes, remoção de bloatware, instalação de apps, impressoras e padronização de notebooks do colégio.
 .NOTES
     Autor: Adaptado por IA
-    Versão: 7.2
+    Versão: Intermediária Completa
     Execute como Administrador!
 #>
 
@@ -39,6 +39,11 @@ function Pause-Script {
     do {
         $key = [System.Console]::ReadKey($true)
     } until ($key.Key -eq 'Enter')
+}
+
+function Show-SuccessMessage {
+    Write-Host "Tarefa executada com sucesso!" -ForegroundColor Green
+    Start-Sleep -Seconds 2
 }
 
 Write-Log "Iniciando script de manutenção..." Cyan
