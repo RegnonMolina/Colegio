@@ -189,33 +189,6 @@ function Remove-Bloatware {
     Show-SuccessMessage
 }
 
-    # Remoção especial do OneDrive
-    try {
-        if (Test-Path "$env:SystemRoot\System32\OneDriveSetup.exe") {
-            Write-Log "Desinstalando OneDrive..." Cyan
-            Start-Process "$env:SystemRoot\System32\OneDriveSetup.exe" -ArgumentList "/uninstall" -NoNewWindow -Wait
-            Remove-Item "$env:LocalAppData\Microsoft\OneDrive" -Force -Recurse -ErrorAction SilentlyContinue
-            Remove-Item "$env:ProgramData\Microsoft OneDrive" -Force -Recurse -ErrorAction SilentlyContinue
-            Write-Log "OneDrive desinstalado." Green
-        }
-    } catch {
-        Write-Log "Erro ao remover OneDrive: $_" Red
-    }
-
-    # Remoção especial do Teams
-    try {
-        Get-Process -Name Teams -ErrorAction SilentlyContinue | Stop-Process -Force
-        Remove-Item "$env:AppData\Microsoft\Teams" -Force -Recurse -ErrorAction SilentlyContinue
-        Remove-Item "$env:LocalAppData\Microsoft\Teams" -Force -Recurse -ErrorAction SilentlyContinue
-        Remove-Item "$env:ProgramFiles(x86)\Microsoft\Teams" -Force -Recurse -ErrorAction SilentlyContinue
-        Write-Log "Microsoft Teams removido." Green
-    } catch {
-        Write-Log "Erro ao remover Teams: $_" Red
-    }
-
-    Write-Log "Remoção de aplicativos adicionais concluída." Green
-
-
 # Função para desativar tarefas agendadas de bloatware/telemetria
 function Disable-BloatwareScheduledTasks {
     Write-Log "Desativando tarefas agendadas de bloatware e telemetria..." Yellow
