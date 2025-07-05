@@ -1781,15 +1781,33 @@ function Show-NetworkMenu {
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
             '1' {
-                Add-WiFiNetwork
-                Set-DnsGoogleCloudflare
-                Install-NetworkPrinters
-                Clear-ARP
-                Flush-DNS
-                Optimize-NetworkPerformance
-                Test-InternetSpeed
-                Show-SuccessMessage
-            }
+    try {
+        Write-Log "🟡 Adicionando Wi-Fi administrativa..."
+        Add-WiFiNetwork
+
+        Write-Log "🟡 Definindo DNS Google/Cloudflare..."
+        Set-DnsGoogleCloudflare
+
+        Write-Log "🟡 Instalando impressoras de rede..."
+        Install-NetworkPrinters
+
+        Write-Log "🟡 Limpando cache ARP..."
+        Clear-ARP
+
+        Write-Log "🟡 Limpando cache DNS..."
+        Flush-DNS
+
+        Write-Log "🟡 Otimizando TCP/DNS..."
+        Optimize-NetworkPerformance
+
+        Write-Log "🟢 Testando velocidade da internet..."
+        Test-InternetSpeed
+
+        Show-SuccessMessage
+    } catch {
+        Write-Log "❌ Erro durante execução de tarefas de rede: $_" Red
+    }
+}
             '2' { Add-WiFiNetwork; Show-SuccessMessage }
             '3' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
             '4' { Install-NetworkPrinters; Show-SuccessMessage }
