@@ -421,14 +421,24 @@ function Set-DnsGoogleCloudflare {
 }
 
 function Test-InternetSpeed {
-    Write-Log "Testando velocidade de internet usando PowerShell..." Yellow
+    Write-Log "Testando velocidade de internet..." Yellow
+    $speedtestPath = "$env:TEMP\speedtest.exe"
+
     try {
-        if (-not (Get-Command speedtest -ErrorAction SilentlyContinue)) {
-            winget install --id Ookla.Speedtest -e --accept-package-agreements --accept-source-agreements
+        if (-not (Test-Path $speedtestPath)) {
+            Write-Log "Baixando Speedtest CLI da Ookla..." Cyan
+            Invoke-WebRequest -Uri "https://install.speedtest.net/app/cli/SpeedtestCLI.exe" -OutFile $speedtestPath -UseBasicParsing
         }
-        speedtest
+
+        Write-Log "Executando Speedtest..." Cyan
+        & $speedtestPath --accept-license --accept-gdpr | ForEach-Object {
+            Write-Log "$_"
+        }
+
         Write-Log "Teste de velocidade concluído." Green
-    } catch { Write-Log "Erro ao testar velocidade: $_" Red }
+    } catch {
+        Write-Log "❌ Erro ao testar velocidade: $_" Red
+    }
 }
 
 function Clear-ARP {
