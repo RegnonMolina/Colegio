@@ -1992,7 +1992,7 @@ function Show-BloatwareMenu {
                 Stop-BloatwareProcesses
                 Run-ExternalDebloaters
                 Optimize-NetworkPerformance
-                Remove-BloatwareSafe
+                Remove-Bloatware
                 Remove-OneDrive-AndRestoreFolders
                 Remove-StartAndTaskbarPins
                 Remove-ScheduledTasksAggressive
@@ -2010,7 +2010,7 @@ function Show-BloatwareMenu {
             '11' { Stop-BloatwareProcesses; Show-SuccessMessage }
             '12' { Run-ExternalDebloaters; Show-SuccessMessage }
             '13' { Optimize-NetworkPerformance; Show-SuccessMessage }
-            '14' { Remove-BloatwareSafe }
+            '14' { Remove-Bloatware }
             '15' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
             '16' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
             '17' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
