@@ -1401,14 +1401,7 @@ function Restore-OfficeMacros {
 function Restore-OneDrive {
     Write-Log "🔄 Tentando reinstalar o OneDrive..." Cyan
 
-    $possiblePaths = @(
-        "$env:SystemRoot\SysWOW64\OneDriveSetup.exe",
-        "$env:SystemRoot\System32\OneDriveSetup.exe"
-    )
-
-    $setupPath = $possiblePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-
-    if (-not $setupPath) {
+    $setupPath {
         # Se o OneDriveSetup não existir localmente, baixe da internet
         $downloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=248256"
         $tempInstaller = "$env:TEMP\OneDriveSetup.exe"
