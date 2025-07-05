@@ -165,7 +165,8 @@ function Remove-Bloatware {
             Write-Log "Erro ao remover $($_.Name): $_" Red
         }
     }
-    
+}
+
 # Função para desativar tarefas agendadas de bloatware/telemetria
 function Disable-BloatwareScheduledTasks {
     Write-Log "Desativando tarefas agendadas de bloatware e telemetria..." Yellow
