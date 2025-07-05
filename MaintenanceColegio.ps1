@@ -870,20 +870,20 @@ function Enable-Sudo {
         return
     }
 
-    $profilePath = "$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+    $profilePath = $PROFILE.CurrentUserAllHosts
     if (-not (Test-Path $profilePath)) {
         New-Item -ItemType File -Path $profilePath -Force | Out-Null
     }
 
-    $content = Get-Content $profilePath -ErrorAction SilentlyContinue
+    $content = (Get-Content $profilePath -ErrorAction SilentlyContinue) -join "`n"
     if ($content -notmatch "function sudo") {
         Add-Content -Path $profilePath -Value @"
 function sudo {
     param([string]\$command)
-    Start-Process pwsh -ArgumentList "-Command \$command" -Verb RunAs
+    Start-Process pwsh -ArgumentList "-Command `"& { \$command }`"" -Verb RunAs
 }
 "@
-        Write-Log "Alias 'sudo' adicionado ao seu profile." Green
+        Write-Log "Alias 'sudo' adicionado ao seu profile. Abra uma nova janela do PowerShell para usar." Green
     } else {
         Write-Log "'sudo' já estava configurado." Cyan
     }
@@ -891,20 +891,19 @@ function sudo {
 
 
 function Enable-TaskbarEndTask {
-    $build = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").CurrentBuild
-    if ([int]$build -lt 23430) {
-        Write-Log "Este recurso exige o Windows 11 build 23430 ou superior." Red
-        return
-    }
-
     try {
+        $build = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").CurrentBuild
+        if (-not $build -or [int]$build -lt 23430) {
+            Write-Log "Este recurso exige o Windows 11 build 23430 ou superior." Red
+            return
+        }
+
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarEndTask /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "'Finalizar tarefa' ativado no menu da barra de tarefas." Green
+        Write-Log "'Finalizar tarefa' ativado no menu da barra de tarefas. Reinicie o Explorer ou faça logoff para ver o efeito." Green
     } catch {
-        Write-Log "Erro ao configurar TaskbarEndTask: $_" Red
+        Write-Log "Erro ao configurar TaskbarEndTask: $($_.Exception.Message)" Red
     }
 }
-
 
 function Enable-TaskbarSeconds {
     Write-Log "Ativando segundos no relógio da barra de tarefas..." Yellow
