@@ -312,12 +312,13 @@ function Update-PowerShell {
 
 # 4. Rede e Impressoras
 function Add-WiFiNetwork {
-    Write-Log "Configurando rede Wi-Fi 'VemProMundo - Adm'..." Yellow
+    try {
+        Write-Log "Configurando rede Wi-Fi 'VemProMundo - Adm'..." Yellow
 
-    $ssid = "VemProMundo - Adm"
-    $password = "!Mund0CoC@7281%"
+        $ssid = "VemProMundo - Adm"
+        $password = "!Mund0CoC@7281%"
 
-    $xmlProfile = @"
+        $xmlProfile = @"
 <?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
   <name>$ssid</name>
@@ -341,39 +342,23 @@ function Add-WiFiNetwork {
 </WLANProfile>
 "@
 
-    try {
-        $tempFile = "$env:TEMP\$($ssid.Replace(' ', '_')).xml"
+        # Usa caminho seguro sem nome 8.3
+        $safeSSID = $ssid -replace '[^a-zA-Z0-9]', '_'
+        $tempFile = Join-Path $env:TEMP "$safeSSID.xml"
+
         $xmlProfile | Out-File -FilePath $tempFile -Encoding ascii
 
-        netsh wlan add profile filename="$tempFile" user=all | Out-Null
-        netsh wlan connect name="$ssid" | Out-Null
+        netsh wlan add profile filename="`"$tempFile`"" user=all | Out-Null
+        netsh wlan set profileparameter name="`"$ssid`"" connectiontype=ESS | Out-Null
+        Set-NetConnectionProfile -Name "$ssid" -NetworkCategory Private
 
-        # Espera até a rede estar conectada (timeout: 15 segundos)
-        $connected = $false
-        for ($i = 0; $i -lt 15; $i++) {
-            Start-Sleep -Seconds 1
-            $status = netsh wlan show interfaces | Select-String "SSID\s+:\s+$ssid"
-            if ($status) {
-                $connected = $true
-                break
-            }
-        }
-
-        if ($connected) {
-            Set-NetConnectionProfile -InterfaceAlias "Wi-Fi" -NetworkCategory Private -ErrorAction SilentlyContinue
-            Write-Log "Rede '$ssid' conectada e configurada como privada." Green
-        } else {
-            Write-Log "⚠️ Não foi possível confirmar a conexão com '$ssid'. Definição como privada pulada." Yellow
-        }
+        Remove-Item -Path $tempFile -Force
+        Write-Log "Rede Wi-Fi configurada com sucesso e definida como privada." Green
     }
     catch {
-        Write-Log "Erro ao configurar rede Wi-Fi: $_" Red
-    }
-    finally {
-        if (Test-Path $tempFile) { Remove-Item $tempFile -Force }
+        Write-Log "❌ Erro ao configurar rede Wi-Fi: $_" Red
     }
 }
-
 
 # Função para detectar e instalar impressoras de rede automaticamente
 function Install-NetworkPrinters {
