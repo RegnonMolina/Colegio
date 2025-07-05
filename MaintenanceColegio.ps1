@@ -145,60 +145,26 @@ function Remove-Bloatware {
         "Microsoft.WindowsStore"
     )
 
-    $bloatwarePatterns = @(
-        "Microsoft.3DBuilder",
-        "Microsoft.BingNews",
-        "Microsoft.BingWeather",
-        "Microsoft.GetHelp",
-        "Microsoft.Getstarted",
-        "Microsoft.MicrosoftOfficeHub",
-        "Microsoft.MicrosoftSolitaireCollection",
-        "Microsoft.MixedReality.Portal",
-        "Microsoft.People",
-        "Microsoft.SkypeApp",
-        "Microsoft.Todos",
-        "Microsoft.Xbox",
-        "Microsoft.XboxGamingOverlay",
-        "Microsoft.Xbox.TCUI",
-        "Microsoft.XboxGameOverlay",
-        "Microsoft.XboxSpeechToTextOverlay",
-        "Microsoft.XboxIdentityProvider",
-        "Microsoft.ZuneMusic",
-        "Microsoft.ZuneVideo",
-        "Microsoft.YourPhone",
-        "Microsoft.MicrosoftStickyNotes",
-        "Microsoft.OneNote",
-        "Microsoft.Outlook",
-        "Microsoft.OutlookForWindows",
-        "Microsoft.LinkedIn"
-    )
-
-    # Remover AppxPackage por usuário atual
-    foreach ($pattern in $bloatwarePatterns) {
-        $apps = Get-AppxPackage -Name $pattern -ErrorAction SilentlyContinue
-        foreach ($app in $apps) {
-            if (-not ($whitelist -contains $app.Name)) {
-                Write-Log "Removendo: $($app.Name)" Cyan
-                Remove-AppxPackage -Package $app.PackageFullName -ErrorAction SilentlyContinue
-            }
+    Write-Log "Removendo bloatware padrão..." Yellow
+    $bloatware = @(
+        "Microsoft.BingNews", "Microsoft.BingWeather", "Microsoft.GetHelp",
+        "Microsoft.Getstarted", "Microsoft.MicrosoftOfficeHub", "Microsoft.MicrosoftSolitaireCollection",
+        "Microsoft.People", "Microsoft.SkypeApp", "Microsoft.WindowsAlarms",
+        "microsoft.windowscommunicationsapps", "Microsoft.WindowsFeedbackHub",
+        "Microsoft.WindowsMaps", "Microsoft.WindowsSoundRecorder", "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxApp", "Microsoft.XboxGameOverlay", "Microsoft.XboxIdentityProvider",
+        "Microsoft.XboxSpeechToTextOverlay", "Microsoft.ZuneMusic", "Microsoft.ZuneVideo",
+        "Microsoft.MixedReality.Portal", "Microsoft.LinkedIn", "Microsoft.QuickAssist", "Microsoft.549981C3F5F10", "Microsoft.Windows.CommunicationsApps",
+        "Microsoft.OneDrive", "Microsoft.Teams", "Microsoft.WindowsFeedbackHub", "Microsoft.LinkedIn"
+        )
+    Get-AppxPackage -AllUsers | Where-Object { $whitelist -notcontains $_.Name } | ForEach-Object {
+        try {
+            Write-Log "Removendo $($_.Name)..." Cyan
+            Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+        } catch {
+            Write-Log "Erro ao remover $($_.Name): $_" Red
         }
     }
-
-    # Remover AppxProvisionedPackage (para novos usuários)
-    foreach ($pattern in $bloatwarePatterns) {
-        $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "$pattern*" }
-        foreach ($pkg in $provisioned) {
-            if (-not ($whitelist -contains $pkg.DisplayName)) {
-                Write-Log "Removendo provisionado: $($pkg.DisplayName)" Cyan
-                Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName -ErrorAction SilentlyContinue
-            }
-        }
-    }
-
-    Write-Log "Remoção segura de bloatware concluída." Green
-    Show-SuccessMessage
-}
-
     
 # Função para desativar tarefas agendadas de bloatware/telemetria
 function Disable-BloatwareScheduledTasks {
