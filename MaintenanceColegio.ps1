@@ -1806,27 +1806,31 @@ function Show-MainMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " SCRIPT DE MANUTENÇÃO WINDOWS - MENU PRINCIPAL" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Sistema e Desempenho" -ForegroundColor Yellow
-        Write-Host " 2. Privacidade e Segurança" -ForegroundColor Yellow
-        Write-Host " 3. Limpeza e Otimização" -ForegroundColor Yellow
-        Write-Host " 4. Diagnóstico e Informações" -ForegroundColor Yellow
-        Write-Host " 5. Instalação de Programas" -ForegroundColor Yellow
+        Write-Host " 1. Bloatware, Privacidade e Hardening" -ForegroundColor Yellow
+        Write-Host " 2. Configurações Avançadas" -ForegroundColor Yellow
+        Write-Host " 3. Diagnóstico e Informações" -ForegroundColor Yellow
+        Write-Host " 4. Instalação de Programas" -ForegroundColor Yellow
+        Write-Host " 5. Limpeza e Otimização" -ForegroundColor Yellow
         Write-Host " 6. Rede e Impressoras" -ForegroundColor Yellow
-        Write-Host " 7. Scripts e Utilidades" -ForegroundColor Yellow
-        Write-Host " 8. Reiniciar o Windows" -ForegroundColor Yellow
-        Write-Host " 0. Sair" -ForegroundColor Red
+        Write-Host " 7. Restauração e Segurança (Undo)" -ForegroundColor Yellow
+        Write-Host " 8. Scripts Externos e Ativadores" -ForegroundColor Yellow
+        Write-Host " 9. Sistema e Desempenho" -ForegroundColor Yellow
+        Write-Host " R. Reiniciar o PC" -ForegroundColor Red
+        Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $choice = Read-Host "`nSelecione uma opção"
-        switch ($choice) {
-            '1' { Show-SystemPerformanceMenu }
-            '2' { Show-PrivacySecurityMenu }
-            '3' { Show-CleanupMenu }
-            '4' { Show-DiagnosticsMenu }
-            '5' { Show-InstallationMenu }
+        switch ($choice.ToUpper()) {
+            '1' { Show-BloatwareMenu }
+            '2' { Show-AdvancedSettingsMenu }
+            '3' { Show-DiagnosticsMenu }
+            '4' { Show-InstallationMenu }
+            '5' { Show-CleanupMenu }
             '6' { Show-NetworkMenu }
-            '7' { Show-AdvancedSettingsMenu }
-            '8' {
+            '7' { Show-RestoreUndoMenu }
+            '8' { Show-ExternalScriptsMenu }
+            '9' { Show-SystemPerformanceMenu }
+            'R' {
                 Write-Log "Reiniciando o computador..." Cyan
                 Restart-Computer -Force
             }
