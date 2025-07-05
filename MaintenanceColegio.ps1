@@ -1056,6 +1056,12 @@ function Remove-Copilot {
 }
 
 function Remove-OneDrive-AndRestoreFolders {
+    $confirm = Read-Host "⚠️ Tem certeza que deseja REMOVER o OneDrive e restaurar pastas? (s/n)"
+    if ($confirm -ne 's') {
+        Write-Host "❌ Operação cancelada pelo usuário." -ForegroundColor Yellow
+        return
+    }
+
     Write-Log "Removendo OneDrive e restaurando pastas padrão..." Yellow
     try {
         taskkill /f /im OneDrive.exe
@@ -1067,9 +1073,12 @@ function Remove-OneDrive-AndRestoreFolders {
             $regPath = "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
             Set-ItemProperty -Path $regPath -Name $folder -Value ("%%USERPROFILE%%\" + $folder)
         }
-        Write-Log "OneDrive removido e pastas restauradas." Green
-    } catch { Write-Log "Erro ao remover Onedrive/restaurar pastas: $_" Red }
+        Write-Log "✅ OneDrive removido e pastas restauradas." Green
+    } catch {
+        Write-Log "❌ Erro ao remover Onedrive/restaurar pastas: $_" Red
+    }
 }
+
 
 function Backup-Registry {
     Write-Log "Fazendo backup do registro (SOFTWARE, SYSTEM, HKCU)..." Yellow
@@ -2026,8 +2035,5 @@ try {
 catch {
     Write-Host "❌ Erro fatal: $_" -ForegroundColor Red
     Write-Host "Consulte o log em: `"$logFile`"" -ForegroundColor Yellow
-    Pause-Script
-}
-finally {
     Pause-Script
 }
