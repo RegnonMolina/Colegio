@@ -214,7 +214,7 @@ function Remove-Bloatware {
     }
 
     Write-Log "Remoção de aplicativos adicionais concluída." Green
-}
+
 
 # Função para desativar tarefas agendadas de bloatware/telemetria
 function Disable-BloatwareScheduledTasks {
@@ -1420,7 +1420,7 @@ function Restore-BloatwareSafe {
             Get-AppxPackage -AllUsers -Name $app -ErrorAction SilentlyContinue |
                 ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml" }
         } catch {
-            Write-Log "Erro ao restaurar $app: $_" Red
+            Write-Log "Erro ao restaurar ${app}: $_" Red
         }
     }
 
