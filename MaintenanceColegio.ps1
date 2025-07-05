@@ -1293,6 +1293,7 @@ catch {
     Write-Log "❌ Falha ao carregar script online: $_" Red
     Show-SuccessMessage
 }
+}
 
 
 # Autologin seguro
