@@ -132,41 +132,124 @@ function Optimize-Volumes {
 
 # 2. Bloatwarefunction Install
 function Remove-Bloatware {
-    Write-Log "Iniciando remoção segura de bloatware..." Yellow
-
+    # Lista de apps essenciais que NÃO devem ser removidos
     $whitelist = @(
         "Microsoft.WindowsCalculator",
         "Microsoft.WindowsCamera",
         "Microsoft.WindowsSoundRecorder",
-        "Microsoft.ScreenSketch",        # Ferramenta de Captura
-        "Microsoft.WindowsNotepad",      # Notepad moderno
-        "Microsoft.StorePurchaseApp",
-        "Microsoft.DesktopAppInstaller",
-        "Microsoft.WindowsStore"
+        "Microsoft.WindowsStore",
+        "Microsoft.Windows.Photos",
+        "Microsoft.WindowsNotepad",
+        "Microsoft.DesktopAppInstaller", # Necessário para winget
+        "Microsoft.Paint",
+        "Microsoft.MSPaint"
     )
 
-    Write-Log "Removendo bloatware padrão..." Yellow
+    # Lista dos principais bloatwares do Windows 11
     $bloatware = @(
-        "Microsoft.BingNews", "Microsoft.BingWeather", "Microsoft.GetHelp",
-        "Microsoft.Getstarted", "Microsoft.MicrosoftOfficeHub", "Microsoft.MicrosoftSolitaireCollection",
-        "Microsoft.People", "Microsoft.SkypeApp", "Microsoft.WindowsAlarms",
-        "microsoft.windowscommunicationsapps", "Microsoft.WindowsFeedbackHub",
-        "Microsoft.WindowsMaps", "Microsoft.WindowsSoundRecorder", "Microsoft.Xbox.TCUI",
-        "Microsoft.XboxApp", "Microsoft.XboxGameOverlay", "Microsoft.XboxIdentityProvider",
-        "Microsoft.XboxSpeechToTextOverlay", "Microsoft.ZuneMusic", "Microsoft.ZuneVideo",
-        "Microsoft.MixedReality.Portal", "Microsoft.LinkedIn", "Microsoft.QuickAssist", "Microsoft.549981C3F5F10", "Microsoft.Windows.CommunicationsApps",
-        "Microsoft.OneDrive", "Microsoft.Teams", "Microsoft.WindowsFeedbackHub", "Microsoft.LinkedIn"
-        )
-    Get-AppxPackage -AllUsers | Where-Object { $whitelist -notcontains $_.Name } | ForEach-Object {
-        try {
-            Write-Log "Removendo $($_.Name)..." Cyan
-            Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-        } catch {
-            Write-Log "Erro ao remover $($_.Name): $_" Red
+        "Microsoft.3DBuilder",
+        "Microsoft.BingNews",
+        "Microsoft.BingWeather",
+        "Microsoft.GetHelp",
+        "Microsoft.Getstarted",
+        "Microsoft.MicrosoftOfficeHub",
+        "Microsoft.MicrosoftSolitaireCollection",
+        "Microsoft.MixedReality.Portal",
+        "Microsoft.MicrosoftStickyNotes",
+        "Microsoft.OneNote",
+        "Microsoft.Outlook",
+        "Microsoft.OutlookForWindows",
+        "Microsoft.People",
+        "Microsoft.SkypeApp",
+        "Microsoft.Todos",
+        "Microsoft.Xbox",
+        "Microsoft.XboxGamingOverlay",
+        "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxGameOverlay",
+        "Microsoft.XboxSpeechToTextOverlay",
+        "Microsoft.XboxIdentityProvider",
+        "Microsoft.ZuneMusic",
+        "Microsoft.ZuneVideo",
+        "Microsoft.LinkedIn",
+        "Microsoft.WindowsAlarms", # Relógio
+        "Microsoft.WindowsMaps",
+        "Microsoft.Wallet",
+        "Microsoft.Whiteboard",
+        "Microsoft.Microsoft3DViewer",
+        "Microsoft.MicrosoftEdgeStaging",
+        "Microsoft.WindowsFeedbackHub"
+    )
+
+    function Write-Log($msg, $color = "Gray") {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        Write-Host "[$timestamp] $msg" -ForegroundColor $color
+    }
+
+    Write-Log "==== INÍCIO REMOÇÃO DE BLOATWARE ====" Cyan
+
+    # Remover AppxPackage do usuário atual
+    foreach ($pattern in $bloatware) {
+        $apps = Get-AppxPackage -Name $pattern -ErrorAction SilentlyContinue
+        foreach ($app in $apps) {
+            if (-not ($whitelist -contains $app.Name)) {
+                try {
+                    Write-Log "Removendo AppxPackage: $($app.Name)" Yellow
+                    Remove-AppxPackage -Package $app.PackageFullName -ErrorAction Stop
+                    Write-Log "Removido: $($app.Name)" Green
+                } catch {
+                    Write-Log "Erro ao remover $($app.Name): $($_.Exception.Message)" Red
+                }
+            }
         }
     }
-}
 
+    # Remover AppxProvisionedPackage (para novos usuários)
+    foreach ($pattern in $bloatware) {
+        $provApps = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "$pattern*" }
+        foreach ($prov in $provApps) {
+            if (-not ($whitelist -contains $prov.DisplayName)) {
+                try {
+                    Write-Log "Removendo AppxProvisionedPackage: $($prov.DisplayName)" Yellow
+                    Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction Stop
+                    Write-Log "Removido: $($prov.DisplayName)" Green
+                } catch {
+                    Write-Log "Erro ao remover $($prov.DisplayName): $($_.Exception.Message)" Red
+                }
+            }
+        }
+    }
+
+    # Remover para todos os usuários (AllUsers)
+    foreach ($pattern in $bloatware) {
+        $appsAll = Get-AppxPackage -AllUsers -Name $pattern -ErrorAction SilentlyContinue
+        foreach ($app in $appsAll) {
+            if (-not ($whitelist -contains $app.Name)) {
+                try {
+                    Write-Log "Removendo AppxPackage (AllUsers): $($app.Name)" Yellow
+                    Remove-AppxPackage -Package $app.PackageFullName -AllUsers -ErrorAction Stop
+                    Write-Log "Removido (AllUsers): $($app.Name)" Green
+                } catch {
+                    Write-Log "Erro ao remover (AllUsers) $($app.Name): $($_.Exception.Message)" Red
+                }
+            }
+        }
+    }
+
+    # Remover OneDrive (opcional, descomente se quiser)
+     try {
+         if (Test-Path "$env:SystemRoot\System32\OneDriveSetup.exe") {
+             Write-Log "Desinstalando OneDrive..." Cyan
+             Start-Process "$env:SystemRoot\System32\OneDriveSetup.exe" -ArgumentList "/uninstall" -NoNewWindow -Wait
+             Remove-Item "$env:LocalAppData\Microsoft\OneDrive" -Force -Recurse -ErrorAction SilentlyContinue
+             Remove-Item "$env:ProgramData\Microsoft OneDrive" -Force -Recurse -ErrorAction SilentlyContinue
+             Write-Log "OneDrive desinstalado." Green
+         }
+     } catch {
+         Write-Log "Erro ao remover OneDrive: $($_.Exception.Message)" Red
+     }
+
+    Write-Log "==== FIM REMOÇÃO DE BLOATWARE ====" Cyan
+}
 # Função para desativar tarefas agendadas de bloatware/telemetria
 function Disable-BloatwareScheduledTasks {
     Write-Log "Desativando tarefas agendadas de bloatware e telemetria..." Yellow
