@@ -1,13 +1,27 @@
-<#
-.SYNOPSIS
-    Script Supremo de Manutenção Windows - Versão Intermediária Completa
-.DESCRIPTION
-    Script completo para automação de manutenção, ajustes, remoção de bloatware, instalação de apps, impressoras e padronização de notebooks do colégio.
-.NOTES
-    Autor: Adaptado por IA
-    Versão: Intermediária Completa
-    Execute como Administrador!
-#>
+# ===============================
+# SCRIPT SUPREMO DE MANUTENÇÃO 🛠️
+# ===============================
+# Iniciado em: $(Get-Date)
+# Desenvolvido com sangue, café e PowerShell 💪
+
+# === VARIÁVEIS GLOBAIS ===
+$logFile = "$PSScriptRoot\log.txt"
+$startTime = Get-Date
+
+# === FUNÇÕES DE UTILIDADE ===
+function Write-Log($msg, $color = "Gray") {
+    Write-Host "[LOG] $msg" -ForegroundColor $color
+}
+
+function Pause-Script {
+    Write-Host "`nPressione Enter para continuar..." -ForegroundColor DarkGray
+    Read-Host
+}
+
+function Show-SuccessMessage {
+    Write-Host "`n✅ Tarefa concluída com sucesso!" -ForegroundColor Green
+    Pause-Script
+}
 
 #region → Configurações Iniciais
 $Host.UI.RawUI.WindowTitle = "MANUTENÇÃO WINDOWS - NÃO FECHE ESTA JANELA"
@@ -307,27 +321,6 @@ function Add-WiFiNetwork {
     Set-NetConnectionProfile -Name "$ssid" -NetworkCategory Private
     Remove-Item $tempFile
     Write-Log "Rede Wi-Fi configurada como privada." Green
-}
-
-function Install-Printers {
-    Write-Log "Instalando impressoras de rede..." Yellow
-    $printers = @{
-        # Adicione suas impressoras aqui no formato: "Nome da Impressora" = "192.168.x.x"
-    }
-    
-    foreach ($printer in $printers.Keys) {
-        $ip = $printers[$printer]
-        $portName = "IP_$($ip.Replace('.','_'))"
-        
-        if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
-            Add-PrinterPort -Name $portName -PrinterHostAddress $ip
-        }
-        
-        if (-not (Get-Printer -Name $printer -ErrorAction SilentlyContinue)) {
-            Add-Printer -Name $printer -DriverName "Generic / Text Only" -PortName $portName
-        }
-        Write-Log "Impressora $printer ($ip) instalada." Green
-    }
 }
 
 # Função para detectar e instalar impressoras de rede automaticamente
@@ -1135,8 +1128,34 @@ function Test-Memory {
     Write-Log "Teste de memória agendado." Green
 }
 
+function Run-WindowsActivator {
+    Clear-Host
+    Write-Host "==== ATIVAÇÃO DO WINDOWS ====" -ForegroundColor Cyan
+    Write-Host "Executando script de ativação oficial (get.activated.win)..." -ForegroundColor Yellow
+    try {
+        irm https://get.activated.win | iex
+        Write-Log "Script de ativação executado com sucesso." Green
+    } catch {
+        Write-Log "Erro ao executar o script de ativação: $_" Red
+    }
+    Pause-Script
+}
+
+function Run-ChrisTitusToolbox {
+    Clear-Host
+    Write-Host "==== CHRIS TITUS TOOLBOX ====" -ForegroundColor Cyan
+    Write-Host "Executando toolbox oficial do site christitus.com..." -ForegroundColor Yellow
+    try {
+        irm christitus.com/win | iex
+        Write-Log "Chris Titus Toolbox executado com sucesso." Green
+    } catch {
+        Write-Log "Erro ao executar o script do Chris Titus: $_" Red
+    }
+    Pause-Script
+}
+
 # Autologin seguro
-function Enable-AutoLogin {
+function Show-AutoLoginMenu {
     Write-Host "=== Configurar Autologin ===" -ForegroundColor Cyan
     $username = Read-Host "Digite o usuário para autologin (ex: Administrator ou SeuUsuario)"
     $password = Read-Host "Digite a senha para autologin (não aparecerá na tela)" -AsSecureString
@@ -1248,365 +1267,427 @@ function Restore-OfficeMacros {
         Write-Log "Macros do Office retornaram ao padrão." Green
     } catch { Write-Log "Erro ao restaurar macros: $_" Red }
 }
-
-function Show-RestoreUndoMenu {
+# === MENU: SISTEMA E DESEMPENHO ===
+function Show-SystemPerformanceMenu {
     do {
         Clear-Host
-        Write-Host "=============================================" -ForegroundColor Magenta
-        Write-Host " REVERTER AJUSTES & SEGURANÇA" -ForegroundColor Magenta
-        Write-Host "=============================================" -ForegroundColor Magenta
-        Write-Host " 1. Restaurar UAC para padrão"
-        Write-Host " 2. Reabilitar IPv6"
-        Write-Host " 3. Restaurar backup do registro"
-        Write-Host " 4. Desfazer privacidade agressiva"
-        Write-Host " 5. Restaurar visual padrão"
-        Write-Host " 6. Reabilitar Action Center/Notificações"
-        Write-Host " 7. Habilitar SMBv1 (NÃO RECOMENDADO)"
-        Write-Host " 8. Desabilitar SMBv1 (RECOMENDADO)"
-        Write-Host " 9. Bloquear macros Office (segurança)"
-        Write-Host "10. Restaurar macros Office (padrão)"
-        Write-Host " 0. Voltar ao menu principal"
-        $choice = Read-Host "`nSelecione uma opção"
+        Write-Host "==== MENU: SISTEMA E DESEMPENHO ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todas as opções abaixo" -ForegroundColor Green
+        Write-Host "2. Ajustar tema do Windows para desempenho"
+        Write-Host "3. Desativar serviços desnecessários"
+        Write-Host "4. Otimizar Windows Explorer para desempenho"
+        Write-Host "5. Renomear notebook"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
-            '1' { Restore-DefaultUAC; Show-SuccessMessage }
-            '2' { Restore-DefaultIPv6; Show-SuccessMessage }
-            '3' { Restore-Registry-FromBackup; Show-SuccessMessage }
-            '4' { Undo-PrivacyHardening; Show-SuccessMessage }
-            '5' { Restore-VisualPerformanceDefault; Show-SuccessMessage }
-            '6' { ReEnable-ActionCenter-Notifications; Show-SuccessMessage }
-            '7' { Enable-SMBv1; Show-SuccessMessage }
-            '8' { Disable-SMBv1; Show-SuccessMessage }
-            '9' { Harden-OfficeMacros; Show-SuccessMessage }
-            '10' { Restore-OfficeMacros; Show-SuccessMessage }
+            '1' {
+                Set-PerformanceTheme
+                Disable-UnnecessaryServices
+                Optimize-ExplorerPerformance
+                Renomear-Notebook
+                Show-SuccessMessage
+            }
+            '2' { Set-PerformanceTheme; Show-SuccessMessage }
+            '3' { Disable-UnnecessaryServices; Show-SuccessMessage }
+            '4' { Optimize-ExplorerPerformance; Show-SuccessMessage }
+            '5' { Renomear-Notebook; Show-SuccessMessage }
             '0' { return }
-            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
 }
 
-#region → Menus Hierárquicos
-# ==== PARTE 2: Menus Avançados e Execução em Lote ====
-# Cole abaixo dos outros menus, antes da chamada Show-MainMenu ou substitua/complete os menus existentes se desejar.
-
-# ---------------------- BLOCO: Limpeza e Otimização (menu incrementado) ----------------------
-
-function Run-All-CleanupAdvanced {
-    Clean-TemporaryFiles
-    Clear-WUCache
-    Flush-DNS
-    Optimize-Volumes
-    Clean-WinSxS
-    Schedule-ChkDsk
-    Remove-WindowsOld
-    Deep-SystemCleanup
-    Clean-PrintSpooler
-    Clean-Prefetch
-    Show-SuccessMessage
-}
-
-function Show-CleanupMenu {
+# === MENU: PRIVACIDADE E SEGURANÇA ===
+function Show-PrivacySecurityMenu {
     do {
         Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " LIMPEZA E OTIMIZAÇÃO" -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Executar todas as tarefas abaixo em sequência" -ForegroundColor Green
-        Write-Host " 2. Limpar arquivos temporários" -ForegroundColor Yellow
-        Write-Host " 3. Limpar cache do Windows Update" -ForegroundColor Yellow
-        Write-Host " 4. Limpar cache DNS" -ForegroundColor Yellow
-        Write-Host " 5. Otimizar volumes" -ForegroundColor Yellow
-        Write-Host " 6. Limpar WinSxS" -ForegroundColor Yellow
-        Write-Host " 7. Agendar chkdsk /f /r" -ForegroundColor Yellow
-        Write-Host " 8. Remover Windows.old" -ForegroundColor Yellow
-        Write-Host " 9. Limpeza profunda de cache, logs, drivers antigos" -ForegroundColor Yellow
-        Write-Host "10. Limpar spooler de impressão" -ForegroundColor Yellow
-        Write-Host "11. Limpar Prefetch" -ForegroundColor Yellow
-        Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
-        
-        $choice = Read-Host "`nSelecione uma opção"
+        Write-Host "==== MENU: PRIVACIDADE E SEGURANÇA ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todas as opções abaixo" -ForegroundColor Green
+        Write-Host "2. Aplicar hardening de segurança"
+        Write-Host "3. Bloatware, Privacidade e Atualizações"
+        Write-Host "4. Reverter ajustes / Segurança extra"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
-            '1' { Run-All-CleanupAdvanced }
-            '2' { Clean-TemporaryFiles; Show-SuccessMessage }
-            '3' { Clear-WUCache; Show-SuccessMessage }
-            '4' { Flush-DNS; Show-SuccessMessage }
-            '5' { Optimize-Volumes; Show-SuccessMessage }
-            '6' { Clean-WinSxS; Show-SuccessMessage }
-            '7' { Schedule-ChkDsk; Show-SuccessMessage }
-            '8' { Remove-WindowsOld; Show-SuccessMessage }
-            '9' { Deep-SystemCleanup; Show-SuccessMessage }
-            '10' { Clean-PrintSpooler; Show-SuccessMessage }
-            '11' { Clean-Prefetch; Show-SuccessMessage }
+            '1' {
+                Enable-WindowsHardening
+                Show-BloatwareMenu
+                Show-RestoreUndoMenu
+                Show-SuccessMessage
+            }
+            '2' { Enable-WindowsHardening; Show-SuccessMessage }
+            '3' { Show-BloatwareMenu }
+            '4' { Show-RestoreUndoMenu }
             '0' { return }
-            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
 }
 
-# ---------------------- BLOCO: Bloatware, Privacidade, Hardening (menu incrementado) ----------------------
-
-function Run-All-BloatwareAdvanced {
-    Remove-Bloatware
-    Remove-AdditionalBloatware
-    Remove-UWPBloatware
-    Remove-ProvisionedBloatware
-    Remove-Copilot
-    Remove-OneDrive-AndRestoreFolders
-    Remove-Edge
-    Disable-ActionCenter-Notifications
-    Disable-BloatwareScheduledTasks
-    Stop-BloatwareProcesses
-    Remove-StartAndTaskbarPins
-    Remove-ScheduledTasksAggressive
-    Enable-ClassicContextMenu
-    Apply-ExtraTweaks
-    Disable-Cortana-AndSearch
-    Disable-UAC
-    Enable-PrivacyHardening
-    Optimize-NetworkPerformance
-    Disable-IPv6
-    Set-VisualPerformance
-    Run-ExternalDebloaters
-    Backup-Registry
-    Show-SuccessMessage
-}
-
-function Show-BloatwareMenu {
-    do {
-        Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " BLOATWARE, PRIVACIDADE, HARDENING, EXTRAS" -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Executar todas as tarefas abaixo em sequência" -ForegroundColor Green
-        Write-Host " 2. Remover bloatware padrão"
-        Write-Host " 3. Remover aplicativos adicionais"
-        Write-Host " 4. Remover UWP bloatware (exceto essenciais)"
-        Write-Host " 5. Remover bloatware (whitelist)"
-        Write-Host " 6. Remover Copilot"
-        Write-Host " 7. Remover OneDrive e restaurar pastas"
-        Write-Host " 8. Remover Microsoft Edge"
-        Write-Host " 9. Desabilitar Action Center/Notificações"
-        Write-Host "10. Desativar tarefas agendadas de bloatware"
-        Write-Host "11. Encerrar processos dispensáveis"
-        Write-Host "12. Remover pins do Menu Iniciar/Barra de Tarefas"
-        Write-Host "13. Remover tarefas agendadas (agressivo)"
-        Write-Host "14. Restaurar menu de contexto clássico"
-        Write-Host "15. Aplicar tweaks extras (bloqueio anúncios, F8, sons, web search, Cast to Device)"
-        Write-Host "16. Desativar Cortana, Search, Telemetria, Relatórios de Erro"
-        Write-Host "17. Desabilitar UAC"
-        Write-Host "18. Aplicar privacidade agressiva"
-        Write-Host "19. Otimizar rede (TCP/DNS)"
-        Write-Host "20. Desabilitar IPv6"
-        Write-Host "21. Ajustar visual para performance"
-        Write-Host "22. Executar debloaters de terceiros"
-        Write-Host "23. Backup do registro"
-        Write-Host "24. Restaurar backup do registro"
-        Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
-        
-        $choice = Read-Host "`nSelecione uma opção"
-        switch ($choice) {
-            '1' { Run-All-BloatwareAdvanced }
-            '2' { Remove-Bloatware; Show-SuccessMessage }
-            '3' { Remove-AdditionalBloatware; Show-SuccessMessage }
-            '4' { Remove-UWPBloatware; Show-SuccessMessage }
-            '5' { Remove-ProvisionedBloatware; Show-SuccessMessage }
-            '6' { Remove-Copilot; Show-SuccessMessage }
-            '7' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
-            '8' { Remove-Edge; Show-SuccessMessage }
-            '9' { Disable-ActionCenter-Notifications; Show-SuccessMessage }
-            '10' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
-            '11' { Stop-BloatwareProcesses; Show-SuccessMessage }
-            '12' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
-            '13' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
-            '14' { Enable-ClassicContextMenu; Show-SuccessMessage }
-            '15' { Apply-ExtraTweaks; Show-SuccessMessage }
-            '16' { Disable-Cortana-AndSearch; Show-SuccessMessage }
-            '17' { Disable-UAC; Show-SuccessMessage }
-            '18' { Enable-PrivacyHardening; Show-SuccessMessage }
-            '19' { Optimize-NetworkPerformance; Show-SuccessMessage }
-            '20' { Disable-IPv6; Show-SuccessMessage }
-            '21' { Set-VisualPerformance; Show-SuccessMessage }
-            '22' { Run-ExternalDebloaters; Show-SuccessMessage }
-            '23' { Backup-Registry; Show-SuccessMessage }
-            '24' { Restore-Registry; Show-SuccessMessage }
-            '0' { return }
-            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
-        }
-    } while ($true)
-}
-
-# ---------------------- BLOCO: Menu Autologin (inclua no menu principal) ----------------------
-
-function Show-AutoLoginMenu {
-    Clear-Host
-    Write-Host "===== AUTOLOGIN =====" -ForegroundColor Cyan
-    Enable-AutoLogin
-}
-
+# === MENU: INSTALAÇÃO E FERRAMENTAS ===
 function Show-InstallationMenu {
     do {
         Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " INSTALAÇÃO DE PROGRAMAS" -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Instalar todos os programas" -ForegroundColor Yellow
-        Write-Host " 2. Instalar Google Chrome" -ForegroundColor Yellow
-        Write-Host " 3. Instalar Google Drive" -ForegroundColor Yellow
-        Write-Host " 4. Instalar VLC Media Player" -ForegroundColor Yellow
-        Write-Host " 5. Instalar Microsoft Office" -ForegroundColor Yellow
-        Write-Host " 6. Instalar Microsoft PowerToys" -ForegroundColor Yellow
-        Write-Host " 7. Instalar AnyDesk" -ForegroundColor Yellow
-        Write-Host " 8. Instalar Notepad++" -ForegroundColor Yellow
-        Write-Host " 9. Instalar 7-Zip" -ForegroundColor Yellow
-        Write-Host "10. Instalar/Atualizar PowerShell" -ForegroundColor Yellow
-		Write-Host "11. Instalar AutoHotKey" -ForegroundColor Yellow
-        Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
-        
-        $choice = Read-Host "`nSelecione uma opção"
+        Write-Host "==== MENU: INSTALAÇÃO DE PROGRAMAS ====" -ForegroundColor Cyan
+        Write-Host "1. Instalar todos os programas" -ForegroundColor Green
+        Write-Host "2. Instalar 7-Zip"
+        Write-Host "3. Instalar AnyDesk"
+        Write-Host "4. Instalar AutoHotKey"
+        Write-Host "5. Instalar Google Chrome"
+        Write-Host "6. Instalar Google Drive"
+        Write-Host "7. Instalar Microsoft Office"
+        Write-Host "8. Instalar Microsoft PowerToys"
+        Write-Host "9. Instalar Notepad++"
+        Write-Host "10. Instalar VLC Media Player"
+        Write-Host "11. Instalar/Atualizar PowerShell"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
-            '1' { Install-Applications; Pause-Script }
-            '2' { winget install --id Google.Chrome -e --accept-package-agreements --accept-source-agreements; Pause-Script }
-            '3' { winget install --id Google.GoogleDrive -e --accept-package-agreements --accept-source-agreements; Pause-Script }
-            '4' { winget install --id VideoLAN.VLC -e --accept-package-agreements --accept-source-agreements; Pause-Script }
-            '5' { winget install --id Microsoft.Office -e --accept-package-agreements --accept-source-agreements; Pause-Script }
-            '6' { winget install --id Microsoft.PowerToys -e --accept-package-agreements --accept-source-agreements; Pause-Script }
-            '7' { winget install --id AnyDesk.AnyDesk -e --accept-package-agreements --accept-source-agreements; Pause-Script }
-            '8' { winget install --id Notepad++.Notepad++ -e --accept-package-agreements --accept-source-agreements; Pause-Script }
-            '9' { winget install --id 7zip.7zip -e --accept-package-agreements --accept-source-agreements; Pause-Script }
-            '10' { Update-PowerShell; Pause-Script }
-			'11' {winget install --id AutoHotkey.AutoHotkey -e --accept-package-agreements --accept-source-agreements; Pause-Script}
+            '1' { Install-Applications; Show-SuccessMessage }
+            '2' { winget install --id 7zip.7zip -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
+            '3' { winget install --id AnyDesk.AnyDesk -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
+            '4' { winget install --id AutoHotkey.AutoHotkey -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
+            '5' { winget install --id Google.Chrome -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
+            '6' { winget install --id Google.GoogleDrive -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
+            '7' { winget install --id Microsoft.Office -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
+            '8' { winget install --id Microsoft.PowerToys -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
+            '9' { winget install --id Notepad++.Notepad++ -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
+            '10' { winget install --id VideoLAN.VLC -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
+            '11' { Update-PowerShell; Show-SuccessMessage }
             '0' { return }
-            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
 }
+
+# === MENU: CONFIGURAÇÕES AVANÇADAS ===
+function Show-AdvancedSettingsMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: CONFIGURAÇÕES AVANÇADAS ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todos os ajustes abaixo" -ForegroundColor Green
+        Write-Host "2. Ajustes do Painel de Controle/Configurações"
+        Write-Host "3. Configurar Autologin"
+        Write-Host "4. Tweaks de interface do Explorer"
+        Write-Host "5. Scripts externos (Ativador e Chris Titus)"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
+        switch ($choice) {
+            '1' {
+                Show-ControlPanelTweaksMenu
+                Show-AutoLoginMenu
+                Show-ExplorerTweaksMenu
+                Show-ExternalScriptsMenu
+            }
+            '2' { Show-ControlPanelTweaksMenu }
+            '3' { Show-AutoLoginMenu }
+            '4' { Show-ExplorerTweaksMenu }
+            '5' { Show-ExternalScriptsMenu }
+            '0' { return }
+            default {
+                Write-Host "Opção inválida!" -ForegroundColor Red
+                Start-Sleep -Seconds 1
+            }
+        }
+    } while ($true)
+}
+
+function Show-ExternalScriptsMenu {
+    do {
+        Clear-Host
+        Write-Host "==== SCRIPTS EXTERNOS ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todos os scripts abaixo" -ForegroundColor Green
+        Write-Host "2. Ativar Windows (get.activated.win)"
+        Write-Host "3. Toolbox Chris Titus (christitus.com)"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
+        switch ($choice) {
+            '1' {
+                Run-WindowsActivator
+                Run-ChrisTitusToolbox
+            }
+            '2' { Run-WindowsActivator }
+            '3' { Run-ChrisTitusToolbox }
+            '0' { return }
+            default {
+                Write-Host "Opção inválida!" -ForegroundColor Red
+                Start-Sleep -Seconds 1
+            }
+        }
+    } while ($true)
+}
+
 
 function Show-NetworkMenu {
     do {
         Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " REDE E OTIMIZAÇÃO" -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Executar todas as tarefas abaixo em sequência" -ForegroundColor Green
-        Write-Host " 2. Limpar cache DNS" -ForegroundColor Yellow
-        Write-Host " 3. Otimizar TCP/DNS" -ForegroundColor Yellow
-        Write-Host " 4. Definir DNS Google/Cloudflare" -ForegroundColor Yellow
-        Write-Host " 5. Testar velocidade de internet" -ForegroundColor Yellow
-        Write-Host " 6. Limpar cache ARP" -ForegroundColor Yellow
-        Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "==== MENU: REDE E IMPRESSORAS ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todas as tarefas abaixo" -ForegroundColor Green
+        Write-Host "2. Definir DNS Google/Cloudflare"
+        Write-Host "3. Instalar impressoras de rede"
+        Write-Host "4. Limpar cache ARP"
+        Write-Host "5. Limpar cache DNS"
+        Write-Host "6. Otimizar TCP/DNS"
+        Write-Host "7. Testar velocidade de internet"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
 
-        $choice = Read-Host "`nSelecione uma opção"
+        $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
-            '1' { Run-All-NetworkAdvanced }
-            '2' { Flush-DNS; Show-SuccessMessage }
-            '3' { Optimize-NetworkPerformance; Show-SuccessMessage }
-            '4' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
-            '5' { Test-InternetSpeed; Show-SuccessMessage }
-            '6' { Clear-ARP; Show-SuccessMessage }
+            '1' {
+                Set-DnsGoogleCloudflare
+                Install-NetworkPrinters
+                Clear-ARP
+                Flush-DNS
+                Optimize-NetworkPerformance
+                Test-InternetSpeed
+                Show-SuccessMessage
+            }
+            '2' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
+            '3' { Install-NetworkPrinters; Show-SuccessMessage }
+            '4' { Clear-ARP; Show-SuccessMessage }
+            '5' { Flush-DNS; Show-SuccessMessage }
+            '6' { Optimize-NetworkPerformance; Show-SuccessMessage }
+            '7' { Test-InternetSpeed; Show-SuccessMessage }
             '0' { return }
-            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
 }
 
+# === MENU: DIAGNÓSTICO E INFORMAÇÕES ===
 function Show-DiagnosticsMenu {
     do {
         Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " DIAGNÓSTICO E INFORMAÇÕES AVANÇADO" -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Executar todos os diagnósticos abaixo" -ForegroundColor Green
-        Write-Host " 2. Exibir informações do sistema" -ForegroundColor Yellow
-        Write-Host " 3. Exibir uso do disco" -ForegroundColor Yellow
-        Write-Host " 4. Exibir informações de rede" -ForegroundColor Yellow
-        Write-Host " 5. SFC /scannow" -ForegroundColor Yellow
-        Write-Host " 6. DISM /RestoreHealth" -ForegroundColor Yellow
-        Write-Host " 7. Verificar saúde dos discos (SMART)" -ForegroundColor Yellow
-        Write-Host " 8. Teste de memória RAM" -ForegroundColor Yellow
-        Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
-        
-        $choice = Read-Host "`nSelecione uma opção"
+        Write-Host "==== MENU: DIAGNÓSTICO E INFORMAÇÕES ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todos os diagnósticos abaixo" -ForegroundColor Green
+        Write-Host "2. DISM /RestoreHealth"
+        Write-Host "3. Exibir informações de rede"
+        Write-Host "4. Exibir informações do sistema"
+        Write-Host "5. Exibir uso do disco"
+        Write-Host "6. SFC /scannow"
+        Write-Host "7. Testar memória RAM"
+        Write-Host "8. Verificar saúde dos discos (SMART)"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
-            '1' { Run-All-DiagnosticsAdvanced }
-            '2' { Show-SystemInfo; Show-SuccessMessage }
-            '3' { Show-DiskUsage; Show-SuccessMessage }
-            '4' { Show-NetworkInfo; Show-SuccessMessage }
-            '5' { Run-SFC-Scan; Show-SuccessMessage }
-            '6' { Run-DISM-Scan; Show-SuccessMessage }
-            '7' { Test-SMART-Drives; Show-SuccessMessage }
-            '8' { Test-Memory; Show-SuccessMessage }
+            '1' {
+                Run-DISM-Scan
+                Show-NetworkInfo
+                Show-SystemInfo
+                Show-DiskUsage
+                Run-SFC-Scan
+                Test-Memory
+                Test-SMART-Drives
+                Show-SuccessMessage
+            }
+            '2' { Run-DISM-Scan; Show-SuccessMessage }
+            '3' { Show-NetworkInfo; Show-SuccessMessage }
+            '4' { Show-SystemInfo; Show-SuccessMessage }
+            '5' { Show-DiskUsage; Show-SuccessMessage }
+            '6' { Run-SFC-Scan; Show-SuccessMessage }
+            '7' { Test-Memory; Show-SuccessMessage }
+            '8' { Test-SMART-Drives; Show-SuccessMessage }
             '0' { return }
-            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
+        }
+    } while ($true)
+}
+
+# === MENU: LIMPEZA E OTIMIZAÇÃO ===
+function Show-CleanupMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: LIMPEZA E OTIMIZAÇÃO ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todas as tarefas abaixo" -ForegroundColor Green
+        Write-Host "2. Agendar chkdsk /f /r"
+        Write-Host "3. Limpar cache DNS"
+        Write-Host "4. Limpar cache do Windows Update"
+        Write-Host "5. Limpar arquivos temporários"
+        Write-Host "6. Limpar Prefetch"
+        Write-Host "7. Limpar spooler de impressão"
+        Write-Host "8. Limpeza profunda (cache, logs, drivers)"
+        Write-Host "9. Otimizar volumes"
+        Write-Host "10. Remover Windows.old"
+        Write-Host "11. Remover pasta WinSxS"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
+        switch ($choice) {
+            '1' { Run-All-CleanupAdvanced }
+            '2' { Schedule-ChkDsk; Show-SuccessMessage }
+            '3' { Flush-DNS; Show-SuccessMessage }
+            '4' { Clear-WUCache; Show-SuccessMessage }
+            '5' { Clean-TemporaryFiles; Show-SuccessMessage }
+            '6' { Clean-Prefetch; Show-SuccessMessage }
+            '7' { Clean-PrintSpooler; Show-SuccessMessage }
+            '8' { Deep-SystemCleanup; Show-SuccessMessage }
+            '9' { Optimize-Volumes; Show-SuccessMessage }
+            '10' { Remove-WindowsOld; Show-SuccessMessage }
+            '11' { Clean-WinSxS; Show-SuccessMessage }
+            '0' { return }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
+        }
+    } while ($true)
+}
+
+# === MENU: BLOATWARE, PRIVACIDADE E HARDENING ===
+function Show-BloatwareMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: BLOATWARE, PRIVACIDADE, EXTRAS ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todas as tarefas abaixo" -ForegroundColor Green
+
+        $items = @(
+            '2. Aplicar privacidade agressiva',
+            '3. Aplicar tweaks extras',
+            '4. Ajustar visual para performance',
+            '5. Backup do registro',
+            '6. Desabilitar IPv6',
+            '7. Desabilitar UAC',
+            '8. Desativar Cortana, Search, Telemetria',
+            '9. Desativar notificações (Action Center)',
+            '10. Desativar tarefas agendadas de bloatware',
+            '11. Encerrar processos dispensáveis',
+            '12. Executar debloaters de terceiros',
+            '13. Otimizar rede (TCP/DNS)',
+            '14. Remover aplicativos adicionais',
+            '15. Remover bloatware (whitelist)',
+            '16. Remover bloatware padrão',
+            '17. Remover Copilot',
+            '18. Remover Edge',
+            '19. Remover OneDrive e restaurar pastas',
+            '20. Remover pins do Menu Iniciar/Barra de Tarefas',
+            '21. Remover tarefas agendadas (agressivo)',
+            '22. Remover UWP bloatware',
+            '23. Restaurar backup do registro',
+            '24. Restaurar menu de contexto clássico'
+        )
+
+        foreach ($i in $items) { Write-Host $i -ForegroundColor Yellow }
+
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
+        switch ($choice) {
+            '1' { Run-All-BloatwareAdvanced }
+            '2' { Enable-PrivacyHardening; Show-SuccessMessage }
+            '3' { Apply-ExtraTweaks; Show-SuccessMessage }
+            '4' { Set-VisualPerformance; Show-SuccessMessage }
+            '5' { Backup-Registry; Show-SuccessMessage }
+            '6' { Disable-IPv6; Show-SuccessMessage }
+            '7' { Disable-UAC; Show-SuccessMessage }
+            '8' { Disable-Cortana-AndSearch; Show-SuccessMessage }
+            '9' { Disable-ActionCenter-Notifications; Show-SuccessMessage }
+            '10' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
+            '11' { Stop-BloatwareProcesses; Show-SuccessMessage }
+            '12' { Run-ExternalDebloaters; Show-SuccessMessage }
+            '13' { Optimize-NetworkPerformance; Show-SuccessMessage }
+            '14' { Remove-AdditionalBloatware; Show-SuccessMessage }
+            '15' { Remove-ProvisionedBloatware; Show-SuccessMessage }
+            '16' { Remove-Bloatware; Show-SuccessMessage }
+            '17' { Remove-Copilot; Show-SuccessMessage }
+            '18' { Remove-Edge; Show-SuccessMessage }
+            '19' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
+            '20' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
+            '21' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
+            '22' { Remove-UWPBloatware; Show-SuccessMessage }
+            '23' { Restore-Registry; Show-SuccessMessage }
+            '24' { Enable-ClassicContextMenu; Show-SuccessMessage }
+            '0' { return }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
+        }
+    } while ($true)
+}
+
+# === MENU: RESTAURAÇÃO E SEGURANÇA (UNDO) ===
+function Show-RestoreUndoMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: REVERTER AJUSTES / SEGURANÇA EXTRA ====" -ForegroundColor Magenta
+        Write-Host "1. Executar todas as tarefas abaixo" -ForegroundColor Green
+        Write-Host "2. Bloquear macros Office (segurança)"
+        Write-Host "3. Desabilitar SMBv1 (RECOMENDADO)"
+        Write-Host "4. Desfazer privacidade agressiva"
+        Write-Host "5. Habilitar SMBv1 (NÃO RECOMENDADO)"
+        Write-Host "6. Reabilitar Action Center/Notificações"
+        Write-Host "7. Reabilitar IPv6"
+        Write-Host "8. Restaurar backup do registro"
+        Write-Host "9. Restaurar macros Office (padrão)"
+        Write-Host "10. Restaurar UAC para padrão"
+        Write-Host "11. Restaurar visual padrão"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
+        switch ($choice) {
+            '1' {
+                Harden-OfficeMacros
+                Disable-SMBv1
+                Undo-PrivacyHardening
+                Enable-SMBv1
+                ReEnable-ActionCenter-Notifications
+                Restore-DefaultIPv6
+                Restore-Registry-FromBackup
+                Restore-OfficeMacros
+                Restore-DefaultUAC
+                Restore-VisualPerformanceDefault
+                Show-SuccessMessage
+            }
+            '2' { Harden-OfficeMacros; Show-SuccessMessage }
+            '3' { Disable-SMBv1; Show-SuccessMessage }
+            '4' { Undo-PrivacyHardening; Show-SuccessMessage }
+            '5' { Enable-SMBv1; Show-SuccessMessage }
+            '6' { ReEnable-ActionCenter-Notifications; Show-SuccessMessage }
+            '7' { Restore-DefaultIPv6; Show-SuccessMessage }
+            '8' { Restore-Registry-FromBackup; Show-SuccessMessage }
+            '9' { Restore-OfficeMacros; Show-SuccessMessage }
+            '10' { Restore-DefaultUAC; Show-SuccessMessage }
+            '11' { Restore-VisualPerformanceDefault; Show-SuccessMessage }
+            '0' { return }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
 }
 
 
+# === MENU PRINCIPAL ===
 function Show-MainMenu {
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " SCRIPT DE MANUTENÇÃO WINDOWS - MENU PRINCIPAL" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " 1. Ajustar tema do Windows para desempenho" -ForegroundColor Yellow
-        Write-Host " 2. Aplicar hardening de segurança" -ForegroundColor Yellow
-        Write-Host " 3. Automação: criar ponto de restauração" -ForegroundColor Yellow
-        Write-Host " 4. Bloatware, Privacidade e Atualizações" -ForegroundColor Yellow
-        Write-Host " 5. Diagnóstico e Informações" -ForegroundColor Yellow
-        Write-Host " 6. Instalação de Programas" -ForegroundColor Yellow
-        Write-Host " 7. Limpeza e Otimização" -ForegroundColor Yellow
-        Write-Host " 8. Otimizações para jogos" -ForegroundColor Yellow
-        Write-Host " 9. Otimizar Windows Explorer para desempenho" -ForegroundColor Yellow
-        Write-Host "10. Rede e Impressoras" -ForegroundColor Yellow
-        Write-Host "11. Tweaks de interface do Explorer" -ForegroundColor Yellow
-        Write-Host "12. Instalar ferramentas de desenvolvimento" -ForegroundColor Yellow
-        Write-Host "13. Desativar serviços desnecessários" -ForegroundColor Yellow
-        Write-Host "14. Abrir pasta de logs" -ForegroundColor Magenta
-        Write-Host "15. Ajustes do Painel de Controle/Configurações" -ForegroundColor Yellow
-        Write-Host "16. Reiniciar PC" -ForegroundColor Yellow
-        Write-Host "17. Renomear notebook" -ForegroundColor Yellow
-		Write-Host "18. Configurar Autologin" -ForegroundColor Yellow
-		Write-Host "19. Reverter ajustes / Segurança extra" -ForegroundColor Magenta
+        Write-Host " 1. Configurações Avançadas" -ForegroundColor Yellow
+        Write-Host " 2. Instalação e Ferramentas" -ForegroundColor Yellow
+        Write-Host " 3. Privacidade e Segurança" -ForegroundColor Yellow
+        Write-Host " 4. Rede e Outros" -ForegroundColor Yellow
+        Write-Host " 5. Sistema e Desempenho" -ForegroundColor Yellow
+        Write-Host " 6. Reiniciar PC" -ForegroundColor Yellow
         Write-Host " 0. Sair" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
-        
+
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
-            '1' { Set-PerformanceTheme; Pause-Script }
-            '2' { Enable-WindowsHardening; Pause-Script }
-            '3' { Create-SystemRestorePoint; Pause-Script }
-            '4' { Show-BloatwareMenu }
-            '5' { Show-DiagnosticsMenu }
-            '6' { Show-InstallationMenu }
-            '7' { Show-CleanupMenu }
-            '8' { Enable-GameOptimizations; Pause-Script }
-            '9' { Optimize-ExplorerPerformance; Pause-Script }
-            '10' { Show-NetworkMenu }
-            '11' { Show-ExplorerTweaksMenu }
-            '12' { Install-DevTools; Pause-Script }
-            '13' { Disable-UnnecessaryServices; Pause-Script }
-            '14' { 
-                Start-Process explorer.exe -ArgumentList "/select,`"$logFile`""
-                Pause-Script
-            }
-            '15' { Show-ControlPanelTweaksMenu }
-            '16' { Write-Log "Reiniciando o computador..." Cyan; Restart-Computer -Force }
-            '17' { Renomear-Notebook }
-			'18' { Show-AutoLoginMenu }
-			'19' { Show-RestoreUndoMenu }
-            '0' { 
+            '1' { Show-AdvancedSettingsMenu }
+            '2' { Show-InstallationMenu }
+            '3' { Show-PrivacySecurityMenu }
+            '4' { Show-NetworkMenu }
+            '5' { Show-SystemPerformanceMenu }
+            '6' { Write-Log "Reiniciando o computador..." Cyan; Restart-Computer -Force }
+            '0' {
                 $duration = (Get-Date) - $startTime
                 Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
-                Write-Log "Log detalhado salvo em: $logFile" Cyan
+                Write-Log "Log salvo em: $logFile" Cyan
                 Write-Host "Pressione qualquer tecla para sair..." -ForegroundColor Magenta
                 [void][System.Console]::ReadKey($true)
-                return 
+                return
             }
-            default { 
+            default {
                 Write-Host "Opção inválida! Tente novamente." -ForegroundColor Red
                 Start-Sleep -Seconds 1
             }
@@ -1615,15 +1696,15 @@ function Show-MainMenu {
 }
 #endregion
 
-# Inicia o menu principal
+# ==== EXECUÇÃO COM SEGURANÇA ====
 try {
     Show-MainMenu
-} catch {
-    Write-Host "Erro fatal: $_" -ForegroundColor Red
-    Write-Host "Consulte o log em: $logFile" -ForegroundColor Yellow
+}
+catch {
+    Write-Host "❌ Erro fatal: $_" -ForegroundColor Red
+    Write-Host "Consulte o log em: `"$logFile`"" -ForegroundColor Yellow
     Pause-Script
 }
 finally {
-    # Garante que o script sempre pausa antes de sair, mesmo em caso de erro
     Pause-Script
 }
