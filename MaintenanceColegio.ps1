@@ -198,7 +198,7 @@ function Remove-Bloatware {
                 Remove-AppxPackage -Package $installed.PackageFullName -ErrorAction SilentlyContinue
             }
         } catch {
-            Write-Log "⚠️ Erro ao remover ${app}: $_" Red
+            Write-Log "⚠️ Erro ao remover $(app): $_" Red
         }
     }
 
@@ -211,7 +211,7 @@ function Remove-Bloatware {
                 Remove-AppxProvisionedPackage -Online -PackageName $provisioned.PackageName -ErrorAction SilentlyContinue
             }
         } catch {
-            Write-Log "⚠️ Erro ao remover provisionado ${app}: $_" Red
+            Write-Log "⚠️ Erro ao remover provisionado $(app): $_" Red
         }
     }
 
@@ -1460,7 +1460,7 @@ function Restore-BloatwareSafe {
                 Write-Log "$app não está instalado. Pulando." Yellow
             }
         } catch {
-            Write-Log "❌ Erro ao reinstalar ${app}: $_" Red
+            Write-Log "❌ Erro ao reinstalar $(app): $_" Red
         }
     }
 
