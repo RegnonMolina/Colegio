@@ -34,16 +34,6 @@ function Write-Log($msg, $color = "Gray") {
     Write-Host "[LOG] $msg" -ForegroundColor $color
 }
 
-function Pause-Script {
-    Write-Host "`nPressione Enter para continuar..." -ForegroundColor DarkGray
-    Read-Host
-}
-
-function Show-SuccessMessage {
-    Write-Host "`n✅ Tarefa concluída com sucesso!" -ForegroundColor Green
-    Pause-Script
-}
-
 #region → Configurações Iniciais
 $Host.UI.RawUI.WindowTitle = "MANUTENÇÃO WINDOWS - NÃO FECHE ESTA JANELA"
 Clear-Host
@@ -1251,7 +1241,7 @@ function Run-WindowsActivator {
     } catch {
         Write-Log "Erro ao executar o script de ativação: $_" Red
     }
-    Pause-Script
+    Show-SuccessMessage
 }
 
 function Run-ChrisTitusToolbox {
@@ -1264,7 +1254,7 @@ function Run-ChrisTitusToolbox {
     } catch {
         Write-Log "Erro ao executar o script do Chris Titus: $_" Red
     }
-    Pause-Script
+    Show-SuccessMessage
 }
 
 function Update-ScriptFromCloud {
@@ -1281,8 +1271,8 @@ function Update-ScriptFromCloud {
         Write-Log "Erro ao carregar o script online: $_" Red
     }
 
-    Pause-Script
-}
+	Show-SuccessMessage
+	}
 
 # Autologin seguro
 function Show-AutoLoginMenu {
@@ -1399,38 +1389,33 @@ function Restore-OfficeMacros {
 }
 
 function Restore-OneDrive {
-    Write-Log "🔄 Tentando reinstalar o OneDrive..." Cyan
+    Write-Log "🔄 Reinstalando o OneDrive via download direto..." Cyan
 
-    $setupPath {
-        # Se o OneDriveSetup não existir localmente, baixe da internet
-        $downloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=248256"
-        $tempInstaller = "$env:TEMP\OneDriveSetup.exe"
+    $downloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=248256"
+    $tempInstaller = "$env:TEMP\OneDriveSetup.exe"
 
-        try {
-            Write-Log "⬇️ Baixando instalador do OneDrive..." Yellow
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $tempInstaller -UseBasicParsing
-            $setupPath = $tempInstaller
-        } catch {
-            Write-Log "❌ Falha ao baixar o OneDrive: $_" Red
-            return
-        }
+    try {
+        Write-Log "⬇️ Baixando instalador oficial do OneDrive..." Yellow
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $tempInstaller -UseBasicParsing
+        Write-Log "✅ Download concluído." Green
+    } catch {
+        Write-Log "❌ Falha ao baixar o OneDrive: $_" Red
+        return
     }
 
-    if (Test-Path $setupPath) {
+    if (Test-Path $tempInstaller) {
         try {
-            Start-Process -FilePath $setupPath -ArgumentList "/silent" -Wait
+            Start-Process -FilePath $tempInstaller -ArgumentList "/silent" -Wait
             Write-Log "✅ OneDrive reinstalado com sucesso." Green
         } catch {
-            Write-Log "❌ Erro ao executar instalador do OneDrive: $_" Red
+            Write-Log "❌ Erro ao executar o instalador: $_" Red
         }
     } else {
-        Write-Log "❌ Instalador do OneDrive não foi encontrado." Red
+        Write-Log "❌ Instalador não encontrado após o download." Red
     }
 
-    Pause-Script
+    Show-SuccessMessage
 }
-
-
 
 function Restore-BloatwareSafe {
     Write-Log "Restaurando aplicativos padrão essenciais..." Yellow
