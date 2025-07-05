@@ -124,6 +124,7 @@ function Optimize-Volumes {
 function Remove-Bloatware {
     Write-Log "Iniciando remoção segura de bloatware..." Yellow
 
+    # Whitelist - Apps que NÃO devem ser removidos
     $whitelist = @(
         "Microsoft.WindowsCalculator",
         "Microsoft.WindowsCamera",
@@ -131,40 +132,53 @@ function Remove-Bloatware {
         "Microsoft.ScreenSketch",        # Ferramenta de Captura
         "Microsoft.WindowsNotepad",      # Notepad moderno
         "Microsoft.StorePurchaseApp",
-        "Microsoft.DesktopAppInstaller",
+        "Microsoft.DesktopAppInstaller", # Necessário para winget
         "Microsoft.WindowsStore"
     )
 
-    $bloatwarePatterns = @(
-        "Microsoft.3DBuilder",
+    # Lista dos apps específicos que você quer remover
+    $bloatwareToRemove = @(
+        # Xbox e componentes
+        "Microsoft.XboxApp",
+        "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxGameOverlay",
+        "Microsoft.XboxGamingOverlay",
+        "Microsoft.XboxIdentityProvider",
+        "Microsoft.XboxSpeechToTextOverlay",
+        
+        # Outlook (clássico e novo)
+        "Microsoft.Office.Outlook",
+        "Microsoft.OutlookForWindows",
+        
+        # LinkedIn
+        "Microsoft.LinkedIn",
+        
+        # Clipchamp
+        "Clipchamp.Clipchamp",
+        
+        # Hub de Comentários
+        "Microsoft.FeedbackHub",
+        
+        # Sticky Notes
+        "Microsoft.MicrosoftStickyNotes",
+        
+        # Outros apps indesejados genéricos
         "Microsoft.BingNews",
         "Microsoft.BingWeather",
         "Microsoft.GetHelp",
         "Microsoft.Getstarted",
         "Microsoft.MicrosoftOfficeHub",
         "Microsoft.MicrosoftSolitaireCollection",
-        "Microsoft.MixedReality.Portal",
         "Microsoft.People",
         "Microsoft.SkypeApp",
         "Microsoft.Todos",
-        "Microsoft.Xbox",
-        "Microsoft.XboxGamingOverlay",
-        "Microsoft.Xbox.TCUI",
-        "Microsoft.XboxGameOverlay",
-        "Microsoft.XboxSpeechToTextOverlay",
-        "Microsoft.XboxIdentityProvider",
         "Microsoft.ZuneMusic",
         "Microsoft.ZuneVideo",
-        "Microsoft.YourPhone",
-        "Microsoft.MicrosoftStickyNotes",
-        "Microsoft.OneNote",
-        "Microsoft.Outlook",
-        "Microsoft.OutlookForWindows",
-        "Microsoft.LinkedIn"
+        "Microsoft.YourPhone"
     )
 
     # Remover AppxPackage por usuário atual
-    foreach ($pattern in $bloatwarePatterns) {
+    foreach ($pattern in $bloatwareToRemove) {
         $apps = Get-AppxPackage -Name $pattern -ErrorAction SilentlyContinue
         foreach ($app in $apps) {
             if (-not ($whitelist -contains $app.Name)) {
@@ -174,8 +188,12 @@ function Remove-Bloatware {
         }
     }
 
+# Remoção adicional de serviços e tarefas relacionadas
+Get-Service -Name Xbl* | Stop-Service -Force -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled -ErrorAction SilentlyContinue
+Get-ScheduledTask -TaskName "*Xbox*" | Disable-ScheduledTask -ErrorAction SilentlyContinue
+
     # Remover AppxProvisionedPackage (para novos usuários)
-    foreach ($pattern in $bloatwarePatterns) {
+    foreach ($pattern in $bloatwareToRemove) {
         $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "$pattern*" }
         foreach ($pkg in $provisioned) {
             if (-not ($whitelist -contains $pkg.DisplayName)) {
@@ -185,7 +203,7 @@ function Remove-Bloatware {
         }
     }
 
-    Write-Log "Remoção segura de bloatware concluída." Green
+    Write-Log "Remoção de bloatware concluída." Green
     Show-SuccessMessage
 }
 
