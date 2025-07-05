@@ -84,10 +84,7 @@ function Write-Log {
 
 
 function Pause-Script {
-    Write-Host "`nPressione ENTER para continuar..." -ForegroundColor Cyan
-    do {
-        $key = [System.Console]::ReadKey($true)
-    } until ($key.Key -eq 'Enter')
+    Show-SuccessMessage
 }
 
 function Show-SuccessMessage {
