@@ -4,7 +4,28 @@
 # Iniciado em: $(Get-Date)
 # Desenvolvido com sangue, café e PowerShell 💪
 
-# === VARIÁVEIS GLOBAIS ===
+# === CONFIGURAÇÕES GLOBAIS ===
+$global:ConfirmPreference = "None"
+$global:ProgressPreference = 'Continue'  
+$global:ErrorActionPreference = "SilentlyContinue"
+$VerbosePreference = "SilentlyContinue" 
+
+$LogDate = Get-Date -format "dd-MM-yyyy-HH"
+$currentTime = Get-Date -format "dd-MM-yyyy HH:mm:ss"
+$computer = $env:COMPUTERNAME
+$windowsUpdateCachePath = "C:\Windows\SoftwareDistribution"
+
+# Detectar rede ativa (SSID)
+try {
+    $profile = Get-NetConnectionProfile | Where-Object { $_.IPv4Connectivity -eq 'Internet' }
+    if ($profile) {
+        $ssid = $profile.Name
+        $interface = $profile.InterfaceAlias
+    }
+} catch {
+    Write-Log "Rede não detectada. Algumas funções podem não funcionar corretamente." Yellow
+}
+
 $logFile = "$PSScriptRoot\log.txt"
 $startTime = Get-Date
 
@@ -101,51 +122,72 @@ function Optimize-Volumes {
 
 # 2. Bloatwarefunction Install
 function Remove-Bloatware {
-    Write-Log "Removendo bloatware padrão..." Yellow
-    $bloatware = @(
-        "Microsoft.BingNews", "Microsoft.BingWeather", "Microsoft.GetHelp",
-        "Microsoft.Getstarted", "Microsoft.MicrosoftOfficeHub", "Microsoft.MicrosoftSolitaireCollection",
-        "Microsoft.People", "Microsoft.SkypeApp", "Microsoft.WindowsAlarms",
-        "microsoft.windowscommunicationsapps", "Microsoft.WindowsFeedbackHub",
-        "Microsoft.WindowsMaps", "Microsoft.WindowsSoundRecorder", "Microsoft.Xbox.TCUI",
-        "Microsoft.XboxApp", "Microsoft.XboxGameOverlay", "Microsoft.XboxIdentityProvider",
-        "Microsoft.XboxSpeechToTextOverlay", "Microsoft.ZuneMusic", "Microsoft.ZuneVideo",
-        "Microsoft.YourPhone", "Microsoft.MixedReality.Portal",
-        "Microsoft.LinkedIn"
-    )
-    
-    foreach ($app in $bloatware) {
-        Get-AppxPackage -Name $app -AllUsers | Remove-AppxPackage -ErrorAction SilentlyContinue
-        Get-AppxProvisionedPackage -Online | Where-Object DisplayName -Like $app | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
-    }
-    Write-Log "Bloatware padrão removido." Green
-}
+    Write-Log "Iniciando remoção segura de bloatware..." Yellow
 
-function Remove-AdditionalBloatware {
-    Write-Log "Removendo aplicativos adicionais..." Yellow
-    $additionalBloatware = @(
-        "Microsoft.QuickAssist",                # Assistência Rápida
-        "Microsoft.549981C3F5F10",             # Copilot
-        "Microsoft.Windows.CommunicationsApps", # Outlook (Classic)
-        "Microsoft.OneDrive",                  # Microsoft OneDrive
-        "Microsoft.Teams",                     # Microsoft Teams
-        "Microsoft.WindowsFeedbackHub",         # Hub de Comentários
-        "Microsoft.LinkedIn"
+    $whitelist = @(
+        "Microsoft.WindowsCalculator",
+        "Microsoft.WindowsCamera",
+        "Microsoft.WindowsSoundRecorder",
+        "Microsoft.ScreenSketch",        # Ferramenta de Captura
+        "Microsoft.WindowsNotepad",      # Notepad moderno
+        "Microsoft.StorePurchaseApp",
+        "Microsoft.DesktopAppInstaller",
+        "Microsoft.WindowsStore"
     )
 
-    foreach ($app in $additionalBloatware) {
-        try {
-            $package = Get-AppxPackage -Name $app -AllUsers -ErrorAction SilentlyContinue
-            if ($package) {
-                Write-Log "Removendo $app..." Cyan
-                Remove-AppxPackage -Package $package -AllUsers -ErrorAction SilentlyContinue
-                Get-AppxProvisionedPackage -Online | Where-Object DisplayName -Like $app | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
-                Write-Log "$app removido com sucesso." Green
+    $bloatwarePatterns = @(
+        "Microsoft.3DBuilder",
+        "Microsoft.BingNews",
+        "Microsoft.BingWeather",
+        "Microsoft.GetHelp",
+        "Microsoft.Getstarted",
+        "Microsoft.MicrosoftOfficeHub",
+        "Microsoft.MicrosoftSolitaireCollection",
+        "Microsoft.MixedReality.Portal",
+        "Microsoft.People",
+        "Microsoft.SkypeApp",
+        "Microsoft.Todos",
+        "Microsoft.Xbox",
+        "Microsoft.XboxGamingOverlay",
+        "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxGameOverlay",
+        "Microsoft.XboxSpeechToTextOverlay",
+        "Microsoft.XboxIdentityProvider",
+        "Microsoft.ZuneMusic",
+        "Microsoft.ZuneVideo",
+        "Microsoft.YourPhone",
+        "Microsoft.MicrosoftStickyNotes",
+        "Microsoft.OneNote",
+        "Microsoft.Outlook",
+        "Microsoft.OutlookForWindows",
+        "Microsoft.LinkedIn"
+    )
+
+    # Remover AppxPackage por usuário atual
+    foreach ($pattern in $bloatwarePatterns) {
+        $apps = Get-AppxPackage -Name $pattern -ErrorAction SilentlyContinue
+        foreach ($app in $apps) {
+            if (-not ($whitelist -contains $app.Name)) {
+                Write-Log "Removendo: $($app.Name)" Cyan
+                Remove-AppxPackage -Package $app.PackageFullName -ErrorAction SilentlyContinue
             }
-        } catch {
-				Write-Log "Erro ao remover ${app}: $_" Red
         }
     }
+
+    # Remover AppxProvisionedPackage (para novos usuários)
+    foreach ($pattern in $bloatwarePatterns) {
+        $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "$pattern*" }
+        foreach ($pkg in $provisioned) {
+            if (-not ($whitelist -contains $pkg.DisplayName)) {
+                Write-Log "Removendo provisionado: $($pkg.DisplayName)" Cyan
+                Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    Write-Log "Remoção segura de bloatware concluída." Green
+    Show-SuccessMessage
+}
 
     # Remoção especial do OneDrive
     try {
@@ -424,14 +466,14 @@ function Show-NetworkInfo {
 function Remove-UWPBloatware {
     Write-Log "Removendo UWP bloatware (exceto essenciais)..." Yellow
     $whitelist = @(
-        'Microsoft.WindowsCalculator',
-        'Microsoft.WindowsStore',
-        'Microsoft.Windows.Photos',
-        'Microsoft.WindowsCamera',
-        'Microsoft.ScreenSketch',
-        'Microsoft.MSPaint',
-        'Microsoft.DesktopAppInstaller'
-    )
+    "Microsoft.WindowsCalculator",
+    "Microsoft.WindowsCamera",
+    "Microsoft.WindowsSoundRecorder",
+    "Microsoft.StorePurchaseApp",
+    "Microsoft.DesktopAppInstaller", # Necessário pro winget
+    "Microsoft.WindowsStore"
+)
+
     Get-AppxPackage -AllUsers | Where-Object { $whitelist -notcontains $_.Name } | ForEach-Object {
         try {
             Write-Log "Removendo $($_.Name)..." Cyan
@@ -623,36 +665,60 @@ function Show-ExplorerTweaksMenu {
     do {
         Clear-Host
         Write-Host "==================== TWEAKS EXPLORER ====================" -ForegroundColor Cyan
-        Write-Host " 1. Mostrar extensões de arquivos" -ForegroundColor Yellow
-        Write-Host " 2. Mostrar arquivos ocultos" -ForegroundColor Yellow
-        Write-Host " 3. Restaurar menus clássicos/contextuais" -ForegroundColor Yellow
-        Write-Host " 4. Remover sugestões/anúncios" -ForegroundColor Yellow
-        Write-Host " 0. Voltar" -ForegroundColor Red
-        $choice = Read-Host "\nSelecione uma opção"
+        Write-Host "1. Executar todos os ajustes abaixo" -ForegroundColor Green
+        Write-Host "2. Mostrar arquivos ocultos" -ForegroundColor Yellow
+        Write-Host "3. Mostrar extensões de arquivos" -ForegroundColor Yellow
+        Write-Host "4. Remover sugestões/anúncios" -ForegroundColor Yellow
+        Write-Host "5. Restaurar menus clássicos/contextuais" -ForegroundColor Yellow
+        Write-Host "0. Voltar" -ForegroundColor Red
+
+        $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
-            '1' { reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f | Out-Null; Write-Log "Extensões de arquivos visíveis." Green; Pause-Script }
-            '2' { reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Hidden /t REG_DWORD /d 1 /f | Out-Null; Write-Log "Arquivos ocultos visíveis." Green; Pause-Script }
-            '3' { reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v EnableClassicContextMenu /t REG_DWORD /d 1 /f | Out-Null; Write-Log "Menus clássicos ativados." Green; Pause-Script }
-            '4' { reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowSyncProviderNotifications /t REG_DWORD /d 0 /f | Out-Null; Write-Log "Sugestões/anúncios removidos." Green; Pause-Script }
+            '1' {
+                # Executa todos em sequência
+                reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Hidden /t REG_DWORD /d 1 /f | Out-Null
+                Write-Log "Arquivos ocultos visíveis." Green
+
+                reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f | Out-Null
+                Write-Log "Extensões de arquivos visíveis." Green
+
+                reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowSyncProviderNotifications /t REG_DWORD /d 0 /f | Out-Null
+                Write-Log "Sugestões/anúncios removidos." Green
+
+                reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v EnableClassicContextMenu /t REG_DWORD /d 1 /f | Out-Null
+                Write-Log "Menus clássicos ativados." Green
+
+                Show-SuccessMessage
+            }
+            '2' {
+                reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Hidden /t REG_DWORD /d 1 /f | Out-Null
+                Write-Log "Arquivos ocultos visíveis." Green
+                Show-SuccessMessage
+            }
+            '3' {
+                reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f | Out-Null
+                Write-Log "Extensões de arquivos visíveis." Green
+                Show-SuccessMessage
+            }
+            '4' {
+                reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowSyncProviderNotifications /t REG_DWORD /d 0 /f | Out-Null
+                Write-Log "Sugestões/anúncios removidos." Green
+                Show-SuccessMessage
+            }
+            '5' {
+                reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v EnableClassicContextMenu /t REG_DWORD /d 1 /f | Out-Null
+                Write-Log "Menus clássicos ativados." Green
+                Show-SuccessMessage
+            }
             '0' { return }
-            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+            default {
+                Write-Host "Opção inválida!" -ForegroundColor Red
+                Start-Sleep -Seconds 1
+            }
         }
     } while ($true)
 }
 
-# Função para otimizações de jogos
-function Enable-GameOptimizations {
-    Write-Log "Aplicando otimizações para jogos..." Yellow
-    try {
-        reg.exe add "HKCU\Software\Microsoft\GameBar" /v AllowAutoGameMode /t REG_DWORD /d 1 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\GameBar" /v AutoGameModeEnabled /t REG_DWORD /d 1 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR" /v AppCaptureEnabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR" /v GameDVR_Enabled /t REG_DWORD /d 0 /f | Out-Null
-        Write-Log "Otimizações de jogos aplicadas." Green
-    } catch {
-        Write-Log "Erro ao aplicar otimizações de jogos: $_" Red
-    }
-}
 
 # Função para instalar ferramentas de desenvolvimento
 function Install-DevTools {
@@ -784,24 +850,46 @@ function Enable-OtherMicrosoftUpdates {
 }
 
 function Enable-Sudo {
-    Write-Log "Habilitando Sudo embutido do Windows..." Yellow
-    try {
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo" /v EnableSudo /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "Sudo embutido habilitado." Green
-    } catch {
-        Write-Log "Erro ao habilitar Sudo: $_" Red
+    if ($PSVersionTable.PSVersion.Major -lt 7) {
+        Write-Log "PowerShell 7+ é necessário para suporte ao sudo." Red
+        return
+    }
+
+    $profilePath = "$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+    if (-not (Test-Path $profilePath)) {
+        New-Item -ItemType File -Path $profilePath -Force | Out-Null
+    }
+
+    $content = Get-Content $profilePath -ErrorAction SilentlyContinue
+    if ($content -notmatch "function sudo") {
+        Add-Content -Path $profilePath -Value @"
+function sudo {
+    param([string]\$command)
+    Start-Process pwsh -ArgumentList "-Command \$command" -Verb RunAs
+}
+"@
+        Write-Log "Alias 'sudo' adicionado ao seu profile." Green
+    } else {
+        Write-Log "'sudo' já estava configurado." Cyan
     }
 }
 
+
 function Enable-TaskbarEndTask {
-    Write-Log "Ativando 'Finalizar Tarefa' na barra de tarefas..." Yellow
+    $build = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").CurrentBuild
+    if ([int]$build -lt 23430) {
+        Write-Log "Este recurso exige o Windows 11 build 23430 ou superior." Red
+        return
+    }
+
     try {
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarEndTask /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "'Finalizar Tarefa' ativado na barra de tarefas." Green
+        Write-Log "'Finalizar tarefa' ativado no menu da barra de tarefas." Green
     } catch {
-        Write-Log "Erro ao ativar 'Finalizar Tarefa': $_" Red
+        Write-Log "Erro ao configurar TaskbarEndTask: $_" Red
     }
 }
+
 
 function Enable-TaskbarSeconds {
     Write-Log "Ativando segundos no relógio da barra de tarefas..." Yellow
@@ -817,27 +905,43 @@ function Show-ControlPanelTweaksMenu {
     do {
         Clear-Host
         Write-Host "==================== AJUSTES DO PAINEL DE CONTROLE/CONFIGURAÇÕES ====================" -ForegroundColor Cyan
-        Write-Host " 1. Ativar tema escuro" -ForegroundColor Yellow
-        Write-Host " 2. Ativar histórico da área de transferência" -ForegroundColor Yellow
-        Write-Host " 3. Ativar atualizações antecipadas do Windows Update" -ForegroundColor Yellow
-        Write-Host " 4. Ativar restauração de apps após reinicialização" -ForegroundColor Yellow
-        Write-Host " 5. Ativar updates para outros produtos Microsoft" -ForegroundColor Yellow
-        Write-Host " 6. Habilitar Sudo embutido" -ForegroundColor Yellow
-        Write-Host " 7. Ativar 'Finalizar Tarefa' na barra de tarefas" -ForegroundColor Yellow
-        Write-Host " 8. Ativar segundos no relógio da barra de tarefas" -ForegroundColor Yellow
-        Write-Host " 0. Voltar ao menu principal" -ForegroundColor Red
-        $choice = Read-Host "\nSelecione uma opção"
+        Write-Host "1. Executar todos os ajustes abaixo" -ForegroundColor Green
+        Write-Host "2. Ativar 'Finalizar Tarefa' na barra de tarefas" -ForegroundColor Yellow
+        Write-Host "3. Ativar atualizações antecipadas do Windows Update" -ForegroundColor Yellow
+        Write-Host "4. Ativar dark mode (tema escuro)" -ForegroundColor Yellow
+        Write-Host "5. Ativar histórico da área de transferência" -ForegroundColor Yellow
+        Write-Host "6. Ativar restauração de apps após reinicialização" -ForegroundColor Yellow
+        Write-Host "7. Ativar segundos no relógio da barra de tarefas" -ForegroundColor Yellow
+        Write-Host "8. Ativar updates para outros produtos Microsoft" -ForegroundColor Yellow
+        Write-Host "9. Habilitar Sudo embutido" -ForegroundColor Yellow
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Red
+
+        $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
-            '1' { Enable-DarkTheme; Pause-Script }
-            '2' { Enable-ClipboardHistory; Pause-Script }
-            '3' { Enable-WindowsUpdateFast; Pause-Script }
-            '4' { Enable-RestartAppsAfterReboot; Pause-Script }
-            '5' { Enable-OtherMicrosoftUpdates; Pause-Script }
-            '6' { Enable-Sudo; Pause-Script }
-            '7' { Enable-TaskbarEndTask; Pause-Script }
-            '8' { Enable-TaskbarSeconds; Pause-Script }
+            '1' {
+                Enable-TaskbarEndTask
+                Enable-WindowsUpdateFast
+                Enable-DarkTheme
+                Enable-ClipboardHistory
+                Enable-RestartAppsAfterReboot
+                Enable-TaskbarSeconds
+                Enable-OtherMicrosoftUpdates
+                Enable-Sudo
+                Show-SuccessMessage
+            }
+            '2' { Enable-TaskbarEndTask; Show-SuccessMessage }
+            '3' { Enable-WindowsUpdateFast; Show-SuccessMessage }
+            '4' { Enable-DarkTheme; Show-SuccessMessage }
+            '5' { Enable-ClipboardHistory; Show-SuccessMessage }
+            '6' { Enable-RestartAppsAfterReboot; Show-SuccessMessage }
+            '7' { Enable-TaskbarSeconds; Show-SuccessMessage }
+            '8' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
+            '9' { Enable-Sudo; Show-SuccessMessage }
             '0' { return }
-            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep -Seconds 1 }
+            default {
+                Write-Host "Opção inválida!" -ForegroundColor Red
+                Start-Sleep -Seconds 1
+            }
         }
     } while ($true)
 }
@@ -1154,6 +1258,23 @@ function Run-ChrisTitusToolbox {
     Pause-Script
 }
 
+function Update-ScriptFromCloud {
+    Clear-Host
+    Write-Host "=======================" -ForegroundColor Cyan
+    Write-Host "ATUALIZANDO SCRIPT..." -ForegroundColor Cyan
+    Write-Host "=======================" -ForegroundColor Cyan
+
+    try {
+        Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." Yellow
+        irm script.colegiomundodosaber.com.br | iex
+        Write-Log "Script carregado com sucesso a partir da versão online!" Green
+    } catch {
+        Write-Log "Erro ao carregar o script online: $_" Red
+    }
+
+    Pause-Script
+}
+
 # Autologin seguro
 function Show-AutoLoginMenu {
     Write-Host "=== Configurar Autologin ===" -ForegroundColor Cyan
@@ -1267,31 +1388,222 @@ function Restore-OfficeMacros {
         Write-Log "Macros do Office retornaram ao padrão." Green
     } catch { Write-Log "Erro ao restaurar macros: $_" Red }
 }
+
+function Restore-OneDrive {
+    $onedriveSetup = "$env:SystemRoot\SysWOW64\OneDriveSetup.exe"
+    if (Test-Path $onedriveSetup) {
+        Start-Process $onedriveSetup
+        Write-Log "OneDrive reinstalado." Green
+    } else {
+        Write-Log "OneDriveSetup.exe não encontrado!" Red
+    }
+    Pause-Script
+}
+
+
+function Restore-BloatwareSafe {
+    Write-Log "Restaurando aplicativos padrão essenciais..." Yellow
+
+    $appsToRestore = @(
+        "Microsoft.WindowsCalculator",
+        "Microsoft.WindowsCamera",
+        "Microsoft.WindowsSoundRecorder",  # Gravador de Voz
+        "Microsoft.ScreenSketch",          # Ferramenta de Captura
+        "Microsoft.WindowsNotepad",
+        "Microsoft.OutlookForWindows",
+        "Microsoft.LinkedIn.LinkedIn"
+    )
+
+    foreach ($app in $appsToRestore) {
+        try {
+            Write-Log "Reinstalando $app..." Cyan
+            Get-AppxPackage -AllUsers -Name $app -ErrorAction SilentlyContinue |
+                ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml" }
+        } catch {
+            Write-Log "Erro ao restaurar $app: $_" Red
+        }
+    }
+
+    Write-Log "Aplicativos essenciais restaurados." Green
+    Show-SuccessMessage
+}
+
+function Apply-ControlPanelTweaks {
+    Write-Host "Aplicando ajustes visuais e de desempenho..." -ForegroundColor Cyan
+
+    # Função interna para setar valores no registro
+    function Set-RegistryValue {
+        param (
+            [string]$Path,
+            [string]$Name,
+            [object]$Value,
+            [Microsoft.Win32.RegistryValueKind]$Type
+        )
+        try {
+            New-Item -Path $Path -Force | Out-Null
+            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type
+        } catch {
+            Write-Warning "Falha ao definir $Name em $Path"
+        }
+    }
+
+    # === Ajustes: Control Panel\Desktop ===
+    $desktopKey = "HKCU:\Control Panel\Desktop"
+    Set-RegistryValue $desktopKey "DragFullWindows" 0 DWord
+    Set-RegistryValue $desktopKey "MenuShowDelay" 0 String
+    Set-RegistryValue $desktopKey "CursorBlinkRate" "530" String
+    Set-RegistryValue $desktopKey "CaretWidth" 1 DWord
+    Set-RegistryValue $desktopKey "PaintDesktopVersion" 0 DWord
+    Set-RegistryValue $desktopKey "SnapSizing" 1 String
+    Set-RegistryValue $desktopKey "FontSmoothingType" 1 DWord
+    Set-RegistryValue $desktopKey "ForegroundFlashCount" 7 DWord
+    Set-RegistryValue $desktopKey "MouseWheelRouting" 2 DWord
+    Set-RegistryValue $desktopKey "ScreenSaveActive" 1 String
+    Set-RegistryValue $desktopKey "WallpaperStyle" "10" String
+    Set-RegistryValue $desktopKey "WheelScrollLines" 3 String
+    Set-RegistryValue $desktopKey "WindowArrangementActive" 1 String
+
+    # === Ajustes: Explorer\Advanced ===
+    $advKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    Set-RegistryValue $advKey "HideFileExt" 1 DWord
+    Set-RegistryValue $advKey "ShowSuperHidden" 0 DWord
+    Set-RegistryValue $advKey "TaskbarAnimations" 1 DWord
+    Set-RegistryValue $advKey "ShowSecondsInSystemClock" 1 DWord
+    Set-RegistryValue $advKey "IconsOnly" 0 DWord
+    Set-RegistryValue $advKey "ShowStatusBar" 1 DWord
+    Set-RegistryValue $advKey "ShowCompColor" 1 DWord
+    Set-RegistryValue $advKey "ListviewAlphaSelect" 1 DWord
+    Set-RegistryValue $advKey "ListviewShadow" 1 DWord
+    Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 1 DWord
+
+    # === Ajustes: Explorer\VisualEffects ===
+    $veBase = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
+    Set-RegistryValue $veBase "VisualFXSetting" 2 DWord
+    $visualTweaks = @(
+        "AnimateMinMax", "ComboBoxAnimation", "ControlAnimations", "CursorShadow",
+        "DragFullWindows", "DropShadow", "DWMAeroPeekEnabled", "DWMEnabled",
+        "DWMSaveThumbnailEnabled", "ListBoxSmoothScrolling", "ListviewAlphaSelect",
+        "ListviewShadow", "MenuAnimation", "SelectionFade", "TaskbarAnimations",
+        "Themes", "ThumbnailsOrIcon", "TooltipAnimation"
+    )
+    foreach ($vt in $visualTweaks) {
+        Set-RegistryValue "$veBase\$vt" "DefaultApplied" 1 DWord
+    }
+
+    # === Ajustes: Themes e Personalização ===
+    $themesKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes"
+    Set-RegistryValue $themesKey "ColorSetFromTheme" 1 DWord
+    Set-RegistryValue $themesKey "WallpaperSetFromTheme" 1 DWord
+    Set-RegistryValue "$themesKey\Personalize" "EnableTransparency" 1 DWord
+    Set-RegistryValue "$themesKey\Personalize" "SystemUsesLightTheme" 0 DWord
+    Set-RegistryValue "$themesKey\Personalize" "AppsUseLightTheme" 0 DWord
+
+    Write-Host "✔️ Ajustes aplicados com sucesso!" -ForegroundColor Green
+}
+
+function Restore-ControlPanelTweaks {
+    Write-Host "Restaurando configurações visuais e de desempenho padrão..." -ForegroundColor Cyan
+
+    function Set-RegistryValue {
+        param (
+            [string]$Path,
+            [string]$Name,
+            [object]$Value,
+            [Microsoft.Win32.RegistryValueKind]$Type
+        )
+        try {
+            New-Item -Path $Path -Force | Out-Null
+            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type
+        } catch {
+            Write-Warning "Falha ao definir $Name em $Path"
+        }
+    }
+
+    # === Restaurar Desktop ===
+    $desktopKey = "HKCU:\Control Panel\Desktop"
+    Set-RegistryValue $desktopKey "DragFullWindows" 1 DWord
+    Set-RegistryValue $desktopKey "MenuShowDelay" "400" String
+    Set-RegistryValue $desktopKey "CursorBlinkRate" "530" String
+    Set-RegistryValue $desktopKey "CaretWidth" 1 DWord
+    Set-RegistryValue $desktopKey "PaintDesktopVersion" 1 DWord
+    Set-RegistryValue $desktopKey "SnapSizing" 1 String
+    Set-RegistryValue $desktopKey "FontSmoothingType" 2 DWord
+    Set-RegistryValue $desktopKey "ForegroundFlashCount" 7 DWord
+    Set-RegistryValue $desktopKey "MouseWheelRouting" 0 DWord
+    Set-RegistryValue $desktopKey "ScreenSaveActive" 0 String
+    Set-RegistryValue $desktopKey "WallpaperStyle" "10" String
+    Set-RegistryValue $desktopKey "WheelScrollLines" 3 String
+    Set-RegistryValue $desktopKey "WindowArrangementActive" 1 String
+
+    # === Restaurar Explorer\Advanced ===
+    $advKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    Set-RegistryValue $advKey "HideFileExt" 0 DWord
+    Set-RegistryValue $advKey "ShowSuperHidden" 0 DWord
+    Set-RegistryValue $advKey "TaskbarAnimations" 1 DWord
+    Set-RegistryValue $advKey "ShowSecondsInSystemClock" 0 DWord
+    Set-RegistryValue $advKey "IconsOnly" 1 DWord
+    Set-RegistryValue $advKey "ShowStatusBar" 0 DWord
+    Set-RegistryValue $advKey "ShowCompColor" 0 DWord
+    Set-RegistryValue $advKey "ListviewAlphaSelect" 1 DWord
+    Set-RegistryValue $advKey "ListviewShadow" 1 DWord
+    Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 0 DWord
+
+    # === Restaurar Visual Effects ===
+    $veBase = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
+    Set-RegistryValue $veBase "VisualFXSetting" 1 DWord
+    $visualTweaks = @(
+        "AnimateMinMax", "ComboBoxAnimation", "ControlAnimations", "CursorShadow",
+        "DragFullWindows", "DropShadow", "DWMAeroPeekEnabled", "DWMEnabled",
+        "DWMSaveThumbnailEnabled", "ListBoxSmoothScrolling", "ListviewAlphaSelect",
+        "ListviewShadow", "MenuAnimation", "SelectionFade", "TaskbarAnimations",
+        "Themes", "ThumbnailsOrIcon", "TooltipAnimation"
+    )
+    foreach ($vt in $visualTweaks) {
+        Set-RegistryValue "$veBase\$vt" "DefaultApplied" 1 DWord
+    }
+
+    # === Restaurar Personalize ===
+    $themesKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes"
+    Set-RegistryValue $themesKey "ColorSetFromTheme" 1 DWord
+    Set-RegistryValue $themesKey "WallpaperSetFromTheme" 1 DWord
+    Set-RegistryValue "$themesKey\Personalize" "EnableTransparency" 1 DWord
+    Set-RegistryValue "$themesKey\Personalize" "SystemUsesLightTheme" 1 DWord
+    Set-RegistryValue "$themesKey\Personalize" "AppsUseLightTheme" 1 DWord
+
+    Write-Host "✔️ Configurações restauradas para o padrão!" -ForegroundColor Green
+}
+
+
 # === MENU: SISTEMA E DESEMPENHO ===
 function Show-SystemPerformanceMenu {
     do {
         Clear-Host
         Write-Host "==== MENU: SISTEMA E DESEMPENHO ====" -ForegroundColor Cyan
         Write-Host "1. Executar todas as opções abaixo" -ForegroundColor Green
-        Write-Host "2. Ajustar tema do Windows para desempenho"
-        Write-Host "3. Desativar serviços desnecessários"
-        Write-Host "4. Otimizar Windows Explorer para desempenho"
-        Write-Host "5. Renomear notebook"
+        Write-Host "2. Aplicar ajustes do Painel de Controle (visual e desempenho)"
+        Write-Host "3. Ajustar tema do Windows para desempenho"
+        Write-Host "4. Desativar serviços desnecessários"
+        Write-Host "5. Otimizar Windows Explorer para desempenho"
+        Write-Host "6. Renomear notebook"
+        Write-Host "7. Restaurar configurações padrão do Painel de Controle"
         Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
             '1' {
+                Apply-ControlPanelTweaks
                 Set-PerformanceTheme
                 Disable-UnnecessaryServices
                 Optimize-ExplorerPerformance
                 Renomear-Notebook
                 Show-SuccessMessage
             }
-            '2' { Set-PerformanceTheme; Show-SuccessMessage }
-            '3' { Disable-UnnecessaryServices; Show-SuccessMessage }
-            '4' { Optimize-ExplorerPerformance; Show-SuccessMessage }
-            '5' { Renomear-Notebook; Show-SuccessMessage }
+            '2' { Apply-ControlPanelTweaks; Show-SuccessMessage }
+            '3' { Set-PerformanceTheme; Show-SuccessMessage }
+            '4' { Disable-UnnecessaryServices; Show-SuccessMessage }
+            '5' { Optimize-ExplorerPerformance; Show-SuccessMessage }
+            '6' { Renomear-Notebook; Show-SuccessMessage }
+            '7' { Restore-ControlPanelTweaks; Show-SuccessMessage }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
@@ -1303,23 +1615,16 @@ function Show-PrivacySecurityMenu {
     do {
         Clear-Host
         Write-Host "==== MENU: PRIVACIDADE E SEGURANÇA ====" -ForegroundColor Cyan
-        Write-Host "1. Executar todas as opções abaixo" -ForegroundColor Green
-        Write-Host "2. Aplicar hardening de segurança"
-        Write-Host "3. Bloatware, Privacidade e Atualizações"
-        Write-Host "4. Reverter ajustes / Segurança extra"
+        Write-Host "1. Aplicar hardening de segurança"
+        Write-Host "2. Bloatware, Privacidade e Atualizações"
+        Write-Host "3. Reverter ajustes / Segurança extra"
         Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
-            '1' {
-                Enable-WindowsHardening
-                Show-BloatwareMenu
-                Show-RestoreUndoMenu
-                Show-SuccessMessage
-            }
-            '2' { Enable-WindowsHardening; Show-SuccessMessage }
-            '3' { Show-BloatwareMenu }
-            '4' { Show-RestoreUndoMenu }
+            '1' { Enable-WindowsHardening; Show-SuccessMessage }
+            '2' { Show-BloatwareMenu }
+            '3' { Show-RestoreUndoMenu }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
@@ -1403,6 +1708,7 @@ function Show-ExternalScriptsMenu {
         Write-Host "1. Executar todos os scripts abaixo" -ForegroundColor Green
         Write-Host "2. Ativar Windows (get.activated.win)"
         Write-Host "3. Toolbox Chris Titus (christitus.com)"
+		Write-Host "4. Executar Script Supremo" -ForegroundColor Yellow
         Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
 
         $choice = Read-Host "`nEscolha uma opção"
@@ -1413,6 +1719,7 @@ function Show-ExternalScriptsMenu {
             }
             '2' { Run-WindowsActivator }
             '3' { Run-ChrisTitusToolbox }
+			'4' { Update-ScriptFromCloud }
             '0' { return }
             default {
                 Write-Host "Opção inválida!" -ForegroundColor Red
@@ -1428,17 +1735,19 @@ function Show-NetworkMenu {
         Clear-Host
         Write-Host "==== MENU: REDE E IMPRESSORAS ====" -ForegroundColor Cyan
         Write-Host "1. Executar todas as tarefas abaixo" -ForegroundColor Green
-        Write-Host "2. Definir DNS Google/Cloudflare"
-        Write-Host "3. Instalar impressoras de rede"
-        Write-Host "4. Limpar cache ARP"
-        Write-Host "5. Limpar cache DNS"
-        Write-Host "6. Otimizar TCP/DNS"
-        Write-Host "7. Testar velocidade de internet"
+        Write-Host "2. Adicionar rede Wi-Fi administrativa"
+        Write-Host "3. Definir DNS Google/Cloudflare"
+        Write-Host "4. Instalar impressoras de rede"
+        Write-Host "5. Limpar cache ARP"
+        Write-Host "6. Limpar cache DNS"
+        Write-Host "7. Otimizar TCP/DNS"
+        Write-Host "8. Testar velocidade de internet"
         Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
             '1' {
+                Add-WiFiNetwork
                 Set-DnsGoogleCloudflare
                 Install-NetworkPrinters
                 Clear-ARP
@@ -1447,17 +1756,19 @@ function Show-NetworkMenu {
                 Test-InternetSpeed
                 Show-SuccessMessage
             }
-            '2' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
-            '3' { Install-NetworkPrinters; Show-SuccessMessage }
-            '4' { Clear-ARP; Show-SuccessMessage }
-            '5' { Flush-DNS; Show-SuccessMessage }
-            '6' { Optimize-NetworkPerformance; Show-SuccessMessage }
-            '7' { Test-InternetSpeed; Show-SuccessMessage }
+            '2' { Add-WiFiNetwork; Show-SuccessMessage }
+            '3' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
+            '4' { Install-NetworkPrinters; Show-SuccessMessage }
+            '5' { Clear-ARP; Show-SuccessMessage }
+            '6' { Flush-DNS; Show-SuccessMessage }
+            '7' { Optimize-NetworkPerformance; Show-SuccessMessage }
+            '8' { Test-InternetSpeed; Show-SuccessMessage }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
 }
+
 
 # === MENU: DIAGNÓSTICO E INFORMAÇÕES ===
 function Show-DiagnosticsMenu {
@@ -1542,64 +1853,62 @@ function Show-BloatwareMenu {
         Clear-Host
         Write-Host "==== MENU: BLOATWARE, PRIVACIDADE, EXTRAS ====" -ForegroundColor Cyan
         Write-Host "1. Executar todas as tarefas abaixo" -ForegroundColor Green
-
-        $items = @(
-            '2. Aplicar privacidade agressiva',
-            '3. Aplicar tweaks extras',
-            '4. Ajustar visual para performance',
-            '5. Backup do registro',
-            '6. Desabilitar IPv6',
-            '7. Desabilitar UAC',
-            '8. Desativar Cortana, Search, Telemetria',
-            '9. Desativar notificações (Action Center)',
-            '10. Desativar tarefas agendadas de bloatware',
-            '11. Encerrar processos dispensáveis',
-            '12. Executar debloaters de terceiros',
-            '13. Otimizar rede (TCP/DNS)',
-            '14. Remover aplicativos adicionais',
-            '15. Remover bloatware (whitelist)',
-            '16. Remover bloatware padrão',
-            '17. Remover Copilot',
-            '18. Remover Edge',
-            '19. Remover OneDrive e restaurar pastas',
-            '20. Remover pins do Menu Iniciar/Barra de Tarefas',
-            '21. Remover tarefas agendadas (agressivo)',
-            '22. Remover UWP bloatware',
-            '23. Restaurar backup do registro',
-            '24. Restaurar menu de contexto clássico'
-        )
-
-        foreach ($i in $items) { Write-Host $i -ForegroundColor Yellow }
-
+        Write-Host "2. Aplicar privacidade agressiva"
+        Write-Host "3. Aplicar tweaks extras"
+        Write-Host "4. Ajustar visual para performance"
+        Write-Host "5. Backup do registro"
+        Write-Host "6. Desabilitar IPv6"
+        Write-Host "7. Desabilitar UAC"
+        Write-Host "8. Desativar Cortana, Search, Telemetria"
+        Write-Host "9. Desativar notificações (Action Center)"
+        Write-Host "10. Desativar tarefas agendadas de bloatware"
+        Write-Host "11. Encerrar processos dispensáveis"
+        Write-Host "12. Executar debloaters de terceiros"
+        Write-Host "13. Otimizar rede (TCP/DNS)"
+        Write-Host "14. Remover bloatware (versão segura e consolidada)"
+        Write-Host "15. Remover OneDrive e restaurar pastas"
+        Write-Host "16. Remover pins do Menu Iniciar/Barra de Tarefas"
+        Write-Host "17. Remover tarefas agendadas (agressivo)"
         Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
-            '1' { Run-All-BloatwareAdvanced }
-            '2' { Enable-PrivacyHardening; Show-SuccessMessage }
-            '3' { Apply-ExtraTweaks; Show-SuccessMessage }
-            '4' { Set-VisualPerformance; Show-SuccessMessage }
-            '5' { Backup-Registry; Show-SuccessMessage }
-            '6' { Disable-IPv6; Show-SuccessMessage }
-            '7' { Disable-UAC; Show-SuccessMessage }
-            '8' { Disable-Cortana-AndSearch; Show-SuccessMessage }
-            '9' { Disable-ActionCenter-Notifications; Show-SuccessMessage }
+            '1' {
+                Enable-PrivacyHardening
+                Apply-ExtraTweaks
+                Set-VisualPerformance
+                Backup-Registry
+                Disable-IPv6
+                Disable-UAC
+                Disable-Cortana-AndSearch
+                Disable-ActionCenter-Notifications
+                Disable-BloatwareScheduledTasks
+                Stop-BloatwareProcesses
+                Run-ExternalDebloaters
+                Optimize-NetworkPerformance
+                Remove-BloatwareSafe
+                Remove-OneDrive-AndRestoreFolders
+                Remove-StartAndTaskbarPins
+                Remove-ScheduledTasksAggressive
+                Show-SuccessMessage
+            }
+            '2'  { Enable-PrivacyHardening; Show-SuccessMessage }
+            '3'  { Apply-ExtraTweaks; Show-SuccessMessage }
+            '4'  { Set-VisualPerformance; Show-SuccessMessage }
+            '5'  { Backup-Registry; Show-SuccessMessage }
+            '6'  { Disable-IPv6; Show-SuccessMessage }
+            '7'  { Disable-UAC; Show-SuccessMessage }
+            '8'  { Disable-Cortana-AndSearch; Show-SuccessMessage }
+            '9'  { Disable-ActionCenter-Notifications; Show-SuccessMessage }
             '10' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
             '11' { Stop-BloatwareProcesses; Show-SuccessMessage }
             '12' { Run-ExternalDebloaters; Show-SuccessMessage }
             '13' { Optimize-NetworkPerformance; Show-SuccessMessage }
-            '14' { Remove-AdditionalBloatware; Show-SuccessMessage }
-            '15' { Remove-ProvisionedBloatware; Show-SuccessMessage }
-            '16' { Remove-Bloatware; Show-SuccessMessage }
-            '17' { Remove-Copilot; Show-SuccessMessage }
-            '18' { Remove-Edge; Show-SuccessMessage }
-            '19' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
-            '20' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
-            '21' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
-            '22' { Remove-UWPBloatware; Show-SuccessMessage }
-            '23' { Restore-Registry; Show-SuccessMessage }
-            '24' { Enable-ClassicContextMenu; Show-SuccessMessage }
-            '0' { return }
+            '14' { Remove-BloatwareSafe }
+            '15' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
+            '16' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
+            '17' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
+            '0'  { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
@@ -1609,7 +1918,7 @@ function Show-BloatwareMenu {
 function Show-RestoreUndoMenu {
     do {
         Clear-Host
-        Write-Host "==== MENU: REVERTER AJUSTES / SEGURANÇA EXTRA ====" -ForegroundColor Magenta
+        Write-Host "==== MENU: REVERTER AJUSTES / RESTAURAR APLICATIVOS ====" -ForegroundColor Magenta
         Write-Host "1. Executar todas as tarefas abaixo" -ForegroundColor Green
         Write-Host "2. Bloquear macros Office (segurança)"
         Write-Host "3. Desabilitar SMBv1 (RECOMENDADO)"
@@ -1618,9 +1927,14 @@ function Show-RestoreUndoMenu {
         Write-Host "6. Reabilitar Action Center/Notificações"
         Write-Host "7. Reabilitar IPv6"
         Write-Host "8. Restaurar backup do registro"
-        Write-Host "9. Restaurar macros Office (padrão)"
-        Write-Host "10. Restaurar UAC para padrão"
-        Write-Host "11. Restaurar visual padrão"
+        Write-Host "9. Restaurar backup do registro (alternativo)"
+        Write-Host "10. Restaurar configurações do Painel de Controle"
+        Write-Host "11. Restaurar macros Office (padrão)"
+        Write-Host "12. Restaurar menu de contexto clássico"
+        Write-Host "13. Restaurar UAC para padrão"
+        Write-Host "14. Restaurar visual padrão"
+        Write-Host "15. Reinstalar aplicativos essenciais (Calculadora, Notepad, Ferramenta de Captura etc)"
+        Write-Host "16. Reinstalar o OneDrive"
         Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
 
         $choice = Read-Host "`nEscolha uma opção"
@@ -1633,27 +1947,36 @@ function Show-RestoreUndoMenu {
                 ReEnable-ActionCenter-Notifications
                 Restore-DefaultIPv6
                 Restore-Registry-FromBackup
+                Restore-Registry
+                Restore-ControlPanelTweaks
                 Restore-OfficeMacros
+                Enable-ClassicContextMenu
                 Restore-DefaultUAC
                 Restore-VisualPerformanceDefault
+                Restore-BloatwareSafe
+                Restore-OneDrive
                 Show-SuccessMessage
             }
-            '2' { Harden-OfficeMacros; Show-SuccessMessage }
-            '3' { Disable-SMBv1; Show-SuccessMessage }
-            '4' { Undo-PrivacyHardening; Show-SuccessMessage }
-            '5' { Enable-SMBv1; Show-SuccessMessage }
-            '6' { ReEnable-ActionCenter-Notifications; Show-SuccessMessage }
-            '7' { Restore-DefaultIPv6; Show-SuccessMessage }
-            '8' { Restore-Registry-FromBackup; Show-SuccessMessage }
-            '9' { Restore-OfficeMacros; Show-SuccessMessage }
-            '10' { Restore-DefaultUAC; Show-SuccessMessage }
-            '11' { Restore-VisualPerformanceDefault; Show-SuccessMessage }
-            '0' { return }
+            '2'  { Harden-OfficeMacros; Show-SuccessMessage }
+            '3'  { Disable-SMBv1; Show-SuccessMessage }
+            '4'  { Undo-PrivacyHardening; Show-SuccessMessage }
+            '5'  { Enable-SMBv1; Show-SuccessMessage }
+            '6'  { ReEnable-ActionCenter-Notifications; Show-SuccessMessage }
+            '7'  { Restore-DefaultIPv6; Show-SuccessMessage }
+            '8'  { Restore-Registry-FromBackup; Show-SuccessMessage }
+            '9'  { Restore-Registry; Show-SuccessMessage }
+            '10' { Restore-ControlPanelTweaks; Show-SuccessMessage }
+            '11' { Restore-OfficeMacros; Show-SuccessMessage }
+            '12' { Enable-ClassicContextMenu; Show-SuccessMessage }
+            '13' { Restore-DefaultUAC; Show-SuccessMessage }
+            '14' { Restore-VisualPerformanceDefault; Show-SuccessMessage }
+            '15' { Restore-BloatwareSafe; Show-SuccessMessage }
+            '16' { Restore-OneDrive; Show-SuccessMessage }
+            '0'  { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
 }
-
 
 # === MENU PRINCIPAL ===
 function Show-MainMenu {
