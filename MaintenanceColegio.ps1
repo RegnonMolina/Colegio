@@ -1284,16 +1284,17 @@ function Update-ScriptFromCloud {
     Write-Host "=======================" -ForegroundColor Cyan
 
     try {
-	Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." Yellow
-    irm script.colegiomundodosaber.com.br | iex
-    Write-Log "Script carregado com sucesso a partir da versão online!" Green
-    Show-SuccessMessage
+        Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." Yellow
+        irm script.colegiomundodosaber.com.br | iex
+        Write-Log "Script carregado com sucesso a partir da versão online!" Green
+        Show-SuccessMessage
+    }
+    catch {
+        Write-Log "❌ Falha ao carregar script online: $_" Red
+        Show-SuccessMessage
+    }
 }
-catch {
-    Write-Log "❌ Falha ao carregar script online: $_" Red
-    Show-SuccessMessage
-}
-}
+
 
 
 # Autologin seguro
