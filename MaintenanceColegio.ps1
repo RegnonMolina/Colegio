@@ -1893,6 +1893,98 @@ function Show-BloatwareMenu {
     } while ($true)
 }
 
+function Show-AdvancedSettingsMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: CONFIGURAÇÕES AVANÇADAS ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todos os ajustes abaixo" -ForegroundColor Green
+        Write-Host "2. Ajustes do Painel de Controle/Configurações"
+        Write-Host "3. Configurar Autologin"
+        Write-Host "4. Tweaks de interface do Explorer"
+        Write-Host "5. Scripts externos (Ativador e Chris Titus)"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
+        switch ($choice) {
+            '1' {
+                Show-ControlPanelTweaksMenu
+                Show-AutoLoginMenu
+                Show-ExplorerTweaksMenu
+                Show-ExternalScriptsMenu
+            }
+            '2' { Show-ControlPanelTweaksMenu }
+            '3' { Show-AutoLoginMenu }
+            '4' { Show-ExplorerTweaksMenu }
+            '5' { Show-ExternalScriptsMenu }
+            '0' { return }
+            default {
+                Write-Host "Opção inválida!" -ForegroundColor Red
+                Start-Sleep -Seconds 1
+            }
+        }
+    } while ($true)
+}
+
+function Show-RestoreUndoMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: REVERTER AJUSTES / RESTAURAR APLICATIVOS ====" -ForegroundColor Magenta
+        Write-Host "1. Executar todas as tarefas abaixo" -ForegroundColor Green
+        Write-Host "2. Bloquear macros Office (segurança)"
+        Write-Host "3. Desabilitar SMBv1 (RECOMENDADO)"
+        Write-Host "4. Desfazer privacidade agressiva"
+        Write-Host "5. Habilitar SMBv1 (NÃO RECOMENDADO)"
+        Write-Host "6. Reabilitar Action Center/Notificações"
+        Write-Host "7. Reabilitar IPv6"
+        Write-Host "8. Restaurar backup do registro"
+        Write-Host "9. Restaurar macros Office (padrão)"
+        Write-Host "10. Restaurar UAC para padrão"
+        Write-Host "11. Restaurar visual padrão"
+        Write-Host "12. Restaurar menu de contexto clássico"
+        Write-Host "13. Restaurar backup do registro (alternativo)"
+        Write-Host "14. Reinstalar aplicativos essenciais (Calculadora, Notepad, Ferramenta de Captura etc)"
+        Write-Host "15. Reinstalar o OneDrive"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
+        switch ($choice) {
+            '1' {
+                Harden-OfficeMacros
+                Disable-SMBv1
+                Undo-PrivacyHardening
+                Enable-SMBv1
+                ReEnable-ActionCenter-Notifications
+                Restore-DefaultIPv6
+                Restore-Registry-FromBackup
+                Restore-OfficeMacros
+                Restore-DefaultUAC
+                Restore-VisualPerformanceDefault
+                Enable-ClassicContextMenu
+                Restore-Registry
+                Restore-BloatwareSafe
+                Restore-OneDrive
+                Show-SuccessMessage
+            }
+            '2'  { Harden-OfficeMacros; Show-SuccessMessage }
+            '3'  { Disable-SMBv1; Show-SuccessMessage }
+            '4'  { Undo-PrivacyHardening; Show-SuccessMessage }
+            '5'  { Enable-SMBv1; Show-SuccessMessage }
+            '6'  { ReEnable-ActionCenter-Notifications; Show-SuccessMessage }
+            '7'  { Restore-DefaultIPv6; Show-SuccessMessage }
+            '8'  { Restore-Registry-FromBackup; Show-SuccessMessage }
+            '9'  { Restore-OfficeMacros; Show-SuccessMessage }
+            '10' { Restore-DefaultUAC; Show-SuccessMessage }
+            '11' { Restore-VisualPerformanceDefault; Show-SuccessMessage }
+            '12' { Enable-ClassicContextMenu; Show-SuccessMessage }
+            '13' { Restore-Registry; Show-SuccessMessage }
+            '14' { Restore-BloatwareSafe }
+            '15' { Restore-OneDrive }
+            '0'  { return }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
+        }
+    } while ($true)
+}
+
 
 # === MENU PRINCIPAL ===
 function Show-MainMenu {
