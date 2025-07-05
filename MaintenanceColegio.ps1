@@ -1288,14 +1288,11 @@ function Update-ScriptFromCloud {
         irm script.colegiomundodosaber.com.br | iex
         Write-Log "Script carregado com sucesso a partir da versão online!" Green
         Show-SuccessMessage
-    }
-    catch {
+    }   catch {
         Write-Log "❌ Falha ao carregar script online: $_" Red
         Show-SuccessMessage
     }
 }
-
-
 
 # Autologin seguro
 function Show-AutoLoginMenu {
