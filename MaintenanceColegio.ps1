@@ -348,18 +348,24 @@ function Add-WiFiNetwork {
 
         $xmlProfile | Out-File -FilePath $tempFile -Encoding ascii
 
-        netsh wlan add profile filename="`"$tempFile`"" user=all | Out-Null
-        netsh wlan set profileparameter name="`"$ssid`"" connectiontype=ESS | Out-Null
-        Set-NetConnectionProfile -Name "$ssid" -NetworkCategory Private
+        netsh wlan add profile filename="$tempFile" user=all | Out-Null
+        netsh wlan set profileparameter name="$ssid" connectiontype=ESS | Out-Null
+
+        # Tenta definir como privada, mas só funciona se já estiver conectada
+        try {
+            Set-NetConnectionProfile -Name "$ssid" -NetworkCategory Private -ErrorAction Stop
+            Write-Log "Perfil de rede definido como privada." Green
+        } catch {
+            Write-Log "Aviso: não foi possível definir perfil como privado (talvez ainda não esteja conectado)." Yellow
+        }
 
         Remove-Item -Path $tempFile -Force
-        Write-Log "Rede Wi-Fi configurada com sucesso e definida como privada." Green
+        Write-Log "Rede Wi-Fi configurada com sucesso." Green
     }
     catch {
-        Write-Log "❌ Erro ao configurar rede Wi-Fi: $_" Red
+        Write-Log "❌ Erro ao configurar rede Wi-Fi: $($_.Exception.Message)" Red
     }
 }
-
 # Função para detectar e instalar impressoras de rede automaticamente
 function Install-NetworkPrinters {
     Write-Log "Detectando e instalando impressoras de rede..." Yellow
@@ -375,6 +381,11 @@ function Install-NetworkPrinters {
         $driver = $printer.Driver
         $portName = "IP_$($ip.Replace('.','_'))"
         try {
+            # Verifica se driver está instalado
+            if (-not (Get-PrinterDriver -Name $driver -ErrorAction SilentlyContinue)) {
+                Write-Log "Driver $driver não encontrado. Instale o driver e tente novamente." Red
+                continue
+            }
             if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
                 Add-PrinterPort -Name $portName -PrinterHostAddress $ip
                 Write-Log "Porta $portName criada para $ip." Green
@@ -386,21 +397,20 @@ function Install-NetworkPrinters {
                 Write-Log "Impressora $name já está instalada." Cyan
             }
         } catch {
-            Write-Log "Erro ao instalar impressora $name ($ip): $_" Red
+            Write-Log "Erro ao instalar impressora $name ($ip): $($_.Exception.Message)" Red
         }
     }
     # Remover impressora OneNote Desktop se existir
     try {
         if (Get-Printer -Name "OneNote (Desktop)" -ErrorAction SilentlyContinue) {
-            Remove-Printer -Name "OneNote (Desktop)"
+            Remove-Printer -Name "OneNote (Desktop)" -ErrorAction Stop
             Write-Log "Impressora OneNote (Desktop) removida." Green
         }
     } catch {
-        Write-Log "Erro ao remover impressora OneNote (Desktop): $_" Red
+        Write-Log "Erro ao remover impressora OneNote (Desktop): $($_.Exception.Message)" Red
     }
     Write-Log "Instalação de impressoras de rede concluída." Green
 }
-
 function Run-All-NetworkAdvanced {
     Flush-DNS
     Optimize-NetworkPerformance
@@ -422,7 +432,7 @@ function Set-DnsGoogleCloudflare {
 
 function Test-InternetSpeed {
     Write-Log "Testando velocidade de internet..." Yellow
-    $speedtestPath = "$env:TEMP\speedtest.exe"
+    $speedtestPath = "$env:TEMP\SpeedtestCLI.exe"
 
     try {
         if (-not (Test-Path $speedtestPath)) {
@@ -432,12 +442,12 @@ function Test-InternetSpeed {
 
         Write-Log "Executando Speedtest..." Cyan
         & $speedtestPath --accept-license --accept-gdpr | ForEach-Object {
-            Write-Log "$_"
+            Write-Log "$_" "Gray"
         }
 
         Write-Log "Teste de velocidade concluído." Green
     } catch {
-        Write-Log "❌ Erro ao testar velocidade: $_" Red
+        Write-Log "❌ Erro ao testar velocidade: $($_.Exception.Message)" Red
     }
 }
 
