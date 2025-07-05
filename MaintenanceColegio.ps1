@@ -1575,7 +1575,6 @@ function Show-SystemPerformanceMenu {
         Write-Host "4. Desativar serviços desnecessários"
         Write-Host "5. Otimizar Windows Explorer para desempenho"
         Write-Host "6. Renomear notebook"
-        Write-Host "7. Restaurar configurações padrão do Painel de Controle"
         Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
 
         $choice = Read-Host "`nEscolha uma opção"
@@ -1593,7 +1592,6 @@ function Show-SystemPerformanceMenu {
             '4' { Disable-UnnecessaryServices; Show-SuccessMessage }
             '5' { Optimize-ExplorerPerformance; Show-SuccessMessage }
             '6' { Renomear-Notebook; Show-SuccessMessage }
-            '7' { Restore-ControlPanelTweaks; Show-SuccessMessage }
             '0' { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
