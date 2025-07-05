@@ -88,8 +88,7 @@ function Pause-Script {
 }
 
 function Show-SuccessMessage {
-    Write-Host "Tarefa executada com sucesso!" -ForegroundColor Green
-    Start-Sleep -Seconds 2
+    Write-Log "`n✔️ Tarefa concluída com sucesso!" Green
 }
 
 Write-Log "Iniciando script de manutenção..." Cyan
@@ -1285,15 +1284,16 @@ function Update-ScriptFromCloud {
     Write-Host "=======================" -ForegroundColor Cyan
 
     try {
-        Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." Yellow
-        irm script.colegiomundodosaber.com.br | iex
-        Write-Log "Script carregado com sucesso a partir da versão online!" Green
-    } catch {
-        Write-Log "Erro ao carregar o script online: $_" Red
-    }
+	Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." Yellow
+    irm script.colegiomundodosaber.com.br | iex
+    Write-Log "Script carregado com sucesso a partir da versão online!" Green
+    Show-SuccessMessage
+}
+catch {
+    Write-Log "❌ Falha ao carregar script online: $_" Red
+    Show-SuccessMessage
+}
 
-	Show-SuccessMessage
-	}
 
 # Autologin seguro
 function Show-AutoLoginMenu {
@@ -2059,7 +2059,9 @@ try {
     Show-MainMenu
 }
 catch {
-    Write-Host "❌ Erro fatal: $_" -ForegroundColor Red
-    Write-Host "Consulte o log em: `"$logFile`"" -ForegroundColor Yellow
+    Write-Log "❌ Erro fatal: $_" Red
+    Write-Log "Consulte o log em: $logFile" Yellow
+}
+finally {
     Show-SuccessMessage
 }
