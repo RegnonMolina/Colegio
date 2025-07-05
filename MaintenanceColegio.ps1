@@ -1399,15 +1399,44 @@ function Restore-OfficeMacros {
 }
 
 function Restore-OneDrive {
-    $onedriveSetup = "$env:SystemRoot\SysWOW64\OneDriveSetup.exe"
-    if (Test-Path $onedriveSetup) {
-        Start-Process $onedriveSetup
-        Write-Log "OneDrive reinstalado." Green
-    } else {
-        Write-Log "OneDriveSetup.exe não encontrado!" Red
+    Write-Log "🔄 Tentando reinstalar o OneDrive..." Cyan
+
+    $possiblePaths = @(
+        "$env:SystemRoot\SysWOW64\OneDriveSetup.exe",
+        "$env:SystemRoot\System32\OneDriveSetup.exe"
+    )
+
+    $setupPath = $possiblePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if (-not $setupPath) {
+        # Se o OneDriveSetup não existir localmente, baixe da internet
+        $downloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=248256"
+        $tempInstaller = "$env:TEMP\OneDriveSetup.exe"
+
+        try {
+            Write-Log "⬇️ Baixando instalador do OneDrive..." Yellow
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $tempInstaller -UseBasicParsing
+            $setupPath = $tempInstaller
+        } catch {
+            Write-Log "❌ Falha ao baixar o OneDrive: $_" Red
+            return
+        }
     }
+
+    if (Test-Path $setupPath) {
+        try {
+            Start-Process -FilePath $setupPath -ArgumentList "/silent" -Wait
+            Write-Log "✅ OneDrive reinstalado com sucesso." Green
+        } catch {
+            Write-Log "❌ Erro ao executar instalador do OneDrive: $_" Red
+        }
+    } else {
+        Write-Log "❌ Instalador do OneDrive não foi encontrado." Red
+    }
+
     Pause-Script
 }
+
 
 
 function Restore-BloatwareSafe {
