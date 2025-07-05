@@ -2016,5 +2016,5 @@ try {
 catch {
     Write-Host "❌ Erro fatal: $_" -ForegroundColor Red
     Write-Host "Consulte o log em: `"$logFile`"" -ForegroundColor Yellow
-    Pause-Script
+    Show-SuccessMessage
 }
