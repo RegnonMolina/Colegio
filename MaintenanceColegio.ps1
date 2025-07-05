@@ -9,7 +9,7 @@ $global:ConfirmPreference = "None"
 $global:ProgressPreference = 'Continue'  
 $global:ErrorActionPreference = "SilentlyContinue"
 $VerbosePreference = "SilentlyContinue" 
-
+$global:logFile = "$PSScriptRoot\log-$((Get-Date).ToString('yyyy-MM-dd-HH')).txt"
 $LogDate = Get-Date -format "dd-MM-yyyy-HH"
 $currentTime = Get-Date -format "dd-MM-yyyy HH:mm:ss"
 $computer = $env:COMPUTERNAME
@@ -30,10 +30,6 @@ $logFile = "$PSScriptRoot\log.txt"
 $startTime = Get-Date
 
 # === FUNÇÕES DE UTILIDADE ===
-function Write-Log($msg, $color = "Gray") {
-    Write-Host "[LOG] $msg" -ForegroundColor $color
-}
-
 #region → Configurações Iniciais
 $Host.UI.RawUI.WindowTitle = "MANUTENÇÃO WINDOWS - NÃO FECHE ESTA JANELA"
 Clear-Host
@@ -52,12 +48,40 @@ $logFile = "$env:TEMP\WinMaintenance_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 $startTime = Get-Date
 
 function Write-Log {
-    param([string]$message, [string]$color = "White")
+    param(
+        [string]$message,
+        [string]$color = "White"
+    )
+
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
+    if (-not $message) {
+        $message = "<mensagem vazia>"
+    }
+
+    # Garante que a cor seja válida
+    $validColors = [System.Enum]::GetNames([System.ConsoleColor])
+    if ($validColors -notcontains $color) {
+        $color = "White"
+    }
+
     $logMessage = "[$timestamp] $message"
-    Add-Content -Path $logFile -Value $logMessage
-    Write-Host $logMessage -ForegroundColor $color
+
+    # Escreve no console
+    try {
+        Write-Host $logMessage -ForegroundColor $color
+    } catch {
+        Write-Host "[$timestamp] $message" -ForegroundColor White
+    }
+
+    # Escreve no arquivo de log
+    try {
+        Add-Content -Path $logFile -Value $logMessage
+    } catch {
+        Write-Host "⚠️ Falha ao salvar log no arquivo: $logFile" -ForegroundColor Yellow
+    }
 }
+
 
 function Pause-Script {
     Write-Host "`nPressione ENTER para continuar..." -ForegroundColor Cyan
