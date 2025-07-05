@@ -317,9 +317,10 @@ function Update-PowerShell {
 # 4. Rede e Impressoras
 function Add-WiFiNetwork {
     Write-Log "Configurando rede Wi-Fi 'VemProMundo - Adm'..." Yellow
+
     $ssid = "VemProMundo - Adm"
     $password = "!Mund0CoC@7281%"
-    
+
     $xmlProfile = @"
 <?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
@@ -343,15 +344,40 @@ function Add-WiFiNetwork {
   </MSM>
 </WLANProfile>
 "@
-    
-    $tempFile = "$env:TEMP\$($ssid.Replace(' ', '_')).xml"
-    $xmlProfile | Out-File -FilePath $tempFile -Encoding ascii
-    netsh wlan add profile filename="$tempFile" user=all
-    netsh wlan set profileparameter name="$ssid" connectiontype=ESS
-    Set-NetConnectionProfile -Name "$ssid" -NetworkCategory Private
-    Remove-Item $tempFile
-    Write-Log "Rede Wi-Fi configurada como privada." Green
+
+    try {
+        $tempFile = "$env:TEMP\$($ssid.Replace(' ', '_')).xml"
+        $xmlProfile | Out-File -FilePath $tempFile -Encoding ascii
+
+        netsh wlan add profile filename="$tempFile" user=all | Out-Null
+        netsh wlan connect name="$ssid" | Out-Null
+
+        # Espera até a rede estar conectada (timeout: 15 segundos)
+        $connected = $false
+        for ($i = 0; $i -lt 15; $i++) {
+            Start-Sleep -Seconds 1
+            $status = netsh wlan show interfaces | Select-String "SSID\s+:\s+$ssid"
+            if ($status) {
+                $connected = $true
+                break
+            }
+        }
+
+        if ($connected) {
+            Set-NetConnectionProfile -InterfaceAlias "Wi-Fi" -NetworkCategory Private -ErrorAction SilentlyContinue
+            Write-Log "Rede '$ssid' conectada e configurada como privada." Green
+        } else {
+            Write-Log "⚠️ Não foi possível confirmar a conexão com '$ssid'. Definição como privada pulada." Yellow
+        }
+    }
+    catch {
+        Write-Log "Erro ao configurar rede Wi-Fi: $_" Red
+    }
+    finally {
+        if (Test-Path $tempFile) { Remove-Item $tempFile -Force }
+    }
 }
+
 
 # Função para detectar e instalar impressoras de rede automaticamente
 function Install-NetworkPrinters {
