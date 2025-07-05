@@ -122,96 +122,78 @@ function Optimize-Volumes {
 
 # 2. Bloatwarefunction Install
 function Remove-Bloatware {
-    Write-Log "Iniciando remoção AGESSIVA de bloatware..." Yellow
+    Write-Log "REMOVENDO LinkedIn, Xbox e bloatware..." Cyan
 
-    # Whitelist - Apps ESSENCIAIS que NÃO devem ser removidos
-    $whitelist = @(
-        "Microsoft.WindowsCalculator",
-        "Microsoft.WindowsCamera",
-        "Microsoft.WindowsStore",
-        "Microsoft.DesktopAppInstaller",
-        "Microsoft.MSPaint",
-        "Microsoft.Windows.Photos"
-    )
-
-    # Lista de bloatware a ser removido
+    # Lista PRIORITÁRIA (foco no que você quer remover)
     $bloatwareToRemove = @(
+        # LinkedIn e variantes
+        "*LinkedIn*",
+        "Microsoft.LinkedIn",
+        "LinkedIn.LinkedIn",
+        
+        # Xbox e todos os componentes
+        "*Xbox*",
         "Microsoft.XboxApp",
         "Microsoft.XboxGameOverlay",
         "Microsoft.XboxGamingOverlay",
         "Microsoft.XboxIdentityProvider",
         "Microsoft.XboxSpeechToTextOverlay",
         "Microsoft.Xbox.TCUI",
-        "Microsoft.LinkedIn",
+        "Microsoft.GamingApp",
+        
+        # Outros bloatwares comuns (opcional)
         "Microsoft.BingNews",
         "Microsoft.BingWeather",
-        "Microsoft.GetHelp",
         "Microsoft.Getstarted",
-        "Microsoft.MicrosoftOfficeHub",
-        "Microsoft.MicrosoftSolitaireCollection",
-        "Microsoft.People",
-        "Microsoft.Todos",
-        "Microsoft.ZuneMusic",
-        "Microsoft.ZuneVideo",
-        "Microsoft.YourPhone",
-        "Microsoft.Office.Outlook",
-        "Microsoft.OutlookForWindows",
-        "Clipchamp.Clipchamp",
-        "Microsoft.MicrosoftStickyNotes",
-        "Microsoft.FeedbackHub",
-        "Microsoft.WindowsFeedbackHub",
-        "Microsoft.Teams",
-        "Microsoft.PowerAutomateDesktop",
-        "Microsoft.Copilot",
-        "Microsoft.WindowsAI",
-        "Microsoft.AssistantRapid",
-        "Microsoft.SkypeApp",
-        "Microsoft.Microsoft3DViewer",
-        "Microsoft.MixedReality.Portal"
+        "Microsoft.MicrosoftSolitaireCollection"
     )
 
-    Write-Log "Removendo pacotes do usuário atual..." Cyan
-    foreach ($app in $bloatwareToRemove) {
-        try {
-            $installed = Get-AppxPackage -Name $app -ErrorAction SilentlyContinue
-            if ($installed -and ($whitelist -notcontains $installed.Name)) {
-                Write-Log "Removendo: ${app}" Yellow
-                Remove-AppxPackage -Package $installed.PackageFullName -ErrorAction SilentlyContinue
-            }
-        } catch {
-            Write-Log "Erro ao remover ${app}: ${_}" Red  # ← Sintaxe corrigida aqui
+    # Whitelist (apps que NÃO podem ser removidos)
+    $whitelist = @(
+        "Microsoft.WindowsCalculator",
+        "Microsoft.WindowsStore",
+        "Microsoft.DesktopAppInstaller"
+    )
+
+    # Passo 1: Remover do usuário atual
+    Write-Log "Removendo pacotes do usuário atual..." Yellow
+    Get-AppxPackage | Where-Object {
+        $_.Name -notin $whitelist -and
+        ($bloatwareToRemove -contains $_.Name -or $bloatwareToRemove -like $_.Name)
+    } | ForEach-Object {
+        Write-Log "Removendo: [$($_.Name)]" Red
+        Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue
+    }
+
+    # Passo 2: Remover provisionados (para novos usuários)
+    Write-Log "Removendo pacotes provisionados..." Yellow
+    Get-AppxProvisionedPackage -Online | Where-Object {
+        $_.PackageName -notin $whitelist -and
+        ($bloatwareToRemove -contains $_.PackageName -or $bloatwareToRemove -like $_.PackageName)
+    } | ForEach-Object {
+        Write-Log "Removendo provisionado: [$($_.DisplayName)]" Red
+        Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue
+    }
+
+    # Passo 3: Limpeza AGESSIVA (pastas residuais)
+    $foldersToDelete = @(
+        "$env:LOCALAPPDATA\Packages\Microsoft.LinkedIn*",
+        "$env:LOCALAPPDATA\Packages\Microsoft.Xbox*",
+        "$env:PROGRAMFILES\WindowsApps\Microsoft.LinkedIn*",
+        "$env:PROGRAMFILES\WindowsApps\Microsoft.Xbox*"
+    )
+    
+    foreach ($folder in $foldersToDelete) {
+        if (Test-Path $folder) {
+            Remove-Item $folder -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Log "Pasta residual removida: [$folder]" DarkYellow
         }
     }
 
-    Write-Log "Removendo pacotes provisionados (novos usuários)..." Cyan
-    foreach ($app in $bloatwareToRemove) {
-        try {
-            $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "${app}*" }
-            if ($provisioned -and ($whitelist -notcontains $provisioned.DisplayName)) {
-                Write-Log "Removendo provisionado: ${provisioned.DisplayName}" Yellow
-                Remove-AppxProvisionedPackage -Online -PackageName $provisioned.PackageName -ErrorAction SilentlyContinue
-            }
-        } catch {
-            Write-Log "Erro ao remover provisionado ${app}: ${_}" Red  # ← Sintaxe corrigida aqui
-        }
-    }
-
-    # Remoção do Copilot (se instalado como "feature")
-    try {
-        if (Get-Command "Get-WindowsCapability" -ErrorAction SilentlyContinue) {
-            $copilotCapability = Get-WindowsCapability -Online -Name "Microsoft.Windows.AI.Copilot*" -ErrorAction SilentlyContinue
-            if ($copilotCapability -and ($copilotCapability.State -eq "Installed")) {
-                Write-Log "Removendo Copilot (Windows Capability)..." Yellow
-                Remove-WindowsCapability -Online -Name "Microsoft.Windows.AI.Copilot*" -ErrorAction SilentlyContinue
-            }
-        }
-    } catch {
-        Write-Log "Nao foi possivel remover o Copilot como capability: ${_}" Red  # ← Sintaxe corrigida aqui
-    }
-
-    Write-Log "✅ Bloatware removido COM SUCESSO!" Green
+    Write-Log "✅ LinkedIn e Xbox FORAM ELIMINADOS!" Green
     Show-SuccessMessage
 }
+
 
 # Função para desativar tarefas agendadas de bloatware/telemetria
 function Disable-BloatwareScheduledTasks {
