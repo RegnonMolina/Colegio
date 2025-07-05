@@ -304,7 +304,7 @@ function Add-WiFiNetwork {
     Write-Log "Configurando rede Wi-Fi 'VemProMundo - Adm'..." Yellow
     $ssid = "VemProMundo - Adm"
     $password = "!Mund0CoC@7281%"
-    
+
     $xmlProfile = @"
 <?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
@@ -328,15 +328,20 @@ function Add-WiFiNetwork {
   </MSM>
 </WLANProfile>
 "@
-    
-    $tempFile = "$env:TEMP\$($ssid.Replace(' ', '_')).xml"
-    $xmlProfile | Out-File -FilePath $tempFile -Encoding ascii
-    netsh wlan add profile filename="$tempFile" user=all
-    netsh wlan set profileparameter name="$ssid" connectiontype=ESS
-    Set-NetConnectionProfile -Name "$ssid" -NetworkCategory Private
-    Remove-Item $tempFile
-    Write-Log "Rede Wi-Fi configurada como privada." Green
+
+    try {
+        $tempFile = Join-Path -Path $env:TEMP -ChildPath "$($ssid.Replace(' ', '_')).xml"
+        $xmlProfile | Out-File -FilePath $tempFile -Encoding ascii -Force
+        netsh wlan add profile filename="$tempFile" user=all
+        netsh wlan set profileparameter name="$ssid" connectiontype=ESS
+        Set-NetConnectionProfile -Name "$ssid" -NetworkCategory Private
+        Remove-Item $tempFile -Force
+        Write-Log "Rede Wi-Fi '$ssid' configurada com sucesso." Green
+    } catch {
+        Write-Log "❌ Erro ao adicionar rede Wi-Fi: $_" Red
+    }
 }
+
 
 # Função para detectar e instalar impressoras de rede automaticamente
 function Install-NetworkPrinters {
@@ -400,6 +405,10 @@ function Set-DnsGoogleCloudflare {
 
 function Test-InternetSpeed {
     Write-Log "Testando velocidade de internet usando PowerShell..." Yellow
+	if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Write-Log "⚠️ Winget não está disponível neste sistema." Red
+    return
+}
     try {
         if (-not (Get-Command speedtest -ErrorAction SilentlyContinue)) {
             winget install --id Ookla.Speedtest -e --accept-package-agreements --accept-source-agreements
@@ -1239,14 +1248,20 @@ function Update-ScriptFromCloud {
     Write-Host "=======================" -ForegroundColor Cyan
 
     try {
+        Write-Log "Verificando conexão com servidor..." Yellow
+        if (-not (Test-Connection -ComputerName "script.colegiomundodosaber.com.br" -Count 1 -Quiet)) {
+            Write-Log "❌ Sem conexão. Atualização abortada." Red
+            return
+        }
+
         Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." Yellow
         irm script.colegiomundodosaber.com.br | iex
-        Write-Log "Script carregado com sucesso a partir da versão online!" Green
+        Write-Log "✅ Script atualizado com sucesso!" Green
+        Show-SuccessMessage
     } catch {
-        Write-Log "Erro ao carregar o script online: $_" Red
+        Write-Log "❌ Falha ao atualizar script: $_" Red
+        Show-SuccessMessage
     }
-
-    Pause-Script
 }
 
 # Autologin seguro
@@ -1375,29 +1390,37 @@ function Restore-OneDrive {
 }
 
 function Restore-BloatwareSafe {
-    Write-Log "Restaurando aplicativos padrão essenciais..." Yellow
-
-    $appsToRestore = @(
+    Write-Log "Reinstalando aplicativos essenciais..." Yellow
+    $apps = @(
         "Microsoft.WindowsCalculator",
-        "Microsoft.WindowsCamera",
-        "Microsoft.WindowsSoundRecorder",  # Gravador de Voz
-        "Microsoft.ScreenSketch",          # Ferramenta de Captura
         "Microsoft.WindowsNotepad",
-        "Microsoft.OutlookForWindows",
-        "Microsoft.LinkedIn.LinkedIn"
+        "Microsoft.ScreenSketch",           # Ferramenta de Captura
+        "Microsoft.WindowsSoundRecorder",   # Gravador de Voz
+        "Microsoft.WindowsCamera",
+        "Microsoft.OutlookForWindows",      # Outlook novo
+        "Microsoft.Outlook",                # Outlook clássico
+        "Microsoft.Linkedin"
     )
 
-    foreach ($app in $appsToRestore) {
+    foreach ($app in $apps) {
         try {
-            Write-Log "Reinstalando $app..." Cyan
-            Get-AppxPackage -AllUsers -Name $app -ErrorAction SilentlyContinue |
-                ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml" }
+            $pkg = Get-AppxPackage -AllUsers -Name $app
+            if ($pkg) {
+                $manifest = Join-Path $pkg.InstallLocation "AppxManifest.xml"
+                if (Test-Path $manifest) {
+                    Add-AppxPackage -DisableDevelopmentMode -Register $manifest
+                    Write-Log "$app reinstalado com sucesso." Green
+                } else {
+                    Write-Log "AppxManifest não encontrado para $app." Red
+                }
+            } else {
+                Write-Log "$app não está instalado. Pulando." Yellow
+            }
         } catch {
-            Write-Log "Erro ao restaurar ${app}: $_" Red
+            Write-Log "❌ Erro ao reinstalar $app: $_" Red
         }
     }
 
-    Write-Log "Aplicativos essenciais restaurados." Green
     Show-SuccessMessage
 }
 
@@ -1798,6 +1821,78 @@ function Show-ExternalScriptsMenu {
         }
     } while ($true)
 }
+function Show-BloatwareMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: BLOATWARE, PRIVACIDADE E HARDENING ====" -ForegroundColor Cyan
+        Write-Host "1. Executar todas as tarefas abaixo" -ForegroundColor Green
+        Write-Host "2. Aplicar privacidade agressiva"
+        Write-Host "3. Aplicar tweaks extras"
+        Write-Host "4. Ajustar visual para performance"
+        Write-Host "5. Backup do registro"
+        Write-Host "6. Desabilitar IPv6"
+        Write-Host "7. Desabilitar UAC"
+        Write-Host "8. Desativar Cortana, Search, Telemetria"
+        Write-Host "9. Desativar notificações (Action Center)"
+        Write-Host "10. Desativar tarefas agendadas de bloatware"
+        Write-Host "11. Encerrar processos dispensáveis"
+        Write-Host "12. Executar debloaters de terceiros"
+        Write-Host "13. Otimizar rede (TCP/DNS)"
+        Write-Host "14. Remover aplicativos adicionais"
+        Write-Host "15. Remover bloatware seguro (recomendado)"
+        Write-Host "16. Remover Copilot"
+        Write-Host "17. Remover OneDrive e restaurar pastas"
+        Write-Host "18. Remover pins do Menu Iniciar/Barra de Tarefas"
+        Write-Host "19. Remover tarefas agendadas (agressivo)"
+        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+
+        $choice = Read-Host "`nEscolha uma opção"
+        switch ($choice) {
+            '1' {
+                Enable-PrivacyHardening
+                Apply-ExtraTweaks
+                Set-VisualPerformance
+                Backup-Registry
+                Disable-IPv6
+                Disable-UAC
+                Disable-Cortana-AndSearch
+                Disable-ActionCenter-Notifications
+                Disable-BloatwareScheduledTasks
+                Stop-BloatwareProcesses
+                Run-ExternalDebloaters
+                Optimize-NetworkPerformance
+                Remove-AdditionalBloatware
+                Remove-BloatwareSafe
+                Remove-Copilot
+                Remove-OneDrive-AndRestoreFolders
+                Remove-StartAndTaskbarPins
+                Remove-ScheduledTasksAggressive
+                Show-SuccessMessage
+            }
+            '2'  { Enable-PrivacyHardening; Show-SuccessMessage }
+            '3'  { Apply-ExtraTweaks; Show-SuccessMessage }
+            '4'  { Set-VisualPerformance; Show-SuccessMessage }
+            '5'  { Backup-Registry; Show-SuccessMessage }
+            '6'  { Disable-IPv6; Show-SuccessMessage }
+            '7'  { Disable-UAC; Show-SuccessMessage }
+            '8'  { Disable-Cortana-AndSearch; Show-SuccessMessage }
+            '9'  { Disable-ActionCenter-Notifications; Show-SuccessMessage }
+            '10' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
+            '11' { Stop-BloatwareProcesses; Show-SuccessMessage }
+            '12' { Run-ExternalDebloaters; Show-SuccessMessage }
+            '13' { Optimize-NetworkPerformance; Show-SuccessMessage }
+            '14' { Remove-AdditionalBloatware; Show-SuccessMessage }
+            '15' { Remove-BloatwareSafe; Show-SuccessMessage }
+            '16' { Remove-Copilot; Show-SuccessMessage }
+            '17' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
+            '18' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
+            '19' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
+            '0'  { return }
+            default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
+        }
+    } while ($true)
+}
+
 
 # === MENU PRINCIPAL ===
 function Show-MainMenu {
