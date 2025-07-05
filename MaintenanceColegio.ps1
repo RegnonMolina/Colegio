@@ -126,25 +126,22 @@ function Remove-Bloatware {
 
     # Whitelist - Apps ESSENCIAIS que NÃO devem ser removidos
     $whitelist = @(
-        "Microsoft.WindowsCalculator",       # Calculadora
-        "Microsoft.WindowsCamera",          # Câmera
-        "Microsoft.WindowsStore",           # Loja de Apps
-        "Microsoft.DesktopAppInstaller",    # Necessário para o Winget
-        "Microsoft.MSPaint",                # Paint (pode ser útil)
-        "Microsoft.Windows.Photos"          # Fotos (alguns recursos dependem dele)
+        "Microsoft.WindowsCalculator",
+        "Microsoft.WindowsCamera",
+        "Microsoft.WindowsStore",
+        "Microsoft.DesktopAppInstaller",
+        "Microsoft.MSPaint",
+        "Microsoft.Windows.Photos"
     )
 
-    # Lista COMPLETA de bloatware a ser REMOVIDO (sem causar erros)
+    # Lista de bloatware a ser removido
     $bloatwareToRemove = @(
-        # Xbox e tudo relacionado
         "Microsoft.XboxApp",
         "Microsoft.XboxGameOverlay",
         "Microsoft.XboxGamingOverlay",
         "Microsoft.XboxIdentityProvider",
         "Microsoft.XboxSpeechToTextOverlay",
         "Microsoft.Xbox.TCUI",
-
-        # LinkedIn e Microsoft Apps inúteis
         "Microsoft.LinkedIn",
         "Microsoft.BingNews",
         "Microsoft.BingWeather",
@@ -157,33 +154,17 @@ function Remove-Bloatware {
         "Microsoft.ZuneMusic",
         "Microsoft.ZuneVideo",
         "Microsoft.YourPhone",
-
-        # Outlook (clássico e novo)
         "Microsoft.Office.Outlook",
         "Microsoft.OutlookForWindows",
-
-        # Clipchamp e Sticky Notes
         "Clipchamp.Clipchamp",
         "Microsoft.MicrosoftStickyNotes",
-
-        # Hub de Comentários e Telemetria
         "Microsoft.FeedbackHub",
         "Microsoft.WindowsFeedbackHub",
-
-        # Teams (versão consumer)
         "Microsoft.Teams",
-
-        # Power Automate (automação desnecessária para usuários comuns)
         "Microsoft.PowerAutomateDesktop",
-
-        # Copilot (se estiver instalado via AppX)
         "Microsoft.Copilot",
         "Microsoft.WindowsAI",
-
-        # Assistência Rápida (remoto da Microsoft)
         "Microsoft.AssistantRapid",
-
-        # Outros apps questionáveis
         "Microsoft.SkypeApp",
         "Microsoft.Microsoft3DViewer",
         "Microsoft.MixedReality.Portal"
@@ -194,28 +175,28 @@ function Remove-Bloatware {
         try {
             $installed = Get-AppxPackage -Name $app -ErrorAction SilentlyContinue
             if ($installed -and ($whitelist -notcontains $installed.Name)) {
-                Write-Log "Removendo: $($installed.Name)" Yellow
+                Write-Log "Removendo: ${app}" Yellow
                 Remove-AppxPackage -Package $installed.PackageFullName -ErrorAction SilentlyContinue
             }
         } catch {
-            Write-Log "⚠️ Erro ao remover $(app): $_" Red
+            Write-Log "Erro ao remover ${app}: ${_}" Red  # ← Sintaxe corrigida aqui
         }
     }
 
     Write-Log "Removendo pacotes provisionados (novos usuários)..." Cyan
     foreach ($app in $bloatwareToRemove) {
         try {
-            $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "$app*" }
+            $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "${app}*" }
             if ($provisioned -and ($whitelist -notcontains $provisioned.DisplayName)) {
-                Write-Log "Removendo provisionado: $($provisioned.DisplayName)" Yellow
+                Write-Log "Removendo provisionado: ${provisioned.DisplayName}" Yellow
                 Remove-AppxProvisionedPackage -Online -PackageName $provisioned.PackageName -ErrorAction SilentlyContinue
             }
         } catch {
-            Write-Log "⚠️ Erro ao remover provisionado $(app): $_" Red
+            Write-Log "Erro ao remover provisionado ${app}: ${_}" Red  # ← Sintaxe corrigida aqui
         }
     }
 
-    # Remoção EXTRA do Copilot (se instalado como "feature" no Windows 11)
+    # Remoção do Copilot (se instalado como "feature")
     try {
         if (Get-Command "Get-WindowsCapability" -ErrorAction SilentlyContinue) {
             $copilotCapability = Get-WindowsCapability -Online -Name "Microsoft.Windows.AI.Copilot*" -ErrorAction SilentlyContinue
@@ -225,7 +206,7 @@ function Remove-Bloatware {
             }
         }
     } catch {
-        Write-Log "⚠️ Não foi possível remover o Copilot como capability: $_" Red
+        Write-Log "Nao foi possivel remover o Copilot como capability: ${_}" Red  # ← Sintaxe corrigida aqui
     }
 
     Write-Log "✅ Bloatware removido COM SUCESSO!" Green
