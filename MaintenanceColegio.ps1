@@ -1836,14 +1836,12 @@ function Show-BloatwareMenu {
         Write-Host "9. Desativar notificações (Action Center)"
         Write-Host "10. Desativar tarefas agendadas de bloatware"
         Write-Host "11. Encerrar processos dispensáveis"
-        Write-Host "12. Executar debloaters de terceiros"
-        Write-Host "13. Otimizar rede (TCP/DNS)"
-        Write-Host "14. Remover aplicativos adicionais"
-        Write-Host "15. Remover bloatware seguro (recomendado)"
-        Write-Host "16. Remover Copilot"
-        Write-Host "17. Remover OneDrive e restaurar pastas"
-        Write-Host "18. Remover pins do Menu Iniciar/Barra de Tarefas"
-        Write-Host "19. Remover tarefas agendadas (agressivo)"
+        Write-Host "12. Otimizar rede (TCP/DNS)"
+        Write-Host "13. Remover bloatware"
+        Write-Host "14. Remover Copilot"
+        Write-Host "15. Remover OneDrive e restaurar pastas"
+        Write-Host "16. Remover pins do Menu Iniciar/Barra de Tarefas"
+        Write-Host "17. Remover tarefas agendadas (agressivo)"
         Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
 
         $choice = Read-Host "`nEscolha uma opção"
@@ -1859,10 +1857,8 @@ function Show-BloatwareMenu {
                 Disable-ActionCenter-Notifications
                 Disable-BloatwareScheduledTasks
                 Stop-BloatwareProcesses
-                Run-ExternalDebloaters
                 Optimize-NetworkPerformance
-                Remove-AdditionalBloatware
-                Remove-BloatwareSafe
+                Remove-Bloatware
                 Remove-Copilot
                 Remove-OneDrive-AndRestoreFolders
                 Remove-StartAndTaskbarPins
@@ -1879,14 +1875,12 @@ function Show-BloatwareMenu {
             '9'  { Disable-ActionCenter-Notifications; Show-SuccessMessage }
             '10' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
             '11' { Stop-BloatwareProcesses; Show-SuccessMessage }
-            '12' { Run-ExternalDebloaters; Show-SuccessMessage }
-            '13' { Optimize-NetworkPerformance; Show-SuccessMessage }
-            '14' { Remove-AdditionalBloatware; Show-SuccessMessage }
-            '15' { Remove-BloatwareSafe; Show-SuccessMessage }
-            '16' { Remove-Copilot; Show-SuccessMessage }
-            '17' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
-            '18' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
-            '19' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
+            '12' { Optimize-NetworkPerformance; Show-SuccessMessage }
+            '13' { Remove-Bloatware; Show-SuccessMessage }
+            '14' { Remove-Copilot; Show-SuccessMessage }
+            '15' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
+            '16' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
+            '17' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
             '0'  { return }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
