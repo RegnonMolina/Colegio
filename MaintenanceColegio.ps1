@@ -379,16 +379,41 @@ function Install-NetworkPrinters {
         }
     }
     # Remover impressora OneNote Desktop se existir
-    try {
-        if (Get-Printer -Name "OneNote (Desktop)" -ErrorAction SilentlyContinue) {
-            Remove-Printer -Name "OneNote (Desktop)"
-            Write-Log "Impressora OneNote (Desktop) removida." Green
+      $printer = Get-Printer -Name "OneNote (Desktop)" -ErrorAction SilentlyContinue
+    
+    if ($null -ne $printer) {
+        try {
+            Write-Host "Removendo a impressora 'OneNote (Desktop)'..." -ForegroundColor Yellow
+            
+            # 1. Remover a impressora
+            Remove-Printer -Name "OneNote (Desktop)" -ErrorAction Stop
+            
+            # 2. Remover o driver da impressora (se existir)
+            $driver = Get-PrinterDriver -Name "OneNote*" -ErrorAction SilentlyContinue
+            if ($null -ne $driver) {
+                Remove-PrinterDriver -Name $driver.Name -ErrorAction SilentlyContinue
+            }
+            
+            # 3. Remover portas associadas (opcional)
+            $ports = Get-PrinterPort -Name "OneNote*" -ErrorAction SilentlyContinue
+            foreach ($port in $ports) {
+                Remove-PrinterPort -Name $port.Name -ErrorAction SilentlyContinue
+            }
+            
+            Write-Host "Impressora 'OneNote (Desktop)' removida com sucesso!" -ForegroundColor Green
+            return $true
         }
-    } catch {
-        Write-Log "Erro ao remover impressora OneNote (Desktop): $_" Red
+        catch {
+            Write-Host "Falha ao remover a impressora: $_" -ForegroundColor Red
+            return $false
+        }
     }
-    Write-Log "Instalação de impressoras de rede concluída." Green
+    else {
+        Write-Host "A impressora 'OneNote (Desktop)' não está instalada." -ForegroundColor Cyan
+        return $true
+    }
 }
+
 
 function Run-All-NetworkAdvanced {
     Flush-DNS
@@ -699,6 +724,7 @@ function Show-ExplorerTweaksMenu {
                 Show-SuccessMessage
             }
             '0' { return }
+			'M' { Show-MainMenu }
             default {
                 Write-Host "Opção inválida!" -ForegroundColor Red
                 Start-Sleep -Seconds 1
@@ -784,6 +810,68 @@ function Update-WindowsAndDrivers {
 }
 
 # Funções de ajustes do Painel de Controle/Configurações
+function Enable-PowerOptions {
+    param (
+        [hashtable]$config
+    )
+    
+    # Converter minutos para segundos (como o powercfg espera)
+    $tempoTelaAC = $config.TempoTelaAC * 60
+    $tempoTelaBateria = $config.TempoTelaBateria * 60
+    $tempoHibernarBateria = $config.TempoHibernarBateria * 60
+    
+    # 1. Configurar tempos de tela
+    powercfg /change monitor-timeout-ac $tempoTelaAC
+    powercfg /change monitor-timeout-dc $tempoTelaBateria
+    
+    # 2. Configurar hibernação
+    powercfg /change hibernate-timeout-ac $config.TempoHibernarAC
+    powercfg /change hibernate-timeout-dc $tempoHibernarBateria
+    
+    # 3. Configurar comportamento dos botões e tampa
+    # Mapear valores para códigos do powercfg
+    $actionMap = @{
+        "Nothing"    = 0
+        "Sleep"      = 1
+        "Hibernate"  = 2
+        "Shutdown"   = 3
+    }
+    
+    # Aplicar para energia conectada (AC)
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS POWERBUTTONACTION $actionMap[$config.BotaoEnergiaAC]
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS SLEEPBUTTONACTION $actionMap[$config.BotaoSuspensaoAC]
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION $actionMap[$config.ComportamentoTampaAC]
+    
+    # Aplicar para bateria (DC)
+    powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS POWERBUTTONACTION $actionMap[$config.BotaoEnergiaBateria]
+    powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS SLEEPBUTTONACTION $actionMap[$config.BotaoSuspensaoBateria]
+    powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION $actionMap[$config.ComportamentoTampaBateria]
+    
+    # 4. Configurações de economia de energia
+    if ($config.EconomiaEnergiaAtivada) {
+        # Ativar economia de energia
+        powercfg /setdcvalueindex SCHEME_CURRENT SUB_ENERGYSAVER ESBATTTHRESHOLD $config.NivelAtivacaoEconomia
+        powercfg /setdcvalueindex SCHEME_CURRENT SUB_ENERGYSAVER ESBRIGHTNESS $($config.ReduzirBrilho ? 1 : 0)
+        
+        # Habilitar "Sempre usar economia de energia"
+        powercfg /setdcvalueindex SCHEME_CURRENT SUB_ENERGYSAVER ES_POLICY 1
+    }
+    
+    # 5. Aplicar todas as alterações
+    powercfg /setactive SCHEME_CURRENT
+    
+    # 6. Resultado
+    Write-Host "Configurações aplicadas com sucesso!" -ForegroundColor Green
+    Write-Host "`nResumo das configurações:" -ForegroundColor Cyan
+    Write-Host " - Tela (AC/DC): $($config.TempoTelaAC)min / $($config.TempoTelaBateria)min"
+    Write-Host " - Hibernação (AC/DC): $($config.TempoHibernarAC == 0 ? 'Nunca' : $config.TempoHibernarAC+'min') / $($config.TempoHibernarBateria)min"
+    Write-Host " - Tampa (AC/DC): $($config.ComportamentoTampaAC) / $($config.ComportamentoTampaBateria)"
+    Write-Host " - Botão Energia (AC/DC): $($config.BotaoEnergiaAC) / $($config.BotaoEnergiaBateria)"
+    Write-Host " - Economia de energia: $($config.EconomiaEnergiaAtivada ? 'Ativada' : 'Desativada')"
+    Write-Host "   - Nível ativação: $($config.NivelAtivacaoEconomia)%"
+    Write-Host "   - Reduzir brilho: $($config.ReduzirBrilho ? 'Sim' : 'Não')"
+}
+
 function Enable-DarkTheme {
     Write-Log "Ativando tema escuro..." Yellow
     try {
@@ -869,7 +957,7 @@ function Enable-TaskbarEndTask {
     }
 
     try {
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarEndTask /t REG_DWORD /d 1 /f | Out-Null
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings" /v TaskbarEndTask /t REG_DWORD /d 1 /f | Out-Null
         Write-Log "'Finalizar tarefa' ativado no menu da barra de tarefas." Green
     } catch {
         Write-Log "Erro ao configurar TaskbarEndTask: $_" Red
@@ -900,7 +988,9 @@ function Show-ControlPanelTweaksMenu {
         Write-Host "7. Ativar segundos no relógio da barra de tarefas" -ForegroundColor Yellow
         Write-Host "8. Ativar updates para outros produtos Microsoft" -ForegroundColor Yellow
         Write-Host "9. Habilitar Sudo embutido" -ForegroundColor Yellow
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Red
+		Write-Host "9. Opções de Energia Avançadas" -ForegroundColor Yellow
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Red
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice) {
@@ -923,7 +1013,9 @@ function Show-ControlPanelTweaksMenu {
             '7' { Enable-TaskbarSeconds; Show-SuccessMessage }
             '8' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
             '9' { Enable-Sudo; Show-SuccessMessage }
+			'10' { Enable-PowerOptions; Show-SuccessMessage }
             '0' { return }
+			'M' { Show-MainMenu }
             default {
                 Write-Host "Opção inválida!" -ForegroundColor Red
                 Start-Sleep -Seconds 1
@@ -1586,7 +1678,8 @@ function Show-SystemPerformanceMenu {
         Write-Host "4. Desativar serviços desnecessários"
         Write-Host "5. Otimizar Windows Explorer para desempenho"
         Write-Host "6. Renomear o notebook"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1604,6 +1697,8 @@ function Show-SystemPerformanceMenu {
             '5' { Optimize-ExplorerPerformance; Show-SuccessMessage }
             '6' { Renomear-Notebook; Show-SuccessMessage }
             '0' { return }
+			'M' { Show-MainMenu }
+
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
@@ -1617,7 +1712,8 @@ function Show-PrivacySecurityMenu {
         Write-Host "1. Aplicar hardening de segurança"
         Write-Host "2. Acessar ajustes de privacidade e bloatware"
         Write-Host "3. Reverter ajustes e restaurar aplicativos"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1625,6 +1721,7 @@ function Show-PrivacySecurityMenu {
             '2' { Show-BloatwareMenu }
             '3' { Show-RestoreUndoMenu }
             '0' { return }
+			'M'  { Show-MainMenu }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
@@ -1646,7 +1743,8 @@ function Show-CleanupMenu {
         Write-Host "9. Otimizar volumes"
         Write-Host "10. Remover pasta Windows.old"
         Write-Host "11. Remover pasta WinSxS"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1674,6 +1772,7 @@ function Show-CleanupMenu {
             '10' { Remove-WindowsOld; Show-SuccessMessage }
             '11' { Clean-WinSxS; Show-SuccessMessage }
             '0' { return }
+			'M' { Show-MainMenu }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
@@ -1692,7 +1791,8 @@ function Show-DiagnosticsMenu {
         Write-Host "6. Exibir informações do sistema"
         Write-Host "7. Exibir informações de rede"
         Write-Host "8. Exibir uso do disco"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1714,6 +1814,7 @@ function Show-DiagnosticsMenu {
             '7' { Show-NetworkInfo; Show-SuccessMessage }
             '8' { Show-DiskUsage; Show-SuccessMessage }
             '0' { return }
+			'M' { Show-MainMenu }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
@@ -1735,7 +1836,8 @@ function Show-InstallationMenu {
         Write-Host "9. Notepad++"
         Write-Host "10. VLC Media Player"
         Write-Host "11. Instalar/Atualizar PowerShell"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1751,6 +1853,7 @@ function Show-InstallationMenu {
             '10' { winget install --id VideoLAN.VLC -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
             '11' { Update-PowerShell; Show-SuccessMessage }
             '0' { return }
+			'M' { Show-MainMenu }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
@@ -1768,7 +1871,8 @@ function Show-NetworkMenu {
         Write-Host "5. Limpar cache ARP"
         Write-Host "6. Limpar cache DNS"
         Write-Host "7. Otimizar TCP/DNS"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1792,6 +1896,7 @@ function Show-NetworkMenu {
             '6' { Flush-DNS; Show-SuccessMessage }
             '7' { Optimize-NetworkPerformance; Show-SuccessMessage }
             '0' { return }
+			'M' { Show-MainMenu }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
@@ -1806,7 +1911,8 @@ function Show-ExternalScriptsMenu {
         Write-Host "2. Ativar Windows (get.activated.win)"
         Write-Host "3. Toolbox Chris Titus (christitus.com)"
         Write-Host "4. Executar Script Supremo (Colégio)"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1820,6 +1926,7 @@ function Show-ExternalScriptsMenu {
             '3' { Run-ChrisTitusToolbox; Show-SuccessMessage }
             '4' { Update-ScriptFromCloud; Show-SuccessMessage }
             '0' { return }
+			'M' { Show-MainMenu }
             default {
                 Write-Host "Opção inválida!" -ForegroundColor Red
                 Start-Sleep -Seconds 1
@@ -1848,7 +1955,8 @@ function Show-BloatwareMenu {
         Write-Host "15. Remover OneDrive e restaurar pastas"
         Write-Host "16. Remover pins do Menu Iniciar/Barra de Tarefas"
         Write-Host "17. Remover tarefas agendadas (agressivo)"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1888,6 +1996,7 @@ function Show-BloatwareMenu {
             '16' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
             '17' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
             '0'  { return }
+			'M' { Show-MainMenu }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
@@ -1902,7 +2011,8 @@ function Show-AdvancedSettingsMenu {
         Write-Host "3. Configurar Autologin"
         Write-Host "4. Tweaks de interface do Explorer"
         Write-Host "5. Scripts externos (Ativador e Chris Titus)"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1917,6 +2027,7 @@ function Show-AdvancedSettingsMenu {
             '4' { Show-ExplorerTweaksMenu }
             '5' { Show-ExternalScriptsMenu }
             '0' { return }
+			'M' { Show-MainMenu }
             default {
                 Write-Host "Opção inválida!" -ForegroundColor Red
                 Start-Sleep -Seconds 1
@@ -1944,7 +2055,8 @@ function Show-RestoreUndoMenu {
         Write-Host "13. Restaurar backup do registro (alternativo)"
         Write-Host "14. Reinstalar aplicativos essenciais (Calculadora, Notepad, Ferramenta de Captura etc)"
         Write-Host "15. Reinstalar o OneDrive"
-        Write-Host "0. Voltar ao menu principal" -ForegroundColor Magenta
+        Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
+		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
@@ -1980,6 +2092,7 @@ function Show-RestoreUndoMenu {
             '14' { Restore-BloatwareSafe }
             '15' { Restore-OneDrive }
             '0'  { return }
+			'M'  { Show-MainMenu }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
