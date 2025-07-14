@@ -151,8 +151,11 @@ function Remove-Bloatware {
     # Whitelist (apps que NÃO podem ser removidos)
     $whitelist = @(
         "Microsoft.WindowsCalculator",
-        "Microsoft.WindowsStore",
-        "Microsoft.DesktopAppInstaller"
+		"Microsoft.WindowsCamera",
+		"Microsoft.WindowsSoundRecorder",
+		"Microsoft.StorePurchaseApp",
+		"Microsoft.DesktopAppInstaller", # Necessário pro winget
+		"Microsoft.WindowsStore"
     )
 
     # Passo 1: Remover do usuário atual
@@ -352,6 +355,7 @@ function Add-WiFiNetwork {
 # Função para detectar e instalar impressoras de rede automaticamente
 function Install-NetworkPrinters {
     Write-Log "Detectando e instalando impressoras de rede..." Yellow
+	pnputil /add-driver "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\*.inf" /install
     $printers = @(
         @{Name = "Samsung Mundo1"; IP = "172.16.40.40"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
         @{Name = "Samsung Mundo2"; IP = "172.17.40.25"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
@@ -412,7 +416,7 @@ function Install-NetworkPrinters {
         Write-Host "A impressora 'OneNote (Desktop)' não está instalada." -ForegroundColor Cyan
         return $true
     }
-}
+
 
 
 function Run-All-NetworkAdvanced {
@@ -556,6 +560,59 @@ function Apply-PrivacyTweaks {
 		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Privacy" /v "TailoredExperiencesWithDiagnosticDataEnabled" /t REG_DWORD /d "0" /f
 		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
 		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
+		# Disable Cortana
+reg.exe add "HKCU\SOFTWARE\Microsoft\Personalization\Settings" /v AcceptedPrivacyPolicy /t REG_DWORD /d 0 /f
+reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /t REG_DWORD /d 1 /f
+reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /t REG_DWORD /d 1 /f
+reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /t REG_DWORD /d 0 /f
+
+# Fix Windows Search
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AllowIndexingEncryptedStoresOrItems" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AllowSearchToUseLocation" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AlwaysUseAutoLangDetection" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "CortanaConsent" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "CortanaInAmbientMode" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "HistoryViewEnabled" /t REG_DWORD /d 0 /f  
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "HasAboveLockTips" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "AllowSearchToUseLocation" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings" /v "SafeSearchMode" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Policies\Microsoft\Windows\Explorer" /v "DisableSearchBoxSuggestions" /t REG_DWORD /d 1 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AllowCortana" /t REG_DWORD /d 0 /f 
+$hkcuPath = $(reg.exe query HKEY_USERS | Select-String -NotMatch -Pattern 'S-1-5-19|S-1-5-20|S-1-5-18|.Default|Classes')
+
+# Disable inking and typing
+reg.exe add "HKCU\Software\Microsoft\InputPersonalization" /v "RestrictImplicitTextCollection" /t REG_DWORD /d 1 /f 
+reg.exe add "HKCU\Software\Microsoft\InputPersonalization" /v "RestrictImplicitInkCollection" /t REG_DWORD /d 1 /f 
+reg.exe add "HKCU\Software\Microsoft\InputPersonalization\TrainedDataStore" /v "AcceptedPrivacyPolicy" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Personalization\Settings" /v "AcceptedPrivacyPolicy" /t REG_DWORD /d 0 /f
+
+# Disable speech recognition
+reg.exe add "HKLM\SOFTWARE\Microsoft\Speech_OneCore\Preferences" /v "VoiceActivationDefaultOn" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Microsoft\Speech_OneCore\Preferences" /v "VoiceActivationEnableAboveLockscreen" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Microsoft\Speech_OneCore\Preferences" /v "ModelDownloadAllowed" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" /v "DisableVoice" /t REG_DWORD /d 1 /f
+
+# Disable user activity
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v "EnableActivityFeed" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v "PublishUserActivities" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v "UploadUserActivities" /t REG_DWORD /d 0 /f 
+
+# Enable long paths
+reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+reg.exe add "HKCU\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
+# Disable feedback
+reg.exe add "HKCU\Software\Microsoft\Siuf\Rules" /v PeriodInNanoSeconds /t REG_DWORD /d 0 /f
+reg.exe add "HKLM\SOFTWARE\Microsoft\Siuf\Rules" /v NumberOfSIUFInPeriod /t REG_DWORD /d 0 /f
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v DoNotShowFeedbackNotifications /t REG_DWORD /d 1 /f
+
+# Disable " - Shortcut" text for shortcuts
+reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /v link /t REG_BINARY /d "00 00 00 00" /f
+
+# Fixing Windows Explorer CPU Usage
+reg.exe add "HKCU\SOFTWARE\Microsoft\input" /v IsInputAppPreloadEnabled /t REG_DWORD /d 0 /f
+reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Dsh" /v IsPrelaunchEnabled /t REG_DWORD /d 0 /f
+
         Write-Log "Tweaks de privacidade aplicados." Green
     } catch {
         Write-Log "Erro ao aplicar tweaks de privacidade: $_" Red
@@ -688,12 +745,12 @@ function Enable-WindowsHardening {
 function Remove-ProvisionedBloatware {
     Write-Log "Removendo bloatware (mantendo whitelist)..." Yellow
     $whitelist = @(
-        'Microsoft.WindowsNotepad',
-        'Microsoft.WindowsCalculator',
-        'Microsoft.WindowsStore',
-        'Microsoft.Windows.Photos',
-        'Microsoft.WindowsCamera',
-        'Microsoft.MSPaint'
+        "Microsoft.WindowsCalculator",
+		"Microsoft.WindowsCamera",
+		"Microsoft.WindowsSoundRecorder",
+		"Microsoft.StorePurchaseApp",
+		"Microsoft.DesktopAppInstaller", # Necessário pro winget
+		"Microsoft.WindowsStore"
     )
     $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $whitelist -notcontains $_.DisplayName }
     foreach ($app in $provisioned) {
@@ -972,18 +1029,8 @@ function Enable-Sudo {
         return
     }
 
-    $profilePath = "$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
-    if (-not (Test-Path $profilePath)) {
-        New-Item -ItemType File -Path $profilePath -Force | Out-Null
-    }
+    sudo config --enable normal
 
-    $content = Get-Content $profilePath -ErrorAction SilentlyContinue
-    if ($content -notmatch "function sudo") {
-        Add-Content -Path $profilePath -Value @"
-function sudo {
-    param([string]\$command)
-    Start-Process pwsh -ArgumentList "-Command \$command" -Verb RunAs
-}
 "@
         Write-Log "Alias 'sudo' adicionado ao seu profile." Green
     } else {
@@ -1274,7 +1321,8 @@ function Disable-Cortana-AndSearch {
 function Disable-UAC {
     Write-Log "Desabilitando UAC..." Yellow
     try {
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v ConsentPromptBehaviorAdmin /t REG_DWORD /d 2 /f
+		reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v PromptOnSecureDesktop /t REG_DWORD /d 1 /f
         Write-Log "UAC desativado." Green
     } catch { Write-Log "Erro ao desativar UAC: $_" Red }
 }
@@ -1723,7 +1771,7 @@ function Restore-ControlPanelTweaks {
     Set-RegistryValue $advKey "ShowCompColor" 0 DWord
     Set-RegistryValue $advKey "ListviewAlphaSelect" 1 DWord
     Set-RegistryValue $advKey "ListviewShadow" 1 DWord
-    Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 0 DWord
+    Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 1 DWord
 
     # === Restaurar Visual Effects ===
     $veBase = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
