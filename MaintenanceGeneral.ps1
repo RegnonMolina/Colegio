@@ -2279,8 +2279,8 @@ function Show-MainMenu {
         Write-Host " 8. Scripts Externos e Ativadores" -ForegroundColor Yellow
         Write-Host " 9. Sistema e Desempenho" -ForegroundColor Yellow
         Write-Host " R. Reiniciar o PC" -ForegroundColor Red
-        Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host " C. Colégio" -ForegroundColor Magenta
+        Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $choice = Read-Host "`nSelecione uma opção"
@@ -2298,6 +2298,7 @@ function Show-MainMenu {
                 Write-Log "Reiniciando o computador..." Cyan
                 Restart-Computer -Force
             }
+			'C' { Run-Colégio }
             '0' {
                 $duration = (Get-Date) - $startTime
                 Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
@@ -2306,7 +2307,6 @@ function Show-MainMenu {
                 [void][System.Console]::ReadKey($true)
                 return
             }
-			'C' { Run-Colégio }
             default {
                 Write-Host "Opção inválida! Tente novamente." -ForegroundColor Red
                 Start-Sleep -Seconds 1
