@@ -1038,6 +1038,8 @@ function Enable-Sudo {
         return $false
     }
 }
+}
+
 
 function Enable-TaskbarEndTask {
     $build = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").CurrentBuild
