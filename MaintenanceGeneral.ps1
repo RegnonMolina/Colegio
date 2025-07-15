@@ -1142,7 +1142,7 @@ function Renomear-Notebook {
     }
     Start-Sleep -Seconds 2
 }
-# ==== Funções Avançadas/Extras - Cole este bloco após as funções de manutenção originais ====
+
 
 function Disable-ActionCenter-Notifications {
     Write-Log "Desabilitando Action Center e notificações..." Yellow
@@ -1376,6 +1376,38 @@ function Run-All-DiagnosticsAdvanced {
     Test-SMART-Drives
     Test-Memory
     Show-SuccessMessage
+}
+
+# ==== Função Colégio ====
+Function Run-Colégio {
+	Apply-ControlPanelTweaks
+Apply-ControlPanelTweaks
+Apply-ExtraTweaks
+Apply-PrivacyTweaks
+Clean-Prefetch
+Clean-PrintSpooler
+Clean-TemporaryFiles
+Clean-WinSxS
+Clear-WUCache
+Deep-SystemCleanup
+Disable-ActionCenter-Notifications
+Disable-BloatwareScheduledTasks
+Disable-Cortana-AndSearch
+Disable-IPv6
+Enable-PrivacyHardening
+Flush-DNS
+Harden-OfficeMacros
+Install-Applications
+Optimize-NetworkPerformance
+Remove-Bloatware
+Remove-Copilot
+Remove-OneDrive-AndRestoreFolders
+Remove-WindowsOld
+Run-ExternalDebloaters
+Set-VisualPerformance
+Stop-BloatwareProcesses
+Update-PowerShell
+Show-SuccessMessage
 }
 
 function Run-SFC-Scan {
@@ -2248,6 +2280,7 @@ function Show-MainMenu {
         Write-Host " 9. Sistema e Desempenho" -ForegroundColor Yellow
         Write-Host " R. Reiniciar o PC" -ForegroundColor Red
         Write-Host " 0. Sair" -ForegroundColor Magenta
+        Write-Host " C. Colégio" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $choice = Read-Host "`nSelecione uma opção"
@@ -2273,6 +2306,7 @@ function Show-MainMenu {
                 [void][System.Console]::ReadKey($true)
                 return
             }
+			'C' { 
             default {
                 Write-Host "Opção inválida! Tente novamente." -ForegroundColor Red
                 Start-Sleep -Seconds 1
