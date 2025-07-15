@@ -30,18 +30,16 @@ $logFile = "$PSScriptRoot\log.txt"
 $startTime = Get-Date
 
 # === FUNÇÕES DE UTILIDADE ===
-function Write-Log($msg, $color = "Gray") {
-    Write-Host "[LOG] $msg" -ForegroundColor $color
-}
+# (Removido: definição duplicada de Write-Log)
 
-function Pause-Script {
+function Suspend-Script {
     Write-Host "`nPressione Enter para continuar..." -ForegroundColor DarkGray
     Read-Host
 }
 
 function Show-SuccessMessage {
     Write-Host "`n✅ Tarefa concluída com sucesso!" -ForegroundColor Green
-    Pause-Script
+    Suspend-Script
 }
 
 #region → Configurações Iniciais
@@ -69,7 +67,7 @@ function Write-Log {
     Write-Host $logMessage -ForegroundColor $color
 }
 
-function Pause-Script {
+function Suspend-Script {
     Write-Host "`nPressione ENTER para continuar..." -ForegroundColor Cyan
     do {
         $key = [System.Console]::ReadKey($true)
@@ -87,7 +85,7 @@ Write-Log "Iniciando script de manutenção..." Cyan
 #region → Funções de Manutenção
 
 # 1. Limpeza e Otimização
-function Clean-TemporaryFiles {
+function Clear-TemporaryFiles {
     Write-Log "Limpando arquivos temporários..." Yellow
     Cleanmgr /sagerun:1 | Out-Null
     Remove-Item "$env:TEMP\*", "$env:SystemRoot\Temp\*", "$env:LOCALAPPDATA\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
@@ -102,7 +100,7 @@ function Clear-WUCache {
     Write-Log "Cache do Windows Update limpo." Green
 }
 
-function Flush-DNS {
+function Clear-DNS {
     Write-Log "Limpando cache DNS..." Yellow
     ipconfig /flushdns | Out-Null
     Write-Log "Cache DNS limpo." Green
@@ -122,8 +120,10 @@ function Optimize-Volumes {
 
 # 2. Bloatwarefunction Install
 function Remove-Bloatware {
-    Write-Log "REMOVENDO LinkedIn, Xbox e bloatware..." Cyan
+# 2. Bloatware
+}
 
+function Remove-Bloatware {
     # Lista PRIORITÁRIA (foco no que você quer remover)
     $bloatwareToRemove = @(
         # LinkedIn e variantes
@@ -163,8 +163,8 @@ function Remove-Bloatware {
     Get-AppxPackage | Where-Object {
         $_.Name -notin $whitelist -and
         ($bloatwareToRemove -contains $_.Name -or $bloatwareToRemove -like $_.Name)
-    } | ForEach-Object {
-        Write-Log "Removendo: [$($_.Name)]" Red
+        $_.Name -notin $whitelist -and
+        ($bloatwareToRemove -contains $_.Name -or $bloatwareToRemove | Where-Object { $_ -and ($_.Length -gt 0) -and ($_.Name -like $_) } )
         Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue
     }
 
@@ -388,7 +388,7 @@ function Install-NetworkPrinters {
     if ($null -ne $printer) {
         try {
             Write-Host "Removendo a impressora 'OneNote (Desktop)'..." -ForegroundColor Yellow
-            
+            Write-Log "Removendo a impressora 'OneNote (Desktop)'..." Yellow
             # 1. Remover a impressora
             Remove-Printer -Name "OneNote (Desktop)" -ErrorAction Stop
             
@@ -419,8 +419,8 @@ function Install-NetworkPrinters {
 }
 
 
-function Run-All-NetworkAdvanced {
-    Flush-DNS
+function Invoke-All-NetworkAdvanced {
+    Clear-DNS
     Optimize-NetworkPerformance
     Set-DnsGoogleCloudflare
     Test-InternetSpeed
@@ -503,7 +503,7 @@ function Remove-UWPBloatware {
 }
 
 # Tweaks de privacidade via registro
-function Apply-PrivacyTweaks {
+function Grant-PrivacyTweaks {
     Write-Log "Aplicando tweaks de privacidade..." Yellow
     try {
         reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
@@ -707,7 +707,7 @@ function Optimize-ExplorerPerformance {
 }
 
 # Função para criar ponto de restauração
-function Create-SystemRestorePoint {
+function New-SystemRestorePoint {
     Write-Log "Criando ponto de restauração do sistema..." Yellow
     try {
         Checkpoint-Computer -Description "Antes da manutenção Windows" -RestorePointType "MODIFY_SETTINGS"
@@ -1076,10 +1076,10 @@ function Show-ControlPanelTweaksMenu {
         Write-Host "8. Ativar updates para outros produtos Microsoft" -ForegroundColor Yellow
         Write-Host "9. Habilitar Sudo embutido" -ForegroundColor Yellow
 		Write-Host "9. Opções de Energia Avançadas" -ForegroundColor Yellow
+        Write-Host "9. Habilitar Sudo embutido" -ForegroundColor Yellow
+        Write-Host "10. Opções de Energia Avançadas" -ForegroundColor Yellow
         Write-Host "0. Voltar ao menu anterior" -ForegroundColor Red
-		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
-
-        $choice = Read-Host "`nSelecione uma opção"
+        Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
         switch ($choice) {
             '1' {
                 Enable-TaskbarEndTask
@@ -1112,7 +1112,7 @@ function Show-ControlPanelTweaksMenu {
 }
 
 # Função para renomear o notebook
-function Renomear-Notebook {
+function Rename-Notebook {
     Write-Log "Deseja renomear este notebook? (S/N)" Yellow
     $timeout = 15
     $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -1151,7 +1151,7 @@ function Disable-ActionCenter-Notifications {
     } catch { Write-Log "Erro ao desativar Action Center: $_" Red }
 }
 
-function Clean-WinSxS {
+function Clear-WinSxS {
     Write-Log "Limpando WinSxS..." Yellow
     try {
         Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase | Out-Null
@@ -1159,7 +1159,7 @@ function Clean-WinSxS {
     } catch { Write-Log "Erro ao limpar WinSxS: $_" Red }
 }
 
-function Schedule-ChkDsk {
+function New-ChkDsk {
     Write-Log "Agendando chkdsk /f /r no próximo reboot..." Yellow
     try {
         chkdsk $env:SystemDrive /f /r
@@ -1175,7 +1175,7 @@ function Remove-WindowsOld {
     } catch { Write-Log "Erro ao remover Windows.old: $_" Red }
 }
 
-function Deep-SystemCleanup {
+function Clear-DeepSystemCleanup {
     Write-Log "Fazendo limpeza profunda (cache de update, logs, drivers antigos)..." Yellow
     try {
         Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
@@ -1186,7 +1186,7 @@ function Deep-SystemCleanup {
     } catch { Write-Log "Erro na limpeza profunda: $_" Red }
 }
 
-function Clean-PrintSpooler {
+function Clear-PrintSpooler {
     Write-Log "Limpando spooler de impressão..." Yellow
     try {
         Stop-Service -Name Spooler -Force -ErrorAction SilentlyContinue
@@ -1199,7 +1199,7 @@ function Clean-PrintSpooler {
     Show-SuccessMessage
 }
 
-function Clean-Prefetch {
+function Clear-Prefetch {
     Write-Log "Limpando Prefetch..." Yellow
     try {
         Remove-Item "$env:SystemRoot\Prefetch\*" -Force -Recurse -ErrorAction SilentlyContinue
@@ -1262,7 +1262,7 @@ function Restore-Registry {
     } catch { Write-Log "Erro ao restaurar o registro: $_" Red }
 }
 
-function Run-ExternalDebloaters {
+function Invoke-ExternalDebloaters {
     $scripts = @("Win11Debloat.ps1", "WinUtil.ps1", "OOSU10.exe", "OpenShellSetup.exe", "SpeedyFox.exe", "_Win10-BlackViper.bat")
     foreach ($scr in $scripts) {
         $path = Join-Path $PSScriptRoot $scr
@@ -1282,7 +1282,7 @@ function Run-ExternalDebloaters {
     }
 }
 
-function Apply-ExtraTweaks {
+function Grant-ExtraTweaks {
     Write-Log "Aplicando tweaks extras..." Yellow
     try {
         # Bloqueio de anúncios
@@ -1364,19 +1364,19 @@ function Set-VisualPerformance {
     } catch { Write-Log "Erro ao ajustar visual: $_" Red }
 }
 # ==== Diagnóstico Avançado ====
-function Run-All-DiagnosticsAdvanced {
+function Invoke-All-DiagnosticsAdvanced {
     Show-SystemInfo
     Show-DiskUsage
     Show-NetworkInfo
-    Run-SFC-Scan
-    Run-DISM-Scan
+    Invoke-SFC-Scan
+    Invoke-DISM-Scan
     Test-SMART-Drives
     Test-Memory
     Show-SuccessMessage
 }
 
 # ==== Função Colégio ====
-function Run-Colégio {
+function Invoke-Colégio {
     Clear-Host
     $start = Get-Date
     Write-Log "`n🚀 Iniciando sequência personalizada para o Colégio..." Cyan
@@ -1384,26 +1384,26 @@ function Run-Colégio {
     try {
         # ===== AJUSTES E TWEAKS ====
         Write-Log "🔧 Aplicando ajustes e tweaks de sistema..." Yellow
-        Apply-ControlPanelTweaks
-        Apply-ExtraTweaks
-        Apply-PrivacyTweaks
+        Grant-ControlPanelTweaks
+        Grant-ExtraTweaks
+        Grant-PrivacyTweaks
         Enable-PrivacyHardening
         Set-VisualPerformance
         Disable-ActionCenter-Notifications
         Disable-BloatwareScheduledTasks
         Disable-Cortana-AndSearch
         Disable-IPv6
-        Harden-OfficeMacros
+        Grant-HardenOfficeMacros
 
         # ===== LIMPEZA ====
         Write-Log "🧹 Realizando limpeza profunda do sistema..." Yellow
-        Clean-Prefetch
-        Clean-PrintSpooler
-        Clean-TemporaryFiles
-        Clean-WinSxS
+        Clear-Prefetch
+        Clear-PrintSpooler
+        Clear-TemporaryFiles
+        Clear-WinSxS
         Clear-WUCache
         Remove-WindowsOld
-        Deep-SystemCleanup
+        Clear-DeepSystemCleanup
 
         # ===== REMOÇÕES ====
         Write-Log "❌ Removendo bloatware e recursos desnecessários..." Yellow
@@ -1414,7 +1414,7 @@ function Run-Colégio {
 
         # ===== OTIMIZAÇÃO ====
         Write-Log "🚀 Otimizando rede e desempenho..." Yellow
-        Flush-DNS
+        Clear-DNS
         Optimize-NetworkPerformance
 
         # ===== INSTALAÇÕES ====
@@ -1424,7 +1424,7 @@ function Run-Colégio {
 
         # ===== EXTERNOS ====
         Write-Log "⚙️ Executando scripts externos, se houver..." Yellow
-        Run-ExternalDebloaters
+        Invoke-ExternalDebloaters
 
         $end = Get-Date
         $duration = $end - $start
@@ -1433,16 +1433,16 @@ function Run-Colégio {
     }
     catch {
         Write-Log "❌ Erro crítico durante a sequência do Colégio: $_" Red
-        Pause-Script
+        Suspend-Script
     }
 }
 
-function Run-SFC-Scan {
+function Invoke-SFC-Scan {
     Write-Log "Executando verificação SFC..." Yellow
     sfc /scannow | Out-Host
     Write-Log "Verificação SFC concluída." Green
 }
-function Run-DISM-Scan {
+function Invoke-DISM-Scan {
     Write-Log "Executando verificação DISM..." Yellow
     DISM /Online /Cleanup-Image /RestoreHealth | Out-Host
     Write-Log "Verificação DISM concluída." Green
@@ -1463,7 +1463,7 @@ function Test-Memory {
     Write-Log "Teste de memória agendado." Green
 }
 
-function Run-WindowsActivator {
+function Invoke-WindowsActivator {
     Clear-Host
     Write-Host "==== ATIVAÇÃO DO WINDOWS ====" -ForegroundColor Cyan
     Write-Host "Executando script de ativação oficial (get.activated.win)..." -ForegroundColor Yellow
@@ -1473,10 +1473,10 @@ function Run-WindowsActivator {
     } catch {
         Write-Log "Erro ao executar o script de ativação: $_" Red
     }
-    Pause-Script
+    Suspend-Script
 }
 
-function Run-ChrisTitusToolbox {
+function Invoke-ChrisTitusToolbox {
     Clear-Host
     Write-Host "==== CHRIS TITUS TOOLBOX ====" -ForegroundColor Cyan
     Write-Host "Executando toolbox oficial do site christitus.com..." -ForegroundColor Yellow
@@ -1486,7 +1486,7 @@ function Run-ChrisTitusToolbox {
     } catch {
         Write-Log "Erro ao executar o script do Chris Titus: $_" Red
     }
-    Pause-Script
+    Suspend-Script
 }
 
 function Update-ScriptFromCloud {
@@ -1580,7 +1580,7 @@ function Restore-VisualPerformanceDefault {
     } catch { Write-Log "Erro ao restaurar visual: $_" Red }
 }
 
-function ReEnable-ActionCenter-Notifications {
+function Grant-ActionCenter-Notifications {
     Write-Log "Reabilitando Action Center e notificações..." Yellow
     try {
         reg.exe delete "HKCU\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /f | Out-Null
@@ -1606,7 +1606,7 @@ function Disable-SMBv1 {
     } catch { Write-Log "Erro ao desabilitar SMBv1: $_" Red }
 }
 
-function Harden-OfficeMacros {
+function Grant-HardenOfficeMacros {
     Write-Log "Desabilitando macros perigosos do Office..." Yellow
     try {
         # Word
@@ -1634,7 +1634,7 @@ function Restore-OneDrive {
     } else {
         Write-Log "OneDriveSetup.exe não encontrado!" Red
     }
-    Pause-Script
+    Suspend-Script
 }
 
 function Restore-BloatwareSafe {
@@ -1672,7 +1672,7 @@ function Restore-BloatwareSafe {
     Show-SuccessMessage
 }
 
-function Apply-ControlPanelTweaks {
+function Grant-ControlPanelTweaks {
     Write-Host "Aplicando ajustes visuais e de desempenho..." -ForegroundColor Cyan
 
     # Função interna para setar valores no registro
@@ -1874,18 +1874,18 @@ function Show-SystemPerformanceMenu {
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
             '1' {
-                Apply-ControlPanelTweaks
+                Grant-ControlPanelTweaks
                 Set-PerformanceTheme
                 Disable-UnnecessaryServices
                 Optimize-ExplorerPerformance
-                Renomear-Notebook
+                Rename-Notebook
                 Show-SuccessMessage
             }
-            '2' { Apply-ControlPanelTweaks; Show-SuccessMessage }
+            '2' { Grant-ControlPanelTweaks; Show-SuccessMessage }
             '3' { Set-PerformanceTheme; Show-SuccessMessage }
             '4' { Disable-UnnecessaryServices; Show-SuccessMessage }
             '5' { Optimize-ExplorerPerformance; Show-SuccessMessage }
-            '6' { Renomear-Notebook; Show-SuccessMessage }
+            '6' { Rename-Notebook; Show-SuccessMessage }
             '0' { return }
 			'M' { Show-MainMenu }
 
@@ -1939,28 +1939,28 @@ function Show-CleanupMenu {
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
             '1' {
-                Schedule-ChkDsk
-                Flush-DNS
+                New-ChkDsk
+                Clear-DNS
                 Clear-WUCache
-                Clean-TemporaryFiles
-                Clean-Prefetch
-                Clean-PrintSpooler
-                Deep-SystemCleanup
+                Clear-TemporaryFiles
+                Clear-Prefetch
+                Clear-PrintSpooler
+                Clear-DeepSystemCleanup
                 Optimize-Volumes
                 Remove-WindowsOld
-                Clean-WinSxS
+                Clear-WinSxS
                 Show-SuccessMessage
             }
-            '2' { Schedule-ChkDsk; Show-SuccessMessage }
-            '3' { Flush-DNS; Show-SuccessMessage }
+            '2' { New-ChkDsk; Show-SuccessMessage }
+            '3' { Clear-DNS; Show-SuccessMessage }
             '4' { Clear-WUCache; Show-SuccessMessage }
-            '5' { Clean-TemporaryFiles; Show-SuccessMessage }
-            '6' { Clean-Prefetch; Show-SuccessMessage }
-            '7' { Clean-PrintSpooler; Show-SuccessMessage }
-            '8' { Deep-SystemCleanup; Show-SuccessMessage }
+            '5' { Clear-TemporaryFiles; Show-SuccessMessage }
+            '6' { Clear-Prefetch; Show-SuccessMessage }
+            '7' { Clear-PrintSpooler; Show-SuccessMessage }
+            '8' { Clear-DeepSystemCleanup; Show-SuccessMessage }
             '9' { Optimize-Volumes; Show-SuccessMessage }
             '10' { Remove-WindowsOld; Show-SuccessMessage }
-            '11' { Clean-WinSxS; Show-SuccessMessage }
+            '11' { Clear-WinSxS; Show-SuccessMessage }
             '0' { return }
 			'M' { Show-MainMenu }
             default { Write-Host "Opção inválida!" -ForegroundColor Red; Start-Sleep 1 }
@@ -1987,8 +1987,8 @@ function Show-DiagnosticsMenu {
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
             '1' {
-                Run-DISM-Scan
-                Run-SFC-Scan
+                Invoke-DISM-Scan
+                Invoke-SFC-Scan
                 Test-SMART-Drives
                 Test-Memory
                 Show-SystemInfo
@@ -1996,8 +1996,8 @@ function Show-DiagnosticsMenu {
                 Show-DiskUsage
                 Show-SuccessMessage
             }
-            '2' { Run-DISM-Scan; Show-SuccessMessage }
-            '3' { Run-SFC-Scan; Show-SuccessMessage }
+            '2' { Invoke-DISM-Scan; Show-SuccessMessage }
+            '3' { Invoke-SFC-Scan; Show-SuccessMessage }
             '4' { Test-SMART-Drives; Show-SuccessMessage }
             '5' { Test-Memory; Show-SuccessMessage }
             '6' { Show-SystemInfo; Show-SuccessMessage }
@@ -2072,7 +2072,7 @@ function Show-NetworkMenu {
                     Set-DnsGoogleCloudflare
                     Install-NetworkPrinters
                     Clear-ARP
-                    Flush-DNS
+                    Clear-DNS
                     Optimize-NetworkPerformance
                     Show-SuccessMessage
                 } catch {
@@ -2083,7 +2083,7 @@ function Show-NetworkMenu {
             '3' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
             '4' { Install-NetworkPrinters; Show-SuccessMessage }
             '5' { Clear-ARP; Show-SuccessMessage }
-            '6' { Flush-DNS; Show-SuccessMessage }
+            '6' { Clear-DNS; Show-SuccessMessage }
             '7' { Optimize-NetworkPerformance; Show-SuccessMessage }
             '0' { return }
 			'M' { Show-MainMenu }
@@ -2107,13 +2107,13 @@ function Show-ExternalScriptsMenu {
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
             '1' {
-                Run-WindowsActivator
-                Run-ChrisTitusToolbox
+                Invoke-WindowsActivator
+                Invoke-ChrisTitusToolbox
                 Update-ScriptFromCloud
                 Show-SuccessMessage
             }
-            '2' { Run-WindowsActivator; Show-SuccessMessage }
-            '3' { Run-ChrisTitusToolbox; Show-SuccessMessage }
+            '2' { Invoke-WindowsActivator; Show-SuccessMessage }
+            '3' { Invoke-ChrisTitusToolbox; Show-SuccessMessage }
             '4' { Update-ScriptFromCloud; Show-SuccessMessage }
             '0' { return }
 			'M' { Show-MainMenu }
@@ -2152,7 +2152,7 @@ function Show-BloatwareMenu {
         switch ($choice) {
             '1' {
                 Enable-PrivacyHardening
-                Apply-ExtraTweaks
+                Grant-ExtraTweaks
                 Set-VisualPerformance
                 Backup-Registry
                 Disable-IPv6
@@ -2170,7 +2170,7 @@ function Show-BloatwareMenu {
                 Show-SuccessMessage
             }
             '2'  { Enable-PrivacyHardening; Show-SuccessMessage }
-            '3'  { Apply-ExtraTweaks; Show-SuccessMessage }
+            '3'  { Grant-ExtraTweaks; Show-SuccessMessage }
             '4'  { Set-VisualPerformance; Show-SuccessMessage }
             '5'  { Backup-Registry; Show-SuccessMessage }
             '6'  { Disable-IPv6; Show-SuccessMessage }
@@ -2251,11 +2251,11 @@ function Show-RestoreUndoMenu {
         $choice = Read-Host "`nEscolha uma opção"
         switch ($choice) {
             '1' {
-                Harden-OfficeMacros
+                Grant-HardenOfficeMacros
                 Disable-SMBv1
                 Undo-PrivacyHardening
                 Enable-SMBv1
-                ReEnable-ActionCenter-Notifications
+                Grant-ActionCenter-Notifications
                 Restore-DefaultIPv6
                 Restore-Registry-FromBackup
                 Restore-OfficeMacros
@@ -2267,11 +2267,11 @@ function Show-RestoreUndoMenu {
                 Restore-OneDrive
                 Show-SuccessMessage
             }
-            '2'  { Harden-OfficeMacros; Show-SuccessMessage }
+            '2'  { Grant-HardenOfficeMacros; Show-SuccessMessage }
             '3'  { Disable-SMBv1; Show-SuccessMessage }
             '4'  { Undo-PrivacyHardening; Show-SuccessMessage }
             '5'  { Enable-SMBv1; Show-SuccessMessage }
-            '6'  { ReEnable-ActionCenter-Notifications; Show-SuccessMessage }
+            '6'  { Grant-ActionCenter-Notifications; Show-SuccessMessage }
             '7'  { Restore-DefaultIPv6; Show-SuccessMessage }
             '8'  { Restore-Registry-FromBackup; Show-SuccessMessage }
             '9'  { Restore-OfficeMacros; Show-SuccessMessage }
@@ -2325,7 +2325,7 @@ function Show-MainMenu {
                 Write-Log "Reiniciando o computador..." Cyan
                 Restart-Computer -Force
             }
-			'10' { Run-Colégio }
+			'10' { Invoke-Colégio }
             '0' {
                 $duration = (Get-Date) - $startTime
                 Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
@@ -2349,8 +2349,8 @@ try {
 catch {
     Write-Host "❌ Erro fatal: $_" -ForegroundColor Red
     Write-Host "Consulte o log em: `"$logFile`"" -ForegroundColor Yellow
-    Pause-Script
+    Suspend-Script
 }
 finally {
-    Pause-Script
+    Suspend-Script
 }
