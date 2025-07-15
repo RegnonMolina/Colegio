@@ -2308,7 +2308,7 @@ function Show-MainMenu {
         Write-Host " 7. Restauração e Segurança (Undo)" -ForegroundColor Yellow
         Write-Host " 8. Scripts Externos e Ativadores" -ForegroundColor Yellow
         Write-Host " 9. Sistema e Desempenho" -ForegroundColor Yellow
-        Write-Host " 10. Colégio" -ForegroundColor Magenta
+        Write-Host " C. Colégio" -ForegroundColor Magenta
         Write-Host " R. Reiniciar o PC" -ForegroundColor Red
         Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -2328,7 +2328,7 @@ function Show-MainMenu {
                 Write-Log "Reiniciando o computador..." Cyan
                 Restart-Computer -Force
             }
-	    '10' { Run-Colégio }
+	    'C' { Run-Colégio }
             '0' {
                 $duration = (Get-Date) - $startTime
                 Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
