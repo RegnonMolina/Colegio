@@ -12,11 +12,3 @@ Este script realiza ajustes, remoções, instalações e otimizações em máqui
 ## 🛠️ Requisitos
 - Executar como Administrador
 - PowerShell 5.1+
-
-## 📦 Execução
-
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force
-irm script.colegiomundodosaber.com.br | iex
-
-📥 [Clique aqui para baixar o script](https://raw.githubusercontent.com/RegnonMolina/Colegio/main/MaintenanceColegio.ps1)
