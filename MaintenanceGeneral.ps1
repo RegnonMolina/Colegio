@@ -1379,8 +1379,8 @@ function Run-All-DiagnosticsAdvanced {
 }
 
 # ==== Função Colégio ====
-Function Run-Colégio {
-	Apply-ControlPanelTweaks
+function Run-Colégio {
+Apply-ControlPanelTweaks
 Apply-ControlPanelTweaks
 Apply-ExtraTweaks
 Apply-PrivacyTweaks
