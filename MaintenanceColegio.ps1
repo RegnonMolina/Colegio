@@ -4,6 +4,11 @@
 # Iniciado em: $(Get-Date)
 # Desenvolvido com sangue, café e PowerShell 💪
 
+#clear-host
+Write-Host "-------------------------------------------------------------------------"
+Write-Host "| Script pra ajustes de notebooks do ambiente do Colégio Mundo do Saber |"
+Write-Host "-------------------------------------------------------------------------"
+
 # === CONFIGURAÇÕES GLOBAIS ===
 $global:ConfirmPreference = "None"
 $global:ProgressPreference = 'Continue'  
@@ -2103,7 +2108,7 @@ function Show-ExternalScriptsMenu {
         Write-Host "1. Executar todos os scripts abaixo" -ForegroundColor Green
         Write-Host "2. Ativar Windows (get.activated.win)"
         Write-Host "3. Toolbox Chris Titus (christitus.com)"
-        Write-Host "4. Executar Script Supremo (Colégio)"
+        Write-Host "4. Atualizar Script Supremo"
         Write-Host "0. Voltar ao menu anterior" -ForegroundColor Magenta
 		Write-Host "M. Voltar ao menu principal" -ForegroundColor Green
 
