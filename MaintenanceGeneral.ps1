@@ -2303,11 +2303,10 @@ function Show-MainMenu {
         Write-Host " 7. Restauração e Segurança (Undo)" -ForegroundColor Yellow
         Write-Host " 8. Scripts Externos e Ativadores" -ForegroundColor Yellow
         Write-Host " 9. Sistema e Desempenho" -ForegroundColor Yellow
-        Write-Host " 10. Colégio" -ForegroundColor Magenta
-        Write-Host " R. Reiniciar o PC" -ForegroundColor Red
+        Write-Host " C. Colégio (Sequência Especial)" -ForegroundColor Magenta
+	Write-Host " R. Reiniciar o PC" -ForegroundColor Red
         Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
-
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice.ToUpper()) {
             '1' { Show-BloatwareMenu }
@@ -2319,18 +2318,15 @@ function Show-MainMenu {
             '7' { Show-RestoreUndoMenu }
             '8' { Show-ExternalScriptsMenu }
             '9' { Show-SystemPerformanceMenu }
-            'R' {
+            'C' {
+                Write-Log "Iniciando rotina Colégio pelo menu principal..." Cyan
+                Run-Colegio
+            }
+	    'R' {
                 Write-Log "Reiniciando o computador..." Cyan
                 Restart-Computer -Force
             }
-	    '10' { Run-Colegio }
-            '0' {
-                $duration = (Get-Date) - $startTime
-                Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
-                Write-Log "Log salvo em: $logFile" Cyan
-                [void][System.Console]::ReadKey($true)
-                return
-            }
+            '0' { return }
             default {
                 Write-Host "Opção inválida! Tente novamente." -ForegroundColor Red
                 Start-Sleep -Seconds 1
@@ -2338,7 +2334,6 @@ function Show-MainMenu {
         }
     } while ($true)
 }
-#endregion
 
 # ==== EXECUÇÃO COM SEGURANÇA ====
 try {
