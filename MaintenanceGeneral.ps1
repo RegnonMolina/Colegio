@@ -1380,7 +1380,7 @@ function Run-All-DiagnosticsAdvanced {
 
 # ==== Função Colégio ====
 #region [FUNÇÃO ESPECIAL: COLÉGIO]
-function Run-Colégio {
+function Run-Colegio {
     Clear-Host
     $start = Get-Date
     Write-Log "`n🚀 Iniciando sequência personalizada para o Colégio..." Cyan
@@ -2288,7 +2288,6 @@ function Show-RestoreUndoMenu {
 
 
 # === MENU PRINCIPAL ===
-#region [ATUALIZAÇÃO MENU PRINCIPAL - OPÇÃO COLÉGIO]
 function Show-MainMenu {
     do {
         Clear-Host
@@ -2296,27 +2295,42 @@ function Show-MainMenu {
         Write-Host " SCRIPT DE MANUTENÇÃO WINDOWS - MENU PRINCIPAL" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " 1. Bloatware, Privacidade e Hardening" -ForegroundColor Yellow
-        Write-Host " 2. Diagnóstico e Informações" -ForegroundColor Yellow
-        Write-Host " 3. Instalação de Programas" -ForegroundColor Yellow
-        Write-Host " 4. Limpeza e Otimização" -ForegroundColor Yellow
-        Write-Host " 5. Rede e Impressoras" -ForegroundColor Yellow
-        Write-Host " 6. Restauração e Segurança (Undo)" -ForegroundColor Yellow
-        Write-Host " C. Colégio" -ForegroundColor Magenta
+        Write-Host " 2. Configurações Avançadas" -ForegroundColor Yellow
+        Write-Host " 3. Diagnóstico e Informações" -ForegroundColor Yellow
+        Write-Host " 4. Instalação de Programas" -ForegroundColor Yellow
+        Write-Host " 5. Limpeza e Otimização" -ForegroundColor Yellow
+        Write-Host " 6. Rede e Impressoras" -ForegroundColor Yellow
+        Write-Host " 7. Restauração e Segurança (Undo)" -ForegroundColor Yellow
+        Write-Host " 8. Scripts Externos e Ativadores" -ForegroundColor Yellow
+        Write-Host " 9. Sistema e Desempenho" -ForegroundColor Yellow
+        Write-Host " 10. Colégio" -ForegroundColor Magenta
+        Write-Host " R. Reiniciar o PC" -ForegroundColor Red
         Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
+
         $choice = Read-Host "`nSelecione uma opção"
         switch ($choice.ToUpper()) {
             '1' { Show-BloatwareMenu }
-            '2' { Show-DiagnosticsMenu }
-            '3' { Show-InstallationMenu }
-            '4' { Show-CleanupMenu }
-            '5' { Show-NetworkMenu }
-            '6' { Show-RestoreUndoMenu }
-            'C' {
-                Write-Log "Iniciando rotina Colégio pelo menu principal..." Cyan
-                Run-Colégio
+            '2' { Show-AdvancedSettingsMenu }
+            '3' { Show-DiagnosticsMenu }
+            '4' { Show-InstallationMenu }
+            '5' { Show-CleanupMenu }
+            '6' { Show-NetworkMenu }
+            '7' { Show-RestoreUndoMenu }
+            '8' { Show-ExternalScriptsMenu }
+            '9' { Show-SystemPerformanceMenu }
+            'R' {
+                Write-Log "Reiniciando o computador..." Cyan
+                Restart-Computer -Force
             }
-            '0' { return }
+	    '10' { Run-Colegio }
+            '0' {
+                $duration = (Get-Date) - $startTime
+                Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
+                Write-Log "Log salvo em: $logFile" Cyan
+                [void][System.Console]::ReadKey($true)
+                return
+            }
             default {
                 Write-Host "Opção inválida! Tente novamente." -ForegroundColor Red
                 Start-Sleep -Seconds 1
