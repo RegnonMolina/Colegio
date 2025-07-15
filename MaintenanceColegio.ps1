@@ -353,13 +353,16 @@ function Add-WiFiNetwork {
 
 # Função para detectar e instalar impressoras de rede automaticamente
 function Install-NetworkPrinters {
-    Write-Log "Detectando e instalando impressoras de rede..." Yellow
-	pnputil /add-driver "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\*.inf" /install
+    Write-Log "Instalando drivers de impressora..." Yellow
+    # Instala os drivers necessários
+    pnputil /add-driver "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\ssn3m.inf" /install
+    pnputil /add-driver "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\E_WF1YWE.INF" /install
+
     $printers = @(
         @{Name = "Samsung Mundo1"; IP = "172.16.40.40"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
         @{Name = "Samsung Mundo2"; IP = "172.17.40.25"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
-        @{Name = "EpsonMundo1 (L3250 Series)"; IP = "172.16.40.37"; Driver = "L3250"},
-        @{Name = "EpsonMundo2 (L3250 Series)"; IP = "172.17.40.72"; Driver = "L3250"}
+        @{Name = "EpsonMundo1 (L3250 Series)"; IP = "172.16.40.37"; Driver = "EPSON L3250 Series"},
+        @{Name = "EpsonMundo2 (L3250 Series)"; IP = "172.17.40.72"; Driver = "EPSON L3250 Series"}
     )
     foreach ($printer in $printers) {
         $ip = $printer.IP
@@ -381,6 +384,8 @@ function Install-NetworkPrinters {
             Write-Log "Erro ao instalar impressora $name ($ip): $_" Red
         }
     }
+    Show-SuccessMessage
+    
     # Remover impressora OneNote Desktop se existir
       $printer = Get-Printer -Name "OneNote (Desktop)" -ErrorAction SilentlyContinue
     
