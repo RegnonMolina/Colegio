@@ -18,3 +18,6 @@ Este script realiza ajustes, remoções, instalações e otimizações em máqui
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force
 .\Invoke-ColegioMaintenance.ps1
+
+
+📥 [Clique aqui para baixar o script](https://raw.githubusercontent.com/RegnonMolina/Colegio/main/MaintenanceColegio.ps1)
