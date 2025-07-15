@@ -15,11 +15,6 @@ $global:ProgressPreference = 'Continue'
 $global:ErrorActionPreference = "SilentlyContinue"
 $VerbosePreference = "SilentlyContinue" 
 
-$LogDate = Get-Date -format "dd-MM-yyyy-HH"
-$currentTime = Get-Date -format "dd-MM-yyyy HH:mm:ss"
-$computer = $env:COMPUTERNAME
-$windowsUpdateCachePath = "C:\Windows\SoftwareDistribution"
-
 # Detectar rede ativa (SSID)
 try {
     $profile = Get-NetConnectionProfile | Where-Object { $_.IPv4Connectivity -eq 'Internet' }
@@ -421,7 +416,7 @@ function Install-NetworkPrinters {
         Write-Host "A impressora 'OneNote (Desktop)' não está instalada." -ForegroundColor Cyan
         return $true
     }
-
+}
 
 
 function Run-All-NetworkAdvanced {
@@ -1038,7 +1033,7 @@ function Enable-Sudo {
         return $false
     }
 }
-}
+
 
 
 function Enable-TaskbarEndTask {
