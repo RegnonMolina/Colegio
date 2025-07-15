@@ -1,0 +1,21 @@
+name: PowerShell ScriptAnalyzer
+
+on:
+  push:
+    paths:
+      - '**.ps1'
+      - '**.psm1'
+  pull_request:
+
+jobs:
+  analyze:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install PowerShell Script Analyzer
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+      - name: Analyze PowerShell Code
+        run: |
+          Invoke-ScriptAnalyzer -Path . -Recurse
+        shell: pwsh
