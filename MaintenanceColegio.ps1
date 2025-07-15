@@ -1037,7 +1037,7 @@ function Enable-Sudo {
     sudo config --enable normal
 
 "@
-        Write-Log "Alias 'sudo' adicionado ao seu profile." Green
+        Write-Log " 'sudo' adicionado ao seu profile." Green
     } else {
         Write-Log "'sudo' já estava configurado." Cyan
     }
