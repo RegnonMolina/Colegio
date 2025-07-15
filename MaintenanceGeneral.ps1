@@ -2306,7 +2306,7 @@ function Show-MainMenu {
                 [void][System.Console]::ReadKey($true)
                 return
             }
-			'C' { 
+			'C' { Run-Colégio }
             default {
                 Write-Host "Opção inválida! Tente novamente." -ForegroundColor Red
                 Start-Sleep -Seconds 1
