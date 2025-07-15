@@ -151,8 +151,11 @@ function Remove-Bloatware {
     # Whitelist (apps que NÃO podem ser removidos)
     $whitelist = @(
         "Microsoft.WindowsCalculator",
-        "Microsoft.WindowsStore",
-        "Microsoft.DesktopAppInstaller"
+		"Microsoft.WindowsCamera",
+		"Microsoft.WindowsSoundRecorder",
+		"Microsoft.StorePurchaseApp",
+		"Microsoft.DesktopAppInstaller", # Necessário pro winget
+		"Microsoft.WindowsStore"
     )
 
     # Passo 1: Remover do usuário atual
@@ -352,6 +355,7 @@ function Add-WiFiNetwork {
 # Função para detectar e instalar impressoras de rede automaticamente
 function Install-NetworkPrinters {
     Write-Log "Detectando e instalando impressoras de rede..." Yellow
+	pnputil /add-driver "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\*.inf" /install
     $printers = @(
         @{Name = "Samsung Mundo1"; IP = "172.16.40.40"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
         @{Name = "Samsung Mundo2"; IP = "172.17.40.25"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
@@ -412,7 +416,7 @@ function Install-NetworkPrinters {
         Write-Host "A impressora 'OneNote (Desktop)' não está instalada." -ForegroundColor Cyan
         return $true
     }
-}
+
 
 
 function Run-All-NetworkAdvanced {
@@ -513,6 +517,102 @@ function Apply-PrivacyTweaks {
         reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEverEnabled /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
+		reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f 
+		reg.exe add "HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f
+		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\SettingSync" /v DisableSettingSync /t REG_DWORD /d 2 /f 
+		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\SettingSync" /v DisableSettingSyncUserOverride /t REG_DWORD /d 1 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" /v DisabledByGroupPolicy /t REG_DWORD /d 1 /f 
+		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f 
+		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\EnhancedStorageDevices" /v TCGSecurityActivationDisabled /t REG_DWORD /d 0 /f 
+		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" /v DontSendAdditionalData /t REG_DWORD /d 1 /f 
+		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" /v Disabled /t REG_DWORD /d 1 /f 
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKLM\Software\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting" /v value /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsConsumerFeatures /t REG_DWORD /d 1 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v ContentDeliveryAllowed /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v OemPreInstalledAppsEnabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEnabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEverEnabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338387Enabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353698Enabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f
+		reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications" /v NoTileApplicationNotification /t REG_DWORD /d 1 /f
+		reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}" /v SensorPermissionState /t REG_DWORD /d 1 /f
+		reg.exe delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Device Metadata" /f
+		reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudClient" /v DisableTailoredExperiencesWithDiagnosticData /t REG_DWORD /d 1 /f
+		reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\OOBE" /v "DisablePrivacyExperience" /t REG_DWORD /d "1" /f
+		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy" /v "HasAccepted" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy" /v "HasAccepted" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" /v "Value" /t REG_SZ /d "Deny" /f
+		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" /v "Value" /t REG_SZ /d "Deny" /f
+		reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Settings\FindMyDevice" /v "LocationSyncEnabled" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_USERS\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack" /v "ShowedToastAtLevel" /t REG_DWORD /d "1" /f
+		reg.exe add "HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack" /v "ShowedToastAtLevel" /t REG_DWORD /d "1" /f
+		reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v "AllowTelemetry" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v "MaxTelemetryAllowed" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Input\TIPC" /v "Enabled" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Input\TIPC" /v "Enabled" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\Privacy" /v "TailoredExperiencesWithDiagnosticDataEnabled" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Privacy" /v "TailoredExperiencesWithDiagnosticDataEnabled" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
+		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
+		# Disable Cortana
+reg.exe add "HKCU\SOFTWARE\Microsoft\Personalization\Settings" /v AcceptedPrivacyPolicy /t REG_DWORD /d 0 /f
+reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /t REG_DWORD /d 1 /f
+reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /t REG_DWORD /d 1 /f
+reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /t REG_DWORD /d 0 /f
+
+# Fix Windows Search
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AllowIndexingEncryptedStoresOrItems" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AllowSearchToUseLocation" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AlwaysUseAutoLangDetection" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "CortanaConsent" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "CortanaInAmbientMode" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "HistoryViewEnabled" /t REG_DWORD /d 0 /f  
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "HasAboveLockTips" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "AllowSearchToUseLocation" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings" /v "SafeSearchMode" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Policies\Microsoft\Windows\Explorer" /v "DisableSearchBoxSuggestions" /t REG_DWORD /d 1 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AllowCortana" /t REG_DWORD /d 0 /f 
+$hkcuPath = $(reg.exe query HKEY_USERS | Select-String -NotMatch -Pattern 'S-1-5-19|S-1-5-20|S-1-5-18|.Default|Classes')
+
+# Disable inking and typing
+reg.exe add "HKCU\Software\Microsoft\InputPersonalization" /v "RestrictImplicitTextCollection" /t REG_DWORD /d 1 /f 
+reg.exe add "HKCU\Software\Microsoft\InputPersonalization" /v "RestrictImplicitInkCollection" /t REG_DWORD /d 1 /f 
+reg.exe add "HKCU\Software\Microsoft\InputPersonalization\TrainedDataStore" /v "AcceptedPrivacyPolicy" /t REG_DWORD /d 0 /f 
+reg.exe add "HKCU\Software\Microsoft\Personalization\Settings" /v "AcceptedPrivacyPolicy" /t REG_DWORD /d 0 /f
+
+# Disable speech recognition
+reg.exe add "HKLM\SOFTWARE\Microsoft\Speech_OneCore\Preferences" /v "VoiceActivationDefaultOn" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Microsoft\Speech_OneCore\Preferences" /v "VoiceActivationEnableAboveLockscreen" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Microsoft\Speech_OneCore\Preferences" /v "ModelDownloadAllowed" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" /v "DisableVoice" /t REG_DWORD /d 1 /f
+
+# Disable user activity
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v "EnableActivityFeed" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v "PublishUserActivities" /t REG_DWORD /d 0 /f 
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v "UploadUserActivities" /t REG_DWORD /d 0 /f 
+
+# Enable long paths
+reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+reg.exe add "HKCU\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
+# Disable feedback
+reg.exe add "HKCU\Software\Microsoft\Siuf\Rules" /v PeriodInNanoSeconds /t REG_DWORD /d 0 /f
+reg.exe add "HKLM\SOFTWARE\Microsoft\Siuf\Rules" /v NumberOfSIUFInPeriod /t REG_DWORD /d 0 /f
+reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v DoNotShowFeedbackNotifications /t REG_DWORD /d 1 /f
+
+# Disable " - Shortcut" text for shortcuts
+reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /v link /t REG_BINARY /d "00 00 00 00" /f
+
+# Fixing Windows Explorer CPU Usage
+reg.exe add "HKCU\SOFTWARE\Microsoft\input" /v IsInputAppPreloadEnabled /t REG_DWORD /d 0 /f
+reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Dsh" /v IsPrelaunchEnabled /t REG_DWORD /d 0 /f
+
         Write-Log "Tweaks de privacidade aplicados." Green
     } catch {
         Write-Log "Erro ao aplicar tweaks de privacidade: $_" Red
@@ -645,12 +745,12 @@ function Enable-WindowsHardening {
 function Remove-ProvisionedBloatware {
     Write-Log "Removendo bloatware (mantendo whitelist)..." Yellow
     $whitelist = @(
-        'Microsoft.WindowsNotepad',
-        'Microsoft.WindowsCalculator',
-        'Microsoft.WindowsStore',
-        'Microsoft.Windows.Photos',
-        'Microsoft.WindowsCamera',
-        'Microsoft.MSPaint'
+        "Microsoft.WindowsCalculator",
+		"Microsoft.WindowsCamera",
+		"Microsoft.WindowsSoundRecorder",
+		"Microsoft.StorePurchaseApp",
+		"Microsoft.DesktopAppInstaller", # Necessário pro winget
+		"Microsoft.WindowsStore"
     )
     $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $whitelist -notcontains $_.DisplayName }
     foreach ($app in $provisioned) {
@@ -929,18 +1029,8 @@ function Enable-Sudo {
         return
     }
 
-    $profilePath = "$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
-    if (-not (Test-Path $profilePath)) {
-        New-Item -ItemType File -Path $profilePath -Force | Out-Null
-    }
+    sudo config --enable normal
 
-    $content = Get-Content $profilePath -ErrorAction SilentlyContinue
-    if ($content -notmatch "function sudo") {
-        Add-Content -Path $profilePath -Value @"
-function sudo {
-    param([string]\$command)
-    Start-Process pwsh -ArgumentList "-Command \$command" -Verb RunAs
-}
 "@
         Write-Log "Alias 'sudo' adicionado ao seu profile." Green
     } else {
@@ -1052,7 +1142,7 @@ function Renomear-Notebook {
     }
     Start-Sleep -Seconds 2
 }
-# ==== Funções Avançadas/Extras - Cole este bloco após as funções de manutenção originais ====
+
 
 function Disable-ActionCenter-Notifications {
     Write-Log "Desabilitando Action Center e notificações..." Yellow
@@ -1231,7 +1321,8 @@ function Disable-Cortana-AndSearch {
 function Disable-UAC {
     Write-Log "Desabilitando UAC..." Yellow
     try {
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v ConsentPromptBehaviorAdmin /t REG_DWORD /d 2 /f
+		reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v PromptOnSecureDesktop /t REG_DWORD /d 1 /f
         Write-Log "UAC desativado." Green
     } catch { Write-Log "Erro ao desativar UAC: $_" Red }
 }
@@ -1285,6 +1376,68 @@ function Run-All-DiagnosticsAdvanced {
     Test-SMART-Drives
     Test-Memory
     Show-SuccessMessage
+}
+
+# ==== Função Colégio ====
+function Run-Colégio {
+    Clear-Host
+    $start = Get-Date
+    Write-Log "`n🚀 Iniciando sequência personalizada para o Colégio..." Cyan
+
+    try {
+        # ===== AJUSTES E TWEAKS ====
+        Write-Log "🔧 Aplicando ajustes e tweaks de sistema..." Yellow
+        Apply-ControlPanelTweaks
+        Apply-ExtraTweaks
+        Apply-PrivacyTweaks
+        Enable-PrivacyHardening
+        Set-VisualPerformance
+        Disable-ActionCenter-Notifications
+        Disable-BloatwareScheduledTasks
+        Disable-Cortana-AndSearch
+        Disable-IPv6
+        Harden-OfficeMacros
+
+        # ===== LIMPEZA ====
+        Write-Log "🧹 Realizando limpeza profunda do sistema..." Yellow
+        Clean-Prefetch
+        Clean-PrintSpooler
+        Clean-TemporaryFiles
+        Clean-WinSxS
+        Clear-WUCache
+        Remove-WindowsOld
+        Deep-SystemCleanup
+
+        # ===== REMOÇÕES ====
+        Write-Log "❌ Removendo bloatware e recursos desnecessários..." Yellow
+        Remove-Bloatware
+        Remove-Copilot
+        Remove-OneDrive-AndRestoreFolders
+        Stop-BloatwareProcesses
+
+        # ===== OTIMIZAÇÃO ====
+        Write-Log "🚀 Otimizando rede e desempenho..." Yellow
+        Flush-DNS
+        Optimize-NetworkPerformance
+
+        # ===== INSTALAÇÕES ====
+        Write-Log "⬇️ Instalando aplicativos essenciais..." Yellow
+        Install-Applications
+        Update-PowerShell
+
+        # ===== EXTERNOS ====
+        Write-Log "⚙️ Executando scripts externos, se houver..." Yellow
+        Run-ExternalDebloaters
+
+        $end = Get-Date
+        $duration = $end - $start
+        Write-Log "✅ Sequência para o Colégio concluída com sucesso em $($duration.ToString("hh\:mm\:ss"))" Green
+        Show-SuccessMessage
+    }
+    catch {
+        Write-Log "❌ Erro crítico durante a sequência do Colégio: $_" Red
+        Pause-Script
+    }
 }
 
 function Run-SFC-Scan {
@@ -1559,16 +1712,56 @@ function Apply-ControlPanelTweaks {
 
     # === Ajustes: Explorer\Advanced ===
     $advKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-    Set-RegistryValue $advKey "HideFileExt" 1 DWord
-    Set-RegistryValue $advKey "ShowSuperHidden" 0 DWord
-    Set-RegistryValue $advKey "TaskbarAnimations" 1 DWord
-    Set-RegistryValue $advKey "ShowSecondsInSystemClock" 1 DWord
-    Set-RegistryValue $advKey "IconsOnly" 0 DWord
-    Set-RegistryValue $advKey "ShowStatusBar" 1 DWord
-    Set-RegistryValue $advKey "ShowCompColor" 1 DWord
-    Set-RegistryValue $advKey "ListviewAlphaSelect" 1 DWord
-    Set-RegistryValue $advKey "ListviewShadow" 1 DWord
-    Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 1 DWord
+    
+    # === Configurações de exibição de arquivos ===
+    Set-RegistryValue $advKey "HideFileExt" 1 DWord               # Oculta extensões de arquivos
+    Set-RegistryValue $advKey "Hidden" 2 DWord                    # Não mostra arquivos ocultos
+    Set-RegistryValue $advKey "ShowSuperHidden" 0 DWord           # Oculta arquivos protegidos do sistema
+    Set-RegistryValue $advKey "ShowInfoTip" 1 DWord               # Mostra dicas de informações
+    Set-RegistryValue $advKey "ShowTypeOverlay" 1 DWord           # Mostra sobreposições de tipo
+    
+    # === Configurações da barra de tarefas ===
+    Set-RegistryValue $advKey "TaskbarAnimations" 1 DWord         # Ativa animações na barra de tarefas
+    Set-RegistryValue $advKey "TaskbarSizeMove" 0 DWord           # Desativa redimensionamento/movimento
+    Set-RegistryValue $advKey "TaskbarSmallIcons" 0 DWord         # Usa ícones normais
+    Set-RegistryValue $advKey "TaskbarAutoHideInTabletMode" 0 DWord # Não oculta automaticamente
+    Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 1 DWord # Opção de desenvolvedor
+    
+    # === Configurações visuais ===
+    Set-RegistryValue $advKey "ShowCompColor" 1 DWord             # Mostra cores compactas
+    Set-RegistryValue $advKey "ShowStatusBar" 1 DWord             # Mostra barra de status
+    Set-RegistryValue $advKey "ListviewAlphaSelect" 1 DWord       # Seleção transparente
+    Set-RegistryValue $advKey "ListviewShadow" 1 DWord            # Sombras nos itens
+    Set-RegistryValue $advKey "IconsOnly" 0 DWord                 # Mostra texto junto com ícones
+    
+    # === Configurações de navegação ===
+    Set-RegistryValue $advKey "LaunchTo" 1 DWord                  # Abre no "Este Computador"
+    Set-RegistryValue $advKey "NavPaneExpandToCurrentFolder" 1 DWord # Expande para pasta atual
+    Set-RegistryValue $advKey "WebView" 1 DWord                   # Ativa visualização web
+    
+    # === Configurações do sistema ===
+    Set-RegistryValue $advKey "ShowSecondsInSystemClock" 1 DWord  # Mostra segundos no relógio
+    Set-RegistryValue $advKey "DisablePreviewDesktop" 1 DWord     # Desativa visualização da área de trabalho
+    Set-RegistryValue $advKey "SeparateProcess" 0 DWord           # Processo único do Explorer
+    
+    # === Configurações do menu Iniciar ===
+    Set-RegistryValue $advKey "Start_SearchFiles" 2 DWord         # Comportamento de pesquisa
+    Set-RegistryValue $advKey "StartShownOnUpgrade" 1 DWord       # Mostrar menu Iniciar após atualização
+    Set-RegistryValue $advKey "StartMenuInit" 13 DWord            # Configuração do menu Iniciar (0d em hex)
+    
+    # === Outras configurações ===
+    Set-RegistryValue $advKey "ServerAdminUI" 0 DWord             # Interface de administração
+    Set-RegistryValue $advKey "DontPrettyPath" 0 DWord            # Mostra caminhos completos
+    Set-RegistryValue $advKey "Filter" 0 DWord                    # Filtros de pesquisa
+    Set-RegistryValue $advKey "AutoCheckSelect" 0 DWord           # Seleção automática
+    Set-RegistryValue $advKey "ShellMigrationLevel" 3 DWord       # Nível de migração do shell
+    Set-RegistryValue $advKey "ReindexedProfile" 1 DWord          # Reindexação de perfil
+    Set-RegistryValue $advKey "ProgrammableTaskbarStatus" 2 DWord # Status programável da barra
+    Set-RegistryValue $advKey "WinXMigrationLevel" 1 DWord        # Nível de migração do menu Win+X
+    Set-RegistryValue $advKey "OTPTBImprSuccess" 1 DWord          # Sucesso de melhoria da barra
+    Set-RegistryValue $advKey "ShellViewReentered" 1 DWord        # Visualização do shell
+
+    Write-Host "Configurações do Explorer atualizadas com sucesso!" -ForegroundColor Green
 
     # === Ajustes: Explorer\VisualEffects ===
     $veBase = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
@@ -1640,7 +1833,7 @@ function Restore-ControlPanelTweaks {
     Set-RegistryValue $advKey "ShowCompColor" 0 DWord
     Set-RegistryValue $advKey "ListviewAlphaSelect" 1 DWord
     Set-RegistryValue $advKey "ListviewShadow" 1 DWord
-    Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 0 DWord
+    Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 1 DWord
 
     # === Restaurar Visual Effects ===
     $veBase = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
@@ -2115,6 +2308,7 @@ function Show-MainMenu {
         Write-Host " 7. Restauração e Segurança (Undo)" -ForegroundColor Yellow
         Write-Host " 8. Scripts Externos e Ativadores" -ForegroundColor Yellow
         Write-Host " 9. Sistema e Desempenho" -ForegroundColor Yellow
+        Write-Host " 10. Colégio" -ForegroundColor Magenta
         Write-Host " R. Reiniciar o PC" -ForegroundColor Red
         Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -2134,11 +2328,11 @@ function Show-MainMenu {
                 Write-Log "Reiniciando o computador..." Cyan
                 Restart-Computer -Force
             }
+	    '10' { Run-Colégio }
             '0' {
                 $duration = (Get-Date) - $startTime
                 Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
                 Write-Log "Log salvo em: $logFile" Cyan
-                Write-Host "Pressione qualquer tecla para sair..." -ForegroundColor Magenta
                 [void][System.Console]::ReadKey($true)
                 return
             }
