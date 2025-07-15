@@ -1380,34 +1380,64 @@ function Run-All-DiagnosticsAdvanced {
 
 # ==== Função Colégio ====
 function Run-Colégio {
-Apply-ControlPanelTweaks
-Apply-ControlPanelTweaks
-Apply-ExtraTweaks
-Apply-PrivacyTweaks
-Clean-Prefetch
-Clean-PrintSpooler
-Clean-TemporaryFiles
-Clean-WinSxS
-Clear-WUCache
-Deep-SystemCleanup
-Disable-ActionCenter-Notifications
-Disable-BloatwareScheduledTasks
-Disable-Cortana-AndSearch
-Disable-IPv6
-Enable-PrivacyHardening
-Flush-DNS
-Harden-OfficeMacros
-Install-Applications
-Optimize-NetworkPerformance
-Remove-Bloatware
-Remove-Copilot
-Remove-OneDrive-AndRestoreFolders
-Remove-WindowsOld
-Run-ExternalDebloaters
-Set-VisualPerformance
-Stop-BloatwareProcesses
-Update-PowerShell
-Show-SuccessMessage
+    Clear-Host
+    $start = Get-Date
+    Write-Log "`n🚀 Iniciando sequência personalizada para o Colégio..." Cyan
+
+    try {
+        # ===== AJUSTES E TWEAKS ====
+        Write-Log "🔧 Aplicando ajustes e tweaks de sistema..." Yellow
+        Apply-ControlPanelTweaks
+        Apply-ExtraTweaks
+        Apply-PrivacyTweaks
+        Enable-PrivacyHardening
+        Set-VisualPerformance
+        Disable-ActionCenter-Notifications
+        Disable-BloatwareScheduledTasks
+        Disable-Cortana-AndSearch
+        Disable-IPv6
+        Harden-OfficeMacros
+
+        # ===== LIMPEZA ====
+        Write-Log "🧹 Realizando limpeza profunda do sistema..." Yellow
+        Clean-Prefetch
+        Clean-PrintSpooler
+        Clean-TemporaryFiles
+        Clean-WinSxS
+        Clear-WUCache
+        Remove-WindowsOld
+        Deep-SystemCleanup
+
+        # ===== REMOÇÕES ====
+        Write-Log "❌ Removendo bloatware e recursos desnecessários..." Yellow
+        Remove-Bloatware
+        Remove-Copilot
+        Remove-OneDrive-AndRestoreFolders
+        Stop-BloatwareProcesses
+
+        # ===== OTIMIZAÇÃO ====
+        Write-Log "🚀 Otimizando rede e desempenho..." Yellow
+        Flush-DNS
+        Optimize-NetworkPerformance
+
+        # ===== INSTALAÇÕES ====
+        Write-Log "⬇️ Instalando aplicativos essenciais..." Yellow
+        Install-Applications
+        Update-PowerShell
+
+        # ===== EXTERNOS ====
+        Write-Log "⚙️ Executando scripts externos, se houver..." Yellow
+        Run-ExternalDebloaters
+
+        $end = Get-Date
+        $duration = $end - $start
+        Write-Log "✅ Sequência para o Colégio concluída com sucesso em $($duration.ToString("hh\:mm\:ss"))" Green
+        Show-SuccessMessage
+    }
+    catch {
+        Write-Log "❌ Erro crítico durante a sequência do Colégio: $_" Red
+        Pause-Script
+    }
 }
 
 function Run-SFC-Scan {
