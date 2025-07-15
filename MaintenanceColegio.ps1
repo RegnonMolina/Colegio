@@ -30,7 +30,6 @@ $logFile = "$PSScriptRoot\log.txt"
 $startTime = Get-Date
 
 # === FUNÇÕES DE UTILIDADE ===
-# (Removido: definição duplicada de Write-Log)
 
 function Suspend-Script {
     Write-Host "`nPressione Enter para continuar..." -ForegroundColor DarkGray
