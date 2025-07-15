@@ -1029,19 +1029,15 @@ function Enable-OtherMicrosoftUpdates {
 }
 
 function Enable-Sudo {
-    if ($PSVersionTable.PSVersion.Major -lt 7) {
-        Write-Log "PowerShell 7+ é necessário para suporte ao sudo." Red
-        return
-    }
-
-    sudo config --enable normal
-
-        Write-Log " sudo adicionado ao seu profile." Green
-    } else {
-        Write-Log "sudo já estava configurado." Cyan
+    try {
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo" /v EnableSudo /t REG_DWORD /d 1 /f | Out-Null
+        Write-Host "✅ Sudo do Windows habilitado! Feche e reabra o terminal para usar." -ForegroundColor Green
+        return $true
+    } catch {
+        Write-Host "❌ Não foi possível habilitar o sudo. $_" -ForegroundColor Red
+        return $false
     }
 }
-
 
 function Enable-TaskbarEndTask {
     $build = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").CurrentBuild
