@@ -1,24 +1,20 @@
-# MaintenanceColegio.ps1
+# 🏫 PowerShell Maintenance Script - Colégio
 
-Script supremo de manutenção para Windows (Colégio Mundo do Saber).
+Este script realiza ajustes, remoções, instalações e otimizações em máquinas escolares com Windows.
 
-## Como usar
+## 🚀 Funcionalidades
+- Debloat do Windows
+- Hardening de privacidade
+- Otimização de desempenho
+- Instalação de apps
+- Configuração de rede
 
-Abra o PowerShell como Administrador e execute:
+## 🛠️ Requisitos
+- Executar como Administrador
+- PowerShell 5.1+
+
+## 📦 Execução
 
 ```powershell
-irm https://raw.githubusercontent.com/RegnonMolina/Colegio/main/MaintenanceColegio.ps1 | iex
-```
-
-## O que faz?
-
-- Limpeza e otimização
-- Remoção de bloatware
-- Instalação de apps essenciais
-- Ajustes de privacidade e segurança
-- Menus interativos
-
-## Avisos
-
-- Execute sempre como Administrador!
-- Leia o código antes de rodar em produção.
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\Invoke-ColegioMaintenance.ps1
