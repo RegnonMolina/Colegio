@@ -1,3 +1,8 @@
+<#
+.SYNOPSIS
+    Script Supremo de Manutenção Windows
+...
+#>
 # ===============================
 # SCRIPT SUPREMO DE MANUTENÇÃO 🛠️
 # ===============================
