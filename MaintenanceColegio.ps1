@@ -15,17 +15,10 @@ $global:ProgressPreference = 'Continue'
 $global:ErrorActionPreference = "SilentlyContinue"
 $VerbosePreference = "SilentlyContinue" 
 
-# Detectar rede ativa (SSID)
-try {
-    $profile = Get-NetConnectionProfile | Where-Object { $_.IPv4Connectivity -eq 'Internet' }
-    if ($profile) {
-        $ssid = $profile.Name
-        $interface = $profile.InterfaceAlias
-    }
+function Get-ActiveNetworkInfo {
+
 }
-catch {
-    Write-Log "Rede não detectada. Algumas funções podem não funcionar corretamente." Yellow
-}
+
 
 $logFile = "$PSScriptRoot\log.txt"
 $startTime = Get-Date
@@ -1854,8 +1847,6 @@ function Grant-ControlPanelTweaks {
     Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoControlPanel" -Value 0 -Force
 
     Write-Log "Painel de controle ajustado com sucesso." Green
-}
-
     Write-Host "✔️ Ajustes aplicados com sucesso!" -ForegroundColor Green
 }
 
