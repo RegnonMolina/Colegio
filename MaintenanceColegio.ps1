@@ -1670,7 +1670,7 @@ function Grant-HardenOfficeMacros {
         Write-Log "Erro ao desabilitar macros perigosos do Office: $_" Red
     }
 
-
+}
 
 function Restore-OfficeMacros {
     Write-Log "Restaurando comportamento padrão de macros do Office..." Yellow
