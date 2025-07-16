@@ -1282,7 +1282,7 @@ function Grant-ControlPanelTweaks {
 		catch {
             Write-Warning "Falha ao definir $Name em $Path"
         }
-		
+    }
     # Função interna para setar valores no registro
     function Set-RegistryValue {
     param (
@@ -1300,7 +1300,7 @@ function Grant-ControlPanelTweaks {
             Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force
         }
     } catch {
-        Write-Warning "⚠️ Falha ao definir $Name em $Path: $($_.Exception.Message)"
+        Write-Warning "⚠️ Falha ao definir $Name em ${Path}: $($_.Exception.Message)"
     }
 }
 # === Ajustes: Control Panel\Desktop ===
