@@ -22,7 +22,7 @@ try {
         $ssid = $profile.Name
         $interface = $profile.InterfaceAlias
     }
-
+}
 catch {
     Write-Log "Rede não detectada. Algumas funções podem não funcionar corretamente." Yellow
 }
@@ -431,7 +431,7 @@ function Set-DnsGoogleCloudflare {
     try {
         Get-NetIPConfiguration | Where-Object {$_.IPv4Address -and $_.InterfaceAlias -notmatch "Loopback"} | ForEach-Object {
             Set-DnsClientServerAddress -InterfaceAlias $_.InterfaceAlias -ServerAddresses ("1.1.1.1","8.8.8.8")
-        
+        }
         Write-Log "DNS configurado para Cloudflare/Google." Green
     } 
     catch { Write-Log "Erro ao configurar DNS: $_" Red }
@@ -631,10 +631,11 @@ reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Dsh" /v IsPrelaunchE
     Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts" -Value "0.0.0.0 vortex.data.microsoft.com"
     Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts" -Value "0.0.0.0 settings-win.data.microsoft.com"
     
-        Write-Log "Tweaks de privacidade aplicados." Green
-    } 
-    catch {
-        Write-Log "Erro ao aplicar tweaks de privacidade: $_" Red
+            Write-Log "Tweaks de privacidade aplicados." Green
+        } 
+        catch {
+            Write-Log "Erro ao aplicar tweaks de privacidade: $_" Red
+        }
     }
 
 # Remover pins do Menu Iniciar e Barra de Tarefas
@@ -1205,6 +1206,7 @@ Start-Process "explorer.exe"
 
 Write-Output "Waiting for explorer to complete loading"
 Start-Sleep 10
+}
 
 function Backup-Registry {
     Write-Log "Fazendo backup do registro (SOFTWARE, SYSTEM, HKCU)..." Yellow
@@ -1643,10 +1645,14 @@ function Grant-HardenOfficeMacros {
             Write-Log "Macros desativadas em: $path" Green
         } 
         catch {
-            Write-Log "Erro ao ajustar segurança em $path: $_" Yellow
+            Write-Log "Erro ao ajustar segurança em ${path}: $_" Yellow
         }
     }
-}
+    }
+    catch {
+        Write-Log "Erro ao desabilitar macros perigosos do Office: $_" Red
+    }
+
 
 
 function Restore-OfficeMacros {
