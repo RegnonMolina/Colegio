@@ -22,9 +22,11 @@ try {
         $ssid = $profile.Name
         $interface = $profile.InterfaceAlias
     }
-} catch {
+}
+catch {
     Write-Log "Rede não detectada. Algumas funções podem não funcionar corretamente." Yellow
 }
+
 
 $logFile = "$PSScriptRoot\log.txt"
 $startTime = Get-Date
@@ -138,11 +140,11 @@ function Remove-Bloatware {
     # Whitelist (apps que NÃO podem ser removidos)
     $whitelist = @(
         "Microsoft.WindowsCalculator",
-		"Microsoft.WindowsCamera",
-		"Microsoft.WindowsSoundRecorder",
-		"Microsoft.StorePurchaseApp",
-		"Microsoft.DesktopAppInstaller", # Necessário pro winget
-		"Microsoft.WindowsStore"
+        "Microsoft.WindowsCamera",
+        "Microsoft.WindowsSoundRecorder",
+        "Microsoft.StorePurchaseApp",
+        "Microsoft.DesktopAppInstaller", # Necessário pro winget
+        "Microsoft.WindowsStore"
     )
 
     # Passo 1: Remover do usuário atual
@@ -214,13 +216,14 @@ function Disable-BloatwareScheduledTasks {
             $taskPath = $task.Substring(0, [string]::LastIndexOf($task, '\\') + 1)
             schtasks /Change /TN $task /Disable | Out-Null
             Write-Log "Tarefa $task desativada com sucesso." Green
-            }
-        } catch {
+        }
+        catch {
             Write-Log "Erro ao desativar ${task}: $_" Red
+        }
         }
     }
     Write-Log "Desativação de tarefas agendadas concluída." Green
-}
+
 
 # Função para encerrar processos dispensáveis
 function Stop-BloatwareProcesses {
@@ -241,7 +244,8 @@ function Stop-BloatwareProcesses {
         try {
             Get-Process -Name $proc -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             Write-Log "Processo $proc encerrado." Green
-        } catch {
+        }
+        catch {
             Write-Log "Erro ao encerrar ${proc}: $_" Red
         }
     }
@@ -256,7 +260,7 @@ function Install-Applications {
     }
 
     $apps = @(
-	    @{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
+        @{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
         @{Name = "Google Chrome"; Id = "Google.Chrome"},
         @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
         @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"},
@@ -274,7 +278,8 @@ function Install-Applications {
             Write-Log "Instalando $($app.Name)..." Yellow
             winget install --id $app.Id -e --accept-package-agreements --accept-source-agreements
             Write-Log "$($app.Name) instalado com sucesso." Green
-        } catch {
+        }
+        catch {
             Write-Log "Falha ao instalar $($app.Name): $_" Red
         }
     }
@@ -289,7 +294,8 @@ function Update-PowerShell {
         Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Force
         iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI"
         Write-Log "PowerShell instalado/atualizado com sucesso." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao instalar/atualizar PowerShell: $_" Red
     }
 }
@@ -332,7 +338,8 @@ function Add-WiFiNetwork {
         Set-NetConnectionProfile -Name "$ssid" -NetworkCategory Private
         Remove-Item $tempFile -Force
         Write-Log "Rede Wi-Fi '$ssid' configurada com sucesso." Green
-    } catch {
+    } 
+    catch {
         Write-Log "❌ Erro ao adicionar rede Wi-Fi: $_" Red
     }
 }
@@ -367,7 +374,8 @@ function Install-NetworkPrinters {
             } else {
                 Write-Log "Impressora $name já está instalada." Cyan
             }
-        } catch {
+        } 
+        catch {
             Write-Log "Erro ao instalar impressora $name ($ip): $_" Red
         }
     }
@@ -424,14 +432,15 @@ function Set-DnsGoogleCloudflare {
     try {
         Get-NetIPConfiguration | Where-Object {$_.IPv4Address -and $_.InterfaceAlias -notmatch "Loopback"} | ForEach-Object {
             Set-DnsClientServerAddress -InterfaceAlias $_.InterfaceAlias -ServerAddresses ("1.1.1.1","8.8.8.8")
-        }
+        
         Write-Log "DNS configurado para Cloudflare/Google." Green
-    } catch { Write-Log "Erro ao configurar DNS: $_" Red }
+    } 
+    catch { Write-Log "Erro ao configurar DNS: $_" Red }
 }
 
 function Test-InternetSpeed {
     Write-Log "Testando velocidade de internet usando PowerShell..." Yellow
-	if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Log "⚠️ Winget não está disponível neste sistema." Red
     return
 }
@@ -441,7 +450,8 @@ function Test-InternetSpeed {
         }
         speedtest
         Write-Log "Teste de velocidade concluído." Green
-    } catch { Write-Log "Erro ao testar velocidade: $_" Red }
+    } 
+    catch { Write-Log "Erro ao testar velocidade: $_" Red }
 }
 
 function Clear-ARP {
@@ -449,7 +459,8 @@ function Clear-ARP {
     try {
         arp -d *
         Write-Log "Cache ARP limpo." Green
-    } catch { Write-Log "Erro ao limpar cache ARP: $_" Red }
+    } 
+    catch { Write-Log "Erro ao limpar cache ARP: $_" Red }
 }
 
 # 5. Diagnóstico e Informações
@@ -486,7 +497,8 @@ function Remove-UWPBloatware {
         try {
             Write-Log "Removendo $($_.Name)..." Cyan
             Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-        } catch {
+        } 
+        catch {
             Write-Log "Erro ao remover $($_.Name): $_" Red
         }
     }
@@ -508,50 +520,50 @@ function Grant-PrivacyTweaks {
         reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEverEnabled /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
-		reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f 
-		reg.exe add "HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f
-		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\SettingSync" /v DisableSettingSync /t REG_DWORD /d 2 /f 
-		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\SettingSync" /v DisableSettingSyncUserOverride /t REG_DWORD /d 1 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" /v DisabledByGroupPolicy /t REG_DWORD /d 1 /f 
-		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f 
-		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\EnhancedStorageDevices" /v TCGSecurityActivationDisabled /t REG_DWORD /d 0 /f 
-		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" /v DontSendAdditionalData /t REG_DWORD /d 1 /f 
-		reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" /v Disabled /t REG_DWORD /d 1 /f 
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKLM\Software\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting" /v value /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsConsumerFeatures /t REG_DWORD /d 1 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v ContentDeliveryAllowed /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v OemPreInstalledAppsEnabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEnabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEverEnabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338387Enabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353698Enabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f
-		reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications" /v NoTileApplicationNotification /t REG_DWORD /d 1 /f
-		reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}" /v SensorPermissionState /t REG_DWORD /d 1 /f
-		reg.exe delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Device Metadata" /f
-		reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudClient" /v DisableTailoredExperiencesWithDiagnosticData /t REG_DWORD /d 1 /f
-		reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\OOBE" /v "DisablePrivacyExperience" /t REG_DWORD /d "1" /f
-		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy" /v "HasAccepted" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy" /v "HasAccepted" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" /v "Value" /t REG_SZ /d "Deny" /f
-		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" /v "Value" /t REG_SZ /d "Deny" /f
-		reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Settings\FindMyDevice" /v "LocationSyncEnabled" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_USERS\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack" /v "ShowedToastAtLevel" /t REG_DWORD /d "1" /f
-		reg.exe add "HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack" /v "ShowedToastAtLevel" /t REG_DWORD /d "1" /f
-		reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v "AllowTelemetry" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v "MaxTelemetryAllowed" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Input\TIPC" /v "Enabled" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Input\TIPC" /v "Enabled" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\Privacy" /v "TailoredExperiencesWithDiagnosticDataEnabled" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Privacy" /v "TailoredExperiencesWithDiagnosticDataEnabled" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
-		reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
-		# Disable Cortana
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f 
+        reg.exe add "HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\SettingSync" /v DisableSettingSync /t REG_DWORD /d 2 /f 
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\SettingSync" /v DisableSettingSyncUserOverride /t REG_DWORD /d 1 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" /v DisabledByGroupPolicy /t REG_DWORD /d 1 /f 
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f 
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\EnhancedStorageDevices" /v TCGSecurityActivationDisabled /t REG_DWORD /d 0 /f 
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" /v DontSendAdditionalData /t REG_DWORD /d 1 /f 
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" /v Disabled /t REG_DWORD /d 1 /f 
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKLM\Software\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting" /v value /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsConsumerFeatures /t REG_DWORD /d 1 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v ContentDeliveryAllowed /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v OemPreInstalledAppsEnabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEnabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEverEnabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338387Enabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353698Enabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f
+        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications" /v NoTileApplicationNotification /t REG_DWORD /d 1 /f
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}" /v SensorPermissionState /t REG_DWORD /d 1 /f
+        reg.exe delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Device Metadata" /f
+        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudClient" /v DisableTailoredExperiencesWithDiagnosticData /t REG_DWORD /d 1 /f
+        reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\OOBE" /v "DisablePrivacyExperience" /t REG_DWORD /d "1" /f
+        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy" /v "HasAccepted" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy" /v "HasAccepted" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" /v "Value" /t REG_SZ /d "Deny" /f
+        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" /v "Value" /t REG_SZ /d "Deny" /f
+        reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Settings\FindMyDevice" /v "LocationSyncEnabled" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_USERS\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack" /v "ShowedToastAtLevel" /t REG_DWORD /d "1" /f
+        reg.exe add "HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack" /v "ShowedToastAtLevel" /t REG_DWORD /d "1" /f
+        reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v "AllowTelemetry" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v "MaxTelemetryAllowed" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Input\TIPC" /v "Enabled" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Input\TIPC" /v "Enabled" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\Privacy" /v "TailoredExperiencesWithDiagnosticDataEnabled" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Privacy" /v "TailoredExperiencesWithDiagnosticDataEnabled" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
+        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
+        # Disable Cortana
 reg.exe add "HKCU\SOFTWARE\Microsoft\Personalization\Settings" /v AcceptedPrivacyPolicy /t REG_DWORD /d 0 /f
 reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /t REG_DWORD /d 1 /f
 reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /t REG_DWORD /d 1 /f
@@ -619,12 +631,12 @@ reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Dsh" /v IsPrelaunchE
     # Bloquear domínios no hosts
     Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts" -Value "0.0.0.0 vortex.data.microsoft.com"
     Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts" -Value "0.0.0.0 settings-win.data.microsoft.com"
-}
+	
         Write-Log "Tweaks de privacidade aplicados." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao aplicar tweaks de privacidade: $_" Red
     }
-}
 
 # Remover pins do Menu Iniciar e Barra de Tarefas
 function Remove-StartAndTaskbarPins {
@@ -633,7 +645,8 @@ function Remove-StartAndTaskbarPins {
         $startLayout = "$env:LOCALAPPDATA\Microsoft\Windows\Shell\LayoutModification.xml"
         if (Test-Path $startLayout) { Remove-Item $startLayout -Force }
         Write-Log "Pins removidos (pode ser necessário reiniciar o Explorer)." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao remover pins: $_" Red
     }
 }
@@ -663,7 +676,8 @@ function Remove-ScheduledTasksAggressive {
             schtasks.exe /change /TN $task /DISABLE | Out-Null
             schtasks.exe /delete /TN $task /f | Out-Null
             Write-Log "Tarefa $task desativada e removida." Green
-        } catch {
+        } 
+        catch {
             Write-Log "Erro ao remover/desativar ${task}: $_" Red
         }
     }
@@ -688,7 +702,8 @@ function Set-PerformanceTheme {
         reg.exe add "HKCU\Control Panel\Desktop" /v FontSmoothingGamma /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\Control Panel\Desktop" /v FontSmoothingOrientation /t REG_DWORD /d 0 /f | Out-Null
         Write-Log "Configurações de desempenho aplicadas ao tema do Windows." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao aplicar tema de desempenho: $_" Red
     }
 }
@@ -708,7 +723,8 @@ function Optimize-ExplorerPerformance {
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ListviewShadow /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarAnimations /t REG_DWORD /d 0 /f | Out-Null
         Write-Log "Windows Explorer otimizado para desempenho." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao otimizar o Explorer: $_" Red
     }
 }
@@ -719,7 +735,8 @@ function New-SystemRestorePoint {
     try {
         Checkpoint-Computer -Description "Antes da manutenção Windows" -RestorePointType "MODIFY_SETTINGS"
         Write-Log "Ponto de restauração criado com sucesso." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao criar ponto de restauração: $_" Red
     }
 }
@@ -743,7 +760,8 @@ function Enable-WindowsHardening {
         net user guest /active:no
         Set-ProcessMitigation -System -Enable DEP,SEHOP,ASLR,BottomUp,HighEntropy
         Write-Log "Hardening de segurança aplicado." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao aplicar hardening: $_" Red
     }
 }
@@ -753,18 +771,19 @@ function Remove-ProvisionedBloatware {
     Write-Log "Removendo bloatware (mantendo whitelist)..." Yellow
     $whitelist = @(
         "Microsoft.WindowsCalculator",
-		"Microsoft.WindowsCamera",
-		"Microsoft.WindowsSoundRecorder",
-		"Microsoft.StorePurchaseApp",
-		"Microsoft.DesktopAppInstaller", # Necessário pro winget
-		"Microsoft.WindowsStore"
+        "Microsoft.WindowsCamera",
+        "Microsoft.WindowsSoundRecorder",
+        "Microsoft.StorePurchaseApp",
+        "Microsoft.DesktopAppInstaller", # Necessário pro winget
+        "Microsoft.WindowsStore"
     )
     $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $whitelist -notcontains $_.DisplayName }
     foreach ($app in $provisioned) {
         try {
             Write-Log "Removendo provisionado $($app.DisplayName)..." Cyan
             Remove-AppxProvisionedPackage -PackageName $app.PackageName -Online -ErrorAction SilentlyContinue
-        } catch {
+        } 
+        catch {
             Write-Log "Erro ao remover provisionado $($app.DisplayName): $_" Red
         }
     }
@@ -773,7 +792,8 @@ function Remove-ProvisionedBloatware {
         try {
             Write-Log "Removendo instalado $($app.Name)..." Cyan
             Remove-AppxPackage -Package $app.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-        } catch {
+        } 
+        catch {
             Write-Log "Erro ao remover instalado $($app.Name): $_" Red
         }
     }
@@ -804,7 +824,7 @@ function Disable-UnnecessaryServices {
         'PimIndexMaintenanceSvc', # Contatos/Calendário
         'SEMgrSvc',             # Pagamentos NFC
         'WbioSrvc'              # Biometria
-	    "diagnosticshub.standardcollector.service" # Microsoft (R) Diagnostics Hub Standard Collector Service
+        "diagnosticshub.standardcollector.service" # Microsoft (R) Diagnostics Hub Standard Collector Service
     "DiagTrack"                                # Diagnostics Tracking Service
     "dmwappushservice"                         # WAP Push Message Routing Service (see known issues)
     "lfsvc"                                    # Geolocation Service
@@ -831,7 +851,8 @@ function Disable-UnnecessaryServices {
             Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
             Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
             Write-Log "Serviço ${svc} desativado." Green
-        } catch {
+        } 
+        catch {
             Write-Log "Erro ao desativar serviço ${svc}: $_" Red
         }
     }
@@ -847,7 +868,8 @@ function Update-WindowsAndDrivers {
         Import-Module PSWindowsUpdate
         Get-WindowsUpdate -AcceptAll -Install -AutoReboot
         Write-Log "Atualizações do Windows concluídas." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao atualizar o Windows: $_" Red
     }
     try {
@@ -855,7 +877,8 @@ function Update-WindowsAndDrivers {
         Write-Log "Verificando atualizações de drivers via winget..." Yellow
         winget upgrade --all --accept-package-agreements --accept-source-agreements
         Write-Log "Atualização de drivers via winget concluída." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao atualizar drivers via winget: $_" Red
     }
 }
@@ -929,7 +952,8 @@ function Enable-DarkTheme {
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f | Out-Null
         Write-Log "Tema escuro ativado." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao ativar tema escuro: $_" Red
     }
 }
@@ -939,7 +963,8 @@ function Enable-ClipboardHistory {
     try {
         reg.exe add "HKCU\Software\Microsoft\Clipboard" /v EnableClipboardHistory /t REG_DWORD /d 1 /f | Out-Null
         Write-Log "Histórico da área de transferência ativado." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao ativar histórico da área de transferência: $_" Red
     }
 }
@@ -949,7 +974,8 @@ function Enable-WindowsUpdateFast {
     try {
         reg.exe add "HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" /v IsContinuousInnovationOptedIn /t REG_DWORD /d 1 /f | Out-Null
         Write-Log "Atualizações antecipadas ativadas." Green
-    } catch {
+    } 
+    catch {
         Write-Log "Erro ao ativar atualizações antecipadas: $_" Red
     }
 }
@@ -1129,8 +1155,11 @@ function Remove-OneDrive-AndRestoreFolders {
     Write-Log "Removendo OneDrive e restaurando pastas padrão..." Yellow
     try {
         taskkill.exe /F /IM "OneDrive.exe"
-taskkill.exe /F /IM "explorer.exe"
-
+        taskkill.exe /F /IM "explorer.exe"
+    } 
+	catch {
+        Write-Log "Erro ao remover OneDrive: $_" Red
+    }
 Write-Output "Remove OneDrive"
 if (Test-Path "$env:systemroot\System32\OneDriveSetup.exe") {
     & "$env:systemroot\System32\OneDriveSetup.exe" /uninstall
@@ -1238,7 +1267,7 @@ function Grant-ExtraTweaks {
         # Remover "Cast to Device"
         reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked" /V "{7AD84985-87B4-4a16-BE58-8B72A5B390F7}" /T REG_SZ /D "Play to Menu" /F | Out-Null
         Write-Log "Tweaks extras aplicados." Green
-	Write-Output "Apply MarkC's mouse acceleration fix"
+    Write-Output "Apply MarkC's mouse acceleration fix"
 Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseSensitivity" "10"
 Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseSpeed" "0"
 Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseThreshold1" "0"
@@ -1308,7 +1337,7 @@ function Disable-UAC {
     Write-Log "Desabilitando UAC..." Yellow
     try {
         reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v ConsentPromptBehaviorAdmin /t REG_DWORD /d 2 /f
-		reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v PromptOnSecureDesktop /t REG_DWORD /d 1 /f
+        reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v PromptOnSecureDesktop /t REG_DWORD /d 1 /f
         Write-Log "UAC desativado." Green
     } catch { Write-Log "Erro ao desativar UAC: $_" Red }
 }
@@ -1613,7 +1642,8 @@ function Grant-HardenOfficeMacros {
             Set-ItemProperty -Path $path -Name "VBAWarnings" -Value 4
             Set-ItemProperty -Path $path -Name "AccessVBOM" -Value 0
             Write-Log "Macros desativadas em: $path" Green
-        } catch {
+        } 
+		catch {
             Write-Log "Erro ao ajustar segurança em $path: $_" Yellow
         }
     }
