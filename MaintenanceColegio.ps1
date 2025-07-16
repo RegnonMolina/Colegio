@@ -22,11 +22,10 @@ try {
         $ssid = $profile.Name
         $interface = $profile.InterfaceAlias
     }
-}
+
 catch {
     Write-Log "Rede não detectada. Algumas funções podem não funcionar corretamente." Yellow
 }
-
 
 $logFile = "$PSScriptRoot\log.txt"
 $startTime = Get-Date
@@ -631,7 +630,7 @@ reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Dsh" /v IsPrelaunchE
     # Bloquear domínios no hosts
     Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts" -Value "0.0.0.0 vortex.data.microsoft.com"
     Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts" -Value "0.0.0.0 settings-win.data.microsoft.com"
-	
+    
         Write-Log "Tweaks de privacidade aplicados." Green
     } 
     catch {
@@ -1157,7 +1156,7 @@ function Remove-OneDrive-AndRestoreFolders {
         taskkill.exe /F /IM "OneDrive.exe"
         taskkill.exe /F /IM "explorer.exe"
     } 
-	catch {
+    catch {
         Write-Log "Erro ao remover OneDrive: $_" Red
     }
 Write-Output "Remove OneDrive"
@@ -1643,7 +1642,7 @@ function Grant-HardenOfficeMacros {
             Set-ItemProperty -Path $path -Name "AccessVBOM" -Value 0
             Write-Log "Macros desativadas em: $path" Green
         } 
-		catch {
+        catch {
             Write-Log "Erro ao ajustar segurança em $path: $_" Yellow
         }
     }
