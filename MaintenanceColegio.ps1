@@ -1,6 +1,3 @@
-
-
-
 # ===============================
 # SCRIPT SUPREMO DE MANUTENÇÃO 🛠️
 # ===============================
@@ -2093,7 +2090,12 @@ function Show-InstallationMenu {
             'H' { winget install --id Microsoft.PowerToys -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
             'I' { winget install --id Notepad++.Notepad++ -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
             'J' { winget install --id VideoLAN.VLC -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
-            'K' { Update-PowerShell; Show-SuccessMessage }
+            'K' { Update-PowerShell; Show-SuccessMessage 
+            # ✅ Após a última instalação, copia o atalho pro Startup
+$atalhoOrigem = "G:\Drives compartilhados\MundoCOC\Tecnologia\AutoHotKey\Colegio - Atalho.lnk"
+$atalhoDestino = [Environment]::GetFolderPath("Startup") + "\Colegio - Atalho.lnk"
+Copy-Item -Path $atalhoOrigem -Destination $atalhoDestino -Force
+            }
             'X' { return }
             default { Write-Host "`nOpção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
