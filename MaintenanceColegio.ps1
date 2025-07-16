@@ -1,3 +1,6 @@
+
+
+
 # ===============================
 # SCRIPT SUPREMO DE MANUTENÇÃO 🛠️
 # ===============================
@@ -15,15 +18,46 @@ $global:ProgressPreference = 'Continue'
 $global:ErrorActionPreference = "SilentlyContinue"
 $VerbosePreference = "SilentlyContinue" 
 
-function Get-ActiveNetworkInfo {
-
-}
-
-
 $logFile = "$PSScriptRoot\log.txt"
 $startTime = Get-Date
 
+#region → Configurações Iniciais
+$Host.UI.RawUI.WindowTitle = "MANUTENÇÃO WINDOWS - NÃO FECHE ESTA JANELA"
+#Clear-Host
+
+# Verifica se é administrador
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "Este script precisa ser executado como Administrador." -ForegroundColor Red
+    Write-Host "Por favor, feche e execute novamente como Administrador." -ForegroundColor Yellow
+    pause
+    exit
+}
+
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$logFile = "$env:TEMP\WinMaintenance_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+$startTime = Get-Date
+
+#endregion
+
+#region → FUNÇÕES
+
 # === FUNÇÕES DE UTILIDADE ===
+function Write-Log {
+    param([string]$message, [string]$color = "White")
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "[$timestamp] $message"
+    Add-Content -Path $logFile -Value $logMessage
+    Write-Host $logMessage -ForegroundColor $color
+}
+
+function Suspend-Script {
+    Write-Host "`nPressione ENTER para continuar..." -ForegroundColor Cyan
+    do {
+        $key = [System.Console]::ReadKey($true)
+    } until ($key.Key -eq 'Enter')
+}
+
 function Test-RequiredFunctions {
     param (
         [string[]]$FunctionList
@@ -52,46 +86,15 @@ function Test-RequiredFunctions {
 
 function Show-SuccessMessage {
     Write-Host "`n✅ Tarefa concluída com sucesso!" -ForegroundColor Green
-}
-
-#region → Configurações Iniciais
-$Host.UI.RawUI.WindowTitle = "MANUTENÇÃO WINDOWS - NÃO FECHE ESTA JANELA"
-Clear-Host
-
-# Verifica se é administrador
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "Este script precisa ser executado como Administrador." -ForegroundColor Red
-    Write-Host "Por favor, feche e execute novamente como Administrador." -ForegroundColor Yellow
-    pause
-    exit
-}
-
-$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-$logFile = "$env:TEMP\WinMaintenance_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
-$startTime = Get-Date
-
-function Write-Log {
-    param([string]$message, [string]$color = "White")
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logMessage = "[$timestamp] $message"
-    Add-Content -Path $logFile -Value $logMessage
-    Write-Host $logMessage -ForegroundColor $color
-}
-
-function Suspend-Script {
-    Write-Host "`nPressione ENTER para continuar..." -ForegroundColor Cyan
-    do {
-        $key = [System.Console]::ReadKey($true)
-    } until ($key.Key -eq 'Enter')
+    Suspend-Script
 }
 
 Write-Log "Iniciando script de manutenção..." Cyan
-#endregion
 
-#region → Funções de Manutenção
 
-# 1. Limpeza e Otimização
+
+# === FUNÇÕES DE LIMPEZA E OTIMIZAÇÃO ===
+
 function Clear-TemporaryFiles {
     Write-Log "Limpando arquivos temporários..." Yellow
     Cleanmgr /sagerun:1 | Out-Null
@@ -125,10 +128,73 @@ function Optimize-Volumes {
     Write-Log "Otimização de volumes concluída." Green
 }
 
-# 2. Bloatwarefunction Install
-function Remove-Bloatware {
-# 2. Bloatware
+function Clear-WinSxS {
+    Write-Log "Limpando WinSxS..." Yellow
+    try {
+        Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase | Out-Null
+        Write-Log "WinSxS limpo." Green
+    } catch { Write-Log "Erro ao limpar WinSxS: $_" Red }
 }
+
+function New-ChkDsk {
+    Write-Log "Agendando chkdsk /f /r no próximo reboot..." Yellow
+    try {
+        chkdsk $env:SystemDrive /f /r
+        Write-Log "chkdsk agendado (confirme no prompt, se solicitado)." Green
+    } catch { Write-Log "Erro ao agendar chkdsk: $_" Red }
+}
+
+function Remove-WindowsOld {
+    Write-Log "Removendo Windows.old..." Yellow
+    try {
+        Remove-Item "$env:SystemDrive\Windows.old" -Force -Recurse -ErrorAction SilentlyContinue
+        Write-Log "Windows.old removido." Green
+    } catch { Write-Log "Erro ao remover Windows.old: $_" Red }
+}
+
+function Clear-DeepSystemCleanup {
+    Write-Log "Fazendo limpeza profunda (cache de update, logs, drivers antigos)..." Yellow
+    try {
+        Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:SystemRoot\Logs\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:SystemRoot\System32\LogFiles\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:SystemRoot\INF\*.log" -Force -ErrorAction SilentlyContinue
+        Write-Log "Limpeza profunda realizada." Green
+    } catch { Write-Log "Erro na limpeza profunda: $_" Red }
+}
+
+function Clear-PrintSpooler {
+    Write-Log "Limpando spooler de impressão..." Yellow
+    try {
+        Stop-Service -Name Spooler -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "$env:SystemRoot\System32\spool\PRINTERS\*" -Force -Recurse -ErrorAction SilentlyContinue
+        Start-Service -Name Spooler -ErrorAction SilentlyContinue
+        Write-Log "Spooler de impressão limpo com sucesso." Green
+    } catch {
+        Write-Log "❌ Erro ao limpar spooler: $_" Red
+    }
+    Show-SuccessMessage
+}
+
+function Clear-Prefetch {
+    Write-Log "Limpando Prefetch..." Yellow
+    try {
+        Remove-Item "$env:SystemRoot\Prefetch\*" -Force -Recurse -ErrorAction SilentlyContinue
+        Write-Log "Prefetch limpo." Green
+    } catch { Write-Log "Erro ao limpar Prefetch: $_" Red }
+}
+
+function Clear-ARP {
+    Write-Log "Limpando cache ARP..." Yellow
+    try {
+        arp -d *
+        Write-Log "Cache ARP limpo." Green
+    } 
+    catch { Write-Log "Erro ao limpar cache ARP: $_" Red }
+}
+
+
+# === FUNÇÕES DE REMOÇÃO DE BLOATWARE ===
 
 function Remove-Bloatware {
     # Lista PRIORITÁRIA (foco no que você quer remover)
@@ -204,8 +270,6 @@ function Remove-Bloatware {
     Show-SuccessMessage
 }
 
-
-# Função para desativar tarefas agendadas de bloatware/telemetria
 function Disable-BloatwareScheduledTasks {
     Write-Log "Desativando tarefas agendadas de bloatware e telemetria..." Yellow
     $tasks = @(
@@ -238,12 +302,10 @@ function Disable-BloatwareScheduledTasks {
         catch {
             Write-Log "Erro ao desativar ${task}: $_" Red
         }
-        }
     }
     Write-Log "Desativação de tarefas agendadas concluída." Green
+}
 
-
-# Função para encerrar processos dispensáveis
 function Stop-BloatwareProcesses {
     Write-Log "Encerrando processos dispensáveis em segundo plano..." Yellow
     $processes = @(
@@ -270,7 +332,125 @@ function Stop-BloatwareProcesses {
     Write-Log "Encerramento de processos dispensáveis concluído." Green
 }
 
-# 3. Instalação de Programas
+function Remove-UWPBloatware {
+    Write-Log "Removendo UWP bloatware (exceto essenciais)..." Yellow
+    $whitelist = @(
+    "Microsoft.WindowsCalculator",
+    "Microsoft.WindowsCamera",
+    "Microsoft.WindowsSoundRecorder",
+    "Microsoft.StorePurchaseApp",
+    "Microsoft.DesktopAppInstaller", # Necessário pro winget
+    "Microsoft.WindowsStore"
+)
+
+    Get-AppxPackage -AllUsers | Where-Object { $whitelist -notcontains $_.Name } | ForEach-Object {
+        try {
+            Write-Log "Removendo $($_.Name)..." Cyan
+            Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+        } 
+        catch {
+            Write-Log "Erro ao remover $($_.Name): $_" Red
+        }
+    }
+    Write-Log "Remoção de UWP bloatware concluída." Green
+}
+
+function Remove-ProvisionedBloatware {
+    Write-Log "Removendo bloatware (mantendo whitelist)..." Yellow
+    $whitelist = @(
+        "Microsoft.WindowsCalculator",
+        "Microsoft.WindowsCamera",
+        "Microsoft.WindowsSoundRecorder",
+        "Microsoft.StorePurchaseApp",
+        "Microsoft.DesktopAppInstaller", # Necessário pro winget
+        "Microsoft.WindowsStore"
+    )
+    $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $whitelist -notcontains $_.DisplayName }
+    foreach ($app in $provisioned) {
+        try {
+            Write-Log "Removendo provisionado $($app.DisplayName)..." Cyan
+            Remove-AppxProvisionedPackage -PackageName $app.PackageName -Online -ErrorAction SilentlyContinue
+        } 
+        catch {
+            Write-Log "Erro ao remover provisionado $($app.DisplayName): $_" Red
+        }
+    }
+    $installed = Get-AppxPackage -AllUsers | Where-Object { $whitelist -notcontains $_.Name }
+    foreach ($app in $installed) {
+        try {
+            Write-Log "Removendo instalado $($app.Name)..." Cyan
+            Remove-AppxPackage -Package $app.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+        } 
+        catch {
+            Write-Log "Erro ao remover instalado $($app.Name): $_" Red
+        }
+    }
+    Write-Log "Remoção de bloatware concluída." Green
+}
+
+function Remove-StartAndTaskbarPins {
+    Write-Log "Removendo pins do Menu Iniciar e Barra de Tarefas..." Yellow
+    try {
+        $startLayout = "$env:LOCALAPPDATA\Microsoft\Windows\Shell\LayoutModification.xml"
+        if (Test-Path $startLayout) { Remove-Item $startLayout -Force }
+        Write-Log "Pins removidos (pode ser necessário reiniciar o Explorer)." Green
+    } 
+    catch {
+        Write-Log "Erro ao remover pins: $_" Red
+    }
+}
+
+function Remove-ScheduledTasksAggressive {
+    Write-Log "Removendo tarefas agendadas de bloatware/telemetria (agressivo)..." Yellow
+    $tasks = @(
+        "\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+        "\Microsoft\Windows\Application Experience\ProgramDataUpdater",
+        "\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
+        "\Microsoft\Windows\Customer Experience Improvement Program\KernelCeipTask",
+        "\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
+        "\Microsoft\Windows\Feedback\Siuf\DmClient",
+        "\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
+        "Microsoft\Windows\Windows Error Reporting\QueueReporting",
+        "\Microsoft\Windows\Application Experience\StartupAppTask",
+        "\Microsoft\Windows\Clip\License Validation",
+        "\Microsoft\Windows\HelloFace\FODCleanupTask",
+        "\Microsoft\Windows\Maps\MapsToastTask",
+        "\Microsoft\Windows\Maps\MapsUpdateTask",
+        "\MicrosoftEdgeUpdateTaskCore",
+        "\MicrosoftEdgeUpdateTaskUA"
+    )
+    foreach ($task in $tasks) {
+        try {
+            schtasks.exe /change /TN $task /DISABLE | Out-Null
+            schtasks.exe /delete /TN $task /f | Out-Null
+            Write-Log "Tarefa $task desativada e removida." Green
+        } 
+        catch {
+            Write-Log "Erro ao remover/desativar ${task}: $_" Red
+        }
+    }
+    Write-Log "Remoção agressiva de tarefas agendadas concluída." Green
+}
+
+function Enable-ClassicContextMenu {
+    Write-Log "Restaurando menu de contexto clássico (Win11)..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" /f /ve | Out-Null
+        Write-Log "Menu de contexto clássico habilitado." Green
+    } catch { Write-Log "Erro ao restaurar menu clássico: $_" Red }
+}
+
+function Remove-Copilot {
+    Write-Log "Removendo Copilot (Win11)..." Yellow
+    try {
+        Get-AppxPackage -Name "Microsoft.549981C3F5F10" -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
+        Write-Log "Copilot removido." Green
+    } catch { Write-Log "Erro ao remover Copilot: $_" Red }
+}
+
+
+# === FUNÇÕES DE INSTALAÇÃO DE APLICATIVOS ===
+
 function Install-Applications {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         Write-Log "Winget não está instalado. Pulando instalação de aplicativos." Red
@@ -305,7 +485,6 @@ function Install-Applications {
     Write-Log "Instalação de aplicativos concluída." Green
 }
 
-# Função para instalar/atualizar o PowerShell
 function Update-PowerShell {
     Write-Log "Instalando/Atualizando PowerShell..." Yellow
     try {
@@ -318,7 +497,9 @@ function Update-PowerShell {
     }
 }
 
-# 4. Rede e Impressoras
+
+# === FUNÇÕES DE REDE E IMPRESSORAS ===
+
 function Add-WiFiNetwork {
     Write-Log "Configurando rede Wi-Fi 'VemProMundo - Adm'..." Yellow
     $ssid = "VemProMundo - Adm"
@@ -327,8 +508,8 @@ function Add-WiFiNetwork {
     $xmlProfile = @"
 <?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
-  <name>$ssid</name>
-  <SSIDConfig><SSID><name>$ssid</name></SSID></SSIDConfig>
+  <n>$ssid</n>
+  <SSIDConfig><SSID><n>$ssid</n></SSID></SSIDConfig>
   <connectionType>ESS</connectionType>
   <connectionMode>auto</connectionMode>
   <MSM>
@@ -362,8 +543,6 @@ function Add-WiFiNetwork {
     }
 }
 
-
-# Função para detectar e instalar impressoras de rede automaticamente
 function Install-NetworkPrinters {
     Write-Log "Instalando drivers de impressora..." Yellow
     # Instala os drivers necessários
@@ -435,7 +614,6 @@ function Install-NetworkPrinters {
     }
 }
 
-
 function Invoke-All-NetworkAdvanced {
     Clear-DNS
     Optimize-NetworkPerformance
@@ -472,16 +650,32 @@ function Test-InternetSpeed {
     catch { Write-Log "Erro ao testar velocidade: $_" Red }
 }
 
-function Clear-ARP {
-    Write-Log "Limpando cache ARP..." Yellow
+function Optimize-NetworkPerformance {
+    Write-Log "Otimizando rede (TCP tweaks, DNS customizado)..." Yellow
     try {
-        arp -d *
-        Write-Log "Cache ARP limpo." Green
-    } 
-    catch { Write-Log "Erro ao limpar cache ARP: $_" Red }
+        netsh int tcp set global autotuninglevel=normal | Out-Null
+        netsh int tcp set global chimney=enabled | Out-Null
+        netsh int tcp set global rss=enabled | Out-Null
+        netsh int tcp set global netdma=enabled | Out-Null
+        netsh int tcp set global dca=enabled | Out-Null
+        netsh int tcp set global ecncapability=disabled | Out-Null
+        netsh int tcp set global timestamps=disabled | Out-Null
+        Write-Log "Parâmetros de rede ajustados com sucesso." Green
+    } catch {
+        Write-Log "Falha na otimização de rede: $_" Red
+    }
 }
 
-# 5. Diagnóstico e Informações
+function Disable-IPv6 {
+    Write-Log "Desabilitando IPv6..." Yellow
+    try {
+        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Name "DisabledComponents" -PropertyType DWord -Value 0xFF -Force | Out-Null
+        Write-Log "IPv6 desativado." Green
+    } catch { Write-Log "Erro ao desativar IPv6: $_" Red }
+}
+
+
+# === FUNÇÕES DE DIAGNÓSTICO E INFORMAÇÕES ===
 
 function Show-SystemInfo {
     Write-Log "Exibindo informações do sistema..." Cyan
@@ -499,31 +693,49 @@ function Show-NetworkInfo {
     Get-NetIPConfiguration | Select-Object InterfaceAlias, IPv4Address, IPv4DefaultGateway, DNSServer | Format-Table -AutoSize | Out-Host
 }
 
-# Remove UWP Bloatware mantendo apenas apps essenciais
-function Remove-UWPBloatware {
-    Write-Log "Removendo UWP bloatware (exceto essenciais)..." Yellow
-    $whitelist = @(
-    "Microsoft.WindowsCalculator",
-    "Microsoft.WindowsCamera",
-    "Microsoft.WindowsSoundRecorder",
-    "Microsoft.StorePurchaseApp",
-    "Microsoft.DesktopAppInstaller", # Necessário pro winget
-    "Microsoft.WindowsStore"
-)
-
-    Get-AppxPackage -AllUsers | Where-Object { $whitelist -notcontains $_.Name } | ForEach-Object {
-        try {
-            Write-Log "Removendo $($_.Name)..." Cyan
-            Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-        } 
-        catch {
-            Write-Log "Erro ao remover $($_.Name): $_" Red
-        }
-    }
-    Write-Log "Remoção de UWP bloatware concluída." Green
+function Invoke-All-DiagnosticsAdvanced {
+    Show-SystemInfo
+    Show-DiskUsage
+    Show-NetworkInfo
+    Invoke-SFC-Scan
+    Invoke-DISM-Scan
+    Test-SMART-Drives
+    Test-Memory
+    Show-SuccessMessage
 }
 
-# Tweaks de privacidade via registro
+function Invoke-SFC-Scan {
+    Write-Log "Executando verificação SFC..." Yellow
+    sfc /scannow | Out-Host
+    Write-Log "Verificação SFC concluída." Green
+}
+
+function Invoke-DISM-Scan {
+    Write-Log "Executando verificação DISM..." Yellow
+    DISM /Online /Cleanup-Image /RestoreHealth | Out-Host
+    Write-Log "Verificação DISM concluída." Green
+}
+
+function Test-SMART-Drives {
+    Write-Log "Verificando saúde dos discos (SMART)..." Yellow
+    Get-WmiObject -Namespace root\wmi -Class MSStorageDriver_FailurePredictStatus | ForEach-Object {
+        if ($_.PredictFailure) {
+            Write-Log "Disco com problemas: $($_.InstanceName)" Red
+        } else {
+            Write-Log "Disco OK: $($_.InstanceName)" Green
+        }
+    }
+}
+
+function Test-Memory {
+    Write-Log "Agendando teste de memória na próxima inicialização..." Yellow
+    mdsched.exe
+    Write-Log "Teste de memória agendado." Green
+}
+
+
+# === FUNÇÕES DE TWEAKS DE PRIVACIDADE E REGISTRO ===
+
 function Grant-PrivacyTweaks {
     Write-Log "Aplicando tweaks de privacidade..." Yellow
     try {
@@ -657,53 +869,62 @@ reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Dsh" /v IsPrelaunchE
         }
     }
 
-# Remover pins do Menu Iniciar e Barra de Tarefas
-function Remove-StartAndTaskbarPins {
-    Write-Log "Removendo pins do Menu Iniciar e Barra de Tarefas..." Yellow
+function Enable-PrivacyHardening {
+    Write-Log "Aplicando privacidade agressiva..." Yellow
     try {
-        $startLayout = "$env:LOCALAPPDATA\Microsoft\Windows\Shell\LayoutModification.xml"
-        if (Test-Path $startLayout) { Remove-Item $startLayout -Force }
-        Write-Log "Pins removidos (pode ser necessário reiniciar o Explorer)." Green
-    } 
-    catch {
-        Write-Log "Erro ao remover pins: $_" Red
-    }
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /t REG_DWORD /d 1 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /t REG_DWORD /d 1 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /t REG_DWORD /d 0 /f | Out-Null
+        Write-Log "Privacidade agressiva aplicada." Green
+    } catch { Write-Log "Erro ao aplicar privacidade agressiva: $_" Red }
 }
 
-# Remover tarefas agendadas agressivamente usando schtasks.exe
-function Remove-ScheduledTasksAggressive {
-    Write-Log "Removendo tarefas agendadas de bloatware/telemetria (agressivo)..." Yellow
-    $tasks = @(
-        "\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
-        "\Microsoft\Windows\Application Experience\ProgramDataUpdater",
-        "\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
-        "\Microsoft\Windows\Customer Experience Improvement Program\KernelCeipTask",
-        "\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
-        "\Microsoft\Windows\Feedback\Siuf\DmClient",
-        "\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
-        "Microsoft\Windows\Windows Error Reporting\QueueReporting",
-        "\Microsoft\Windows\Application Experience\StartupAppTask",
-        "\Microsoft\Windows\Clip\License Validation",
-        "\Microsoft\Windows\HelloFace\FODCleanupTask",
-        "\Microsoft\Windows\Maps\MapsToastTask",
-        "\Microsoft\Windows\Maps\MapsUpdateTask",
-        "\MicrosoftEdgeUpdateTaskCore",
-        "\MicrosoftEdgeUpdateTaskUA"
-    )
-    foreach ($task in $tasks) {
-        try {
-            schtasks.exe /change /TN $task /DISABLE | Out-Null
-            schtasks.exe /delete /TN $task /f | Out-Null
-            Write-Log "Tarefa $task desativada e removida." Green
-        } 
-        catch {
-            Write-Log "Erro ao remover/desativar ${task}: $_" Red
-        }
-    }
-    Write-Log "Remoção agressiva de tarefas agendadas concluída." Green
+function Disable-Cortana-AndSearch {
+    Write-Log "Desativando Cortana, Windows Search, Telemetria e Relatórios de Erro..." Yellow
+    try {
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCloudSearch /t REG_DWORD /d 0 /f | Out-Null
+        Stop-Service WSearch -Force -ErrorAction SilentlyContinue
+        Set-Service WSearch -StartupType Disabled -ErrorAction SilentlyContinue
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\ErrorReporting" /v Disabled /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Cortana, Search, Telemetria e Relatório de Erro desativados." Green
+    } catch { Write-Log "Erro ao desativar Cortana/Search: $_" Red }
 }
 
-# Função para otimizar o tema do Windows para desempenho
+function Disable-UAC {
+    Write-Log "Desabilitando UAC..." Yellow
+    try {
+        reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v ConsentPromptBehaviorAdmin /t REG_DWORD /d 2 /f
+        reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v PromptOnSecureDesktop /t REG_DWORD /d 1 /f
+        Write-Log "UAC desativado." Green
+    } catch { Write-Log "Erro ao desativar UAC: $_" Red }
+}
+
+function Disable-ActionCenter-Notifications {
+    Write-Log "Desabilitando Action Center e notificações..." Yellow
+    try {
+        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "Action Center e notificações desativados." Green
+    } catch { Write-Log "Erro ao desativar Action Center: $_" Red }
+}
+
+function Set-VisualPerformance {
+    Write-Log "Ajustando visual para melhor performance..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f | Out-Null
+        reg.exe add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f | Out-Null
+        Write-Log "Visual ajustado para performance." Green
+    } catch { Write-Log "Erro ao ajustar visual: $_" Red }
+}
+
+
+# === FUNÇÕES DE OTIMIZAÇÃO E DESEMPENHO ===
+
 function Set-PerformanceTheme {
     Write-Log "Aplicando configurações de desempenho no tema do Windows..." Yellow
     try {
@@ -727,7 +948,6 @@ function Set-PerformanceTheme {
     }
 }
 
-# Função para otimizar o Windows Explorer para desempenho
 function Optimize-ExplorerPerformance {
     Write-Log "Otimizando Windows Explorer para desempenho..." Yellow
     try {
@@ -748,7 +968,6 @@ function Optimize-ExplorerPerformance {
     }
 }
 
-# Função para criar ponto de restauração
 function New-SystemRestorePoint {
     Write-Log "Criando ponto de restauração do sistema..." Yellow
     try {
@@ -760,7 +979,6 @@ function New-SystemRestorePoint {
     }
 }
 
-# Função para hardening de segurança
 function Enable-WindowsHardening {
     Write-Log "Aplicando hardening de segurança..." Yellow
     try {
@@ -785,41 +1003,6 @@ function Enable-WindowsHardening {
     }
 }
 
-# Função para remover bloatware provisionado e instalado, mantendo whitelist
-function Remove-ProvisionedBloatware {
-    Write-Log "Removendo bloatware (mantendo whitelist)..." Yellow
-    $whitelist = @(
-        "Microsoft.WindowsCalculator",
-        "Microsoft.WindowsCamera",
-        "Microsoft.WindowsSoundRecorder",
-        "Microsoft.StorePurchaseApp",
-        "Microsoft.DesktopAppInstaller", # Necessário pro winget
-        "Microsoft.WindowsStore"
-    )
-    $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $whitelist -notcontains $_.DisplayName }
-    foreach ($app in $provisioned) {
-        try {
-            Write-Log "Removendo provisionado $($app.DisplayName)..." Cyan
-            Remove-AppxProvisionedPackage -PackageName $app.PackageName -Online -ErrorAction SilentlyContinue
-        } 
-        catch {
-            Write-Log "Erro ao remover provisionado $($app.DisplayName): $_" Red
-        }
-    }
-    $installed = Get-AppxPackage -AllUsers | Where-Object { $whitelist -notcontains $_.Name }
-    foreach ($app in $installed) {
-        try {
-            Write-Log "Removendo instalado $($app.Name)..." Cyan
-            Remove-AppxPackage -Package $app.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-        } 
-        catch {
-            Write-Log "Erro ao remover instalado $($app.Name): $_" Red
-        }
-    }
-    Write-Log "Remoção de bloatware concluída." Green
-}
-
-# Função para desativar serviços desnecessários
 function Disable-UnnecessaryServices {
     Write-Log "Desativando serviços desnecessários..." Yellow
     $services = @(
@@ -842,28 +1025,28 @@ function Disable-UnnecessaryServices {
         'OneSyncSvc',           # Sincronização
         'PimIndexMaintenanceSvc', # Contatos/Calendário
         'SEMgrSvc',             # Pagamentos NFC
-        'WbioSrvc'              # Biometria
-        "diagnosticshub.standardcollector.service" # Microsoft (R) Diagnostics Hub Standard Collector Service
-    "DiagTrack"                                # Diagnostics Tracking Service
-    "dmwappushservice"                         # WAP Push Message Routing Service (see known issues)
-    "lfsvc"                                    # Geolocation Service
-    "MapsBroker"                               # Downloaded Maps Manager
-    "NetTcpPortSharing"                        # Net.Tcp Port Sharing Service
-    "RemoteAccess"                             # Routing and Remote Access
-    "RemoteRegistry"                           # Remote Registry
-    "SharedAccess"                             # Internet Connection Sharing (ICS)
-    "TrkWks"                                   # Distributed Link Tracking Client
-    "WbioSrvc"                                 # Windows Biometric Service (required for Fingerprint reader / facial detection)
-    #"WlanSvc"                                 # WLAN AutoConfig (Disabling this can cause issues with wifi connectivity)
-    "WMPNetworkSvc"                            # Windows Media Player Network Sharing Service
-    #"wscsvc"                                  # Windows Security Center Service
-    #"WSearch"                                 # Windows Search
-    "XblAuthManager"                           # Xbox Live Auth Manager
-    "XblGameSave"                              # Xbox Live Game Save Service
-    "XboxNetApiSvc"                            # Xbox Live Networking Service
-    "ndu"                                      # Windows Network Data Usage Monitor
-    # Services which cannot be disabled
-    #"WdNisSvc"
+        'WbioSrvc',             # Biometria
+        "diagnosticshub.standardcollector.service", # Microsoft (R) Diagnostics Hub Standard Collector Service
+        "DiagTrack",                                # Diagnostics Tracking Service
+        "dmwappushservice",                         # WAP Push Message Routing Service (see known issues)
+        "lfsvc",                                    # Geolocation Service
+        "MapsBroker",                               # Downloaded Maps Manager
+        "NetTcpPortSharing",                        # Net.Tcp Port Sharing Service
+        "RemoteAccess",                             # Routing and Remote Access
+        "RemoteRegistry",                           # Remote Registry
+        "SharedAccess",                             # Internet Connection Sharing (ICS)
+        "TrkWks",                                   # Distributed Link Tracking Client
+        "WbioSrvc",                                 # Windows Biometric Service (required for Fingerprint reader / facial detection)
+        #"WlanSvc",                                 # WLAN AutoConfig (Disabling this can cause issues with wifi connectivity)
+        "WMPNetworkSvc",                            # Windows Media Player Network Sharing Service
+        #"wscsvc",                                  # Windows Security Center Service
+        #"WSearch",                                 # Windows Search
+        "XblAuthManager",                           # Xbox Live Auth Manager
+        "XblGameSave",                              # Xbox Live Game Save Service
+        "XboxNetApiSvc",                            # Xbox Live Networking Service
+        "ndu"                                       # Windows Network Data Usage Monitor
+        # Services which cannot be disabled
+        #"WdNisSvc"
     )
     foreach ($svc in $services) {
         try {
@@ -878,7 +1061,6 @@ function Disable-UnnecessaryServices {
     Write-Log "Desativação de serviços concluída." Green
 }
 
-# Função para atualizar Windows e drivers
 function Update-WindowsAndDrivers {
     Write-Log "Verificando e instalando atualizações do Windows..." Yellow
     try {
@@ -902,7 +1084,9 @@ function Update-WindowsAndDrivers {
     }
 }
 
-# Funções de ajustes do Painel de Controle/Configurações
+
+# === FUNÇÕES DE CONFIGURAÇÃO DO PAINEL DE CONTROLE ===
+
 function Enable-PowerOptions {
     param (
         [hashtable]$config
@@ -1030,8 +1214,6 @@ function Enable-Sudo {
     }
 }
 
-
-
 function Enable-TaskbarEndTask {
     $build = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").CurrentBuild
     if ([int]$build -lt 23430) {
@@ -1047,7 +1229,6 @@ function Enable-TaskbarEndTask {
     }
 }
 
-
 function Enable-TaskbarSeconds {
     Write-Log "Ativando segundos no relógio da barra de tarefas..." Yellow
     try {
@@ -1058,7 +1239,6 @@ function Enable-TaskbarSeconds {
     }
 }
 
-# Função para renomear o notebook
 function Rename-Notebook {
     Write-Log "Deseja renomear este notebook? (S/N)" Yellow
     $timeout = 15
@@ -1088,643 +1268,7 @@ function Rename-Notebook {
 }
 
 
-function Disable-ActionCenter-Notifications {
-    Write-Log "Desabilitando Action Center e notificações..." Yellow
-    try {
-        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "Action Center e notificações desativados." Green
-    } catch { Write-Log "Erro ao desativar Action Center: $_" Red }
-}
-
-function Clear-WinSxS {
-    Write-Log "Limpando WinSxS..." Yellow
-    try {
-        Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase | Out-Null
-        Write-Log "WinSxS limpo." Green
-    } catch { Write-Log "Erro ao limpar WinSxS: $_" Red }
-}
-
-function New-ChkDsk {
-    Write-Log "Agendando chkdsk /f /r no próximo reboot..." Yellow
-    try {
-        chkdsk $env:SystemDrive /f /r
-        Write-Log "chkdsk agendado (confirme no prompt, se solicitado)." Green
-    } catch { Write-Log "Erro ao agendar chkdsk: $_" Red }
-}
-
-function Remove-WindowsOld {
-    Write-Log "Removendo Windows.old..." Yellow
-    try {
-        Remove-Item "$env:SystemDrive\Windows.old" -Force -Recurse -ErrorAction SilentlyContinue
-        Write-Log "Windows.old removido." Green
-    } catch { Write-Log "Erro ao remover Windows.old: $_" Red }
-}
-
-function Clear-DeepSystemCleanup {
-    Write-Log "Fazendo limpeza profunda (cache de update, logs, drivers antigos)..." Yellow
-    try {
-        Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item "$env:SystemRoot\Logs\*" -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item "$env:SystemRoot\System32\LogFiles\*" -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item "$env:SystemRoot\INF\*.log" -Force -ErrorAction SilentlyContinue
-        Write-Log "Limpeza profunda realizada." Green
-    } catch { Write-Log "Erro na limpeza profunda: $_" Red }
-}
-
-function Clear-PrintSpooler {
-    Write-Log "Limpando spooler de impressão..." Yellow
-    try {
-        Stop-Service -Name Spooler -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path "$env:SystemRoot\System32\spool\PRINTERS\*" -Force -Recurse -ErrorAction SilentlyContinue
-        Start-Service -Name Spooler -ErrorAction SilentlyContinue
-        Write-Log "Spooler de impressão limpo com sucesso." Green
-    } catch {
-        Write-Log "❌ Erro ao limpar spooler: $_" Red
-    }
-    Show-SuccessMessage
-}
-
-function Clear-Prefetch {
-    Write-Log "Limpando Prefetch..." Yellow
-    try {
-        Remove-Item "$env:SystemRoot\Prefetch\*" -Force -Recurse -ErrorAction SilentlyContinue
-        Write-Log "Prefetch limpo." Green
-    } catch { Write-Log "Erro ao limpar Prefetch: $_" Red }
-}
-
-function Enable-ClassicContextMenu {
-    Write-Log "Restaurando menu de contexto clássico (Win11)..." Yellow
-    try {
-        reg.exe add "HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" /f /ve | Out-Null
-        Write-Log "Menu de contexto clássico habilitado." Green
-    } catch { Write-Log "Erro ao restaurar menu clássico: $_" Red }
-}
-
-function Remove-Copilot {
-    Write-Log "Removendo Copilot (Win11)..." Yellow
-    try {
-        Get-AppxPackage -Name "Microsoft.549981C3F5F10" -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
-        Write-Log "Copilot removido." Green
-    } catch { Write-Log "Erro ao remover Copilot: $_" Red }
-}
-
-function Remove-OneDrive-AndRestoreFolders {
-    Write-Log "Removendo OneDrive e restaurando pastas padrão..." Yellow
-    try {
-        taskkill.exe /F /IM "OneDrive.exe"
-        taskkill.exe /F /IM "explorer.exe"
-    } 
-    catch {
-        Write-Log "Erro ao remover OneDrive: $_" Red
-    }
-Write-Output "Remove OneDrive"
-if (Test-Path "$env:systemroot\System32\OneDriveSetup.exe") {
-    & "$env:systemroot\System32\OneDriveSetup.exe" /uninstall
-}
-if (Test-Path "$env:systemroot\SysWOW64\OneDriveSetup.exe") {
-    & "$env:systemroot\SysWOW64\OneDriveSetup.exe" /uninstall
-}
-
-Write-Output "Removing OneDrive leftovers"
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:localappdata\Microsoft\OneDrive"
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:programdata\Microsoft OneDrive"
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:systemdrive\OneDriveTemp"
-# check if directory is empty before removing:
-If ((Get-ChildItem "$env:userprofile\OneDrive" -Recurse | Measure-Object).Count -eq 0) {
-    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:userprofile\OneDrive"
-}
-
-Write-Output "Disable OneDrive via Group Policies"
-New-FolderForced -Path "HKLM:\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\OneDrive"
-Set-ItemProperty -Path "HKLM:\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\OneDrive" "DisableFileSyncNGSC" 1
-
-Write-Output "Remove Onedrive from explorer sidebar"
-New-PSDrive -PSProvider "Registry" -Root "HKEY_CLASSES_ROOT" -Name "HKCR"
-mkdir -Force "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}"
-Set-ItemProperty -Path "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" "System.IsPinnedToNameSpaceTree" 0
-mkdir -Force "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}"
-Set-ItemProperty -Path "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" "System.IsPinnedToNameSpaceTree" 0
-Remove-PSDrive "HKCR"
-
-# Thank you Matthew Israelsson
-Write-Output "Removing run hook for new users"
-reg load "hku\Default" "C:\Users\Default\NTUSER.DAT"
-reg delete "HKEY_USERS\Default\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "OneDriveSetup" /f
-reg unload "hku\Default"
-
-Write-Output "Removing startmenu entry"
-Remove-Item -Force -ErrorAction SilentlyContinue "$env:userprofile\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk"
-
-Write-Output "Removing scheduled task"
-Get-ScheduledTask -TaskPath '\' -TaskName 'OneDrive*' -ea SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
-
-Write-Output "Restarting explorer"
-Start-Process "explorer.exe"
-
-Write-Output "Waiting for explorer to complete loading"
-Start-Sleep 10
-}
-
-function Backup-Registry {
-    Write-Log "Fazendo backup do registro (SOFTWARE, SYSTEM, HKCU)..." Yellow
-    try {
-        $bkpPath = "$env:USERPROFILE\Desktop\reg_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-        New-Item -Path $bkpPath -ItemType Directory | Out-Null
-        reg.exe save HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" /y | Out-Null
-        reg.exe save HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" /y | Out-Null
-        reg.exe save HKCU "$bkpPath\HKCU.reg" /y | Out-Null
-        Write-Log "Backup do registro salvo em: $bkpPath" Green
-    } catch { Write-Log "Erro ao fazer backup do registro: $_" Red }
-}
-
-function Restore-Registry {
-    Write-Host "Digite o caminho da pasta onde está o backup do registro:" -ForegroundColor Cyan
-    $bkpPath = Read-Host "Exemplo: C:\Users\SeuUsuario\Desktop\reg_backup_20250704_140000"
-    try {
-        reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
-        reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
-        reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
-        Write-Log "Registro restaurado a partir de $bkpPath." Green
-    } catch { Write-Log "Erro ao restaurar o registro: $_" Red }
-}
-
-function Invoke-ExternalDebloaters {
-    $scripts = @("Win11Debloat.ps1", "WinUtil.ps1", "OOSU10.exe", "OpenShellSetup.exe", "SpeedyFox.exe", "_Win10-BlackViper.bat")
-    foreach ($scr in $scripts) {
-        $path = Join-Path $PSScriptRoot $scr
-        if (Test-Path $path) {
-            Write-Log "Executando $scr..." Yellow
-            if ($scr -like "*.ps1") {
-                powershell.exe -ExecutionPolicy Bypass -File $path
-            } elseif ($scr -like "*.exe") {
-                Start-Process $path -Wait
-            } elseif ($scr -like "*.bat") {
-                Start-Process "cmd.exe" -ArgumentList "/c `"$path`"" -Wait
-            }
-            Write-Log "$scr executado." Green
-        } else {
-            Write-Log "$scr não encontrado, pulando." Cyan
-        }
-    }
-}
-
-function Grant-ExtraTweaks {
-    Write-Log "Aplicando tweaks extras..." Yellow
-    try {
-        # Bloqueio de anúncios
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338393Enabled /t REG_DWORD /d 0 /f | Out-Null
-        # F8 no boot
-        bcdedit /set {current} bootmenupolicy Legacy | Out-Null
-        # Desativar sons do sistema
-        reg.exe add "HKCU\AppEvents\Schemes" /ve /d ".None" /f | Out-Null
-        # Desativar web search
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" /v BingSearchEnabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" /v CortanaConsent /t REG_DWORD /d 0 /f | Out-Null
-        # Remover "Cast to Device"
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked" /V "{7AD84985-87B4-4a16-BE58-8B72A5B390F7}" /T REG_SZ /D "Play to Menu" /F | Out-Null
-        Write-Log "Tweaks extras aplicados." Green
-    Write-Output "Apply MarkC's mouse acceleration fix"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseSensitivity" "10"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseSpeed" "0"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseThreshold1" "0"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseThreshold2" "0"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "SmoothMouseXCurve" ([byte[]](0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0xCC, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x80, 0x99, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x66, 0x26, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x33, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00))
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "SmoothMouseYCurve" ([byte[]](0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00))
-
-Write-Output "Disable mouse pointer hiding"
-Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" "UserPreferencesMask" ([byte[]](0x9e,
-0x1e, 0x06, 0x80, 0x12, 0x00, 0x00, 0x00))
-
-Write-Output "Disable Game DVR and Game Bar"
-New-FolderForced -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR"
-Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowgameDVR" 0
-
-Write-Output "Disable easy access keyboard stuff"
-Set-ItemProperty -Path "HKCU:\Control Panel\Accessibility\StickyKeys" "Flags" "506"
-Set-ItemProperty -Path "HKCU:\Control Panel\Accessibility\Keyboard Response" "Flags" "122"
-Set-ItemProperty -Path "HKCU:\Control Panel\Accessibility\ToggleKeys" "Flags" "58"
-
-Write-Output "Disable Edge desktop shortcut on new profiles"
-New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer" -Name DisableEdgeDesktopShortcutCreation -PropertyType DWORD -Value 1
-
-Write-Output "Restoring old volume slider"
-New-FolderForced -Path "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\MTCUVC"
-Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\MTCUVC" "EnableMtcUvc" 0
-
-Write-Output "Setting folder view options"
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Hidden" 1
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideFileExt" 0
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideDrivesWithNoMedia" 0
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "ShowSyncProviderNotifications" 0
-
-Write-Output "Disable Aero-Shake Minimize feature"
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "DisallowShaking" 1
-
-Write-Output "Setting default explorer view to This PC"
-Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "LaunchTo" 1
-
-# This removes the "Trending Searches" results shown when you click on the windows search bar
-Write-Output "Disabling Trending Searches"
-New-FolderForced -Path "HKLM:\Software\Policies\Microsoft\Windows\Explorer"
-Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\Explorer" "DisableSearchBoxSuggestions" 1
-    } catch { Write-Log "Erro ao aplicar tweaks extras: $_" Red }
-}
-
-function Disable-Cortana-AndSearch {
-    Write-Log "Desativando Cortana, Windows Search, Telemetria e Relatórios de Erro..." Yellow
-    try {
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCloudSearch /t REG_DWORD /d 0 /f | Out-Null
-        Stop-Service WSearch -Force -ErrorAction SilentlyContinue
-        Set-Service WSearch -StartupType Disabled -ErrorAction SilentlyContinue
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\ErrorReporting" /v Disabled /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "Cortana, Search, Telemetria e Relatório de Erro desativados." Green
-    } catch { Write-Log "Erro ao desativar Cortana/Search: $_" Red }
-}
-
-function Disable-UAC {
-    Write-Log "Desabilitando UAC..." Yellow
-    try {
-        reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v ConsentPromptBehaviorAdmin /t REG_DWORD /d 2 /f
-        reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v PromptOnSecureDesktop /t REG_DWORD /d 1 /f
-        Write-Log "UAC desativado." Green
-    } catch { Write-Log "Erro ao desativar UAC: $_" Red }
-}
-
-function Enable-PrivacyHardening {
-    Write-Log "Aplicando privacidade agressiva..." Yellow
-    try {
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /t REG_DWORD /d 1 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /t REG_DWORD /d 1 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /t REG_DWORD /d 0 /f | Out-Null
-        Write-Log "Privacidade agressiva aplicada." Green
-    } catch { Write-Log "Erro ao aplicar privacidade agressiva: $_" Red }
-}
-
-function Optimize-NetworkPerformance {
-    Write-Log "Otimizando rede (TCP tweaks, DNS customizado)..." Yellow
-    try {
-        netsh int tcp set global autotuninglevel=normal | Out-Null
-        netsh int tcp set global chimney=enabled | Out-Null
-        netsh int tcp set global rss=enabled | Out-Null
-        netsh int tcp set global netdma=enabled | Out-Null
-        netsh int tcp set global dca=enabled | Out-Null
-        netsh int tcp set global ecncapability=disabled | Out-Null
-        netsh int tcp set global timestamps=disabled | Out-Null
-        Write-Log "Parâmetros de rede ajustados com sucesso." Green
-    } catch {
-        Write-Log "Falha na otimização de rede: $_" Red
-    }
-}
-
-function Disable-IPv6 {
-    Write-Log "Desabilitando IPv6..." Yellow
-    try {
-        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Name "DisabledComponents" -PropertyType DWord -Value 0xFF -Force | Out-Null
-        Write-Log "IPv6 desativado." Green
-    } catch { Write-Log "Erro ao desativar IPv6: $_" Red }
-}
-
-function Set-VisualPerformance {
-    Write-Log "Ajustando visual para melhor performance..." Yellow
-    try {
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f | Out-Null
-        reg.exe add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f | Out-Null
-        Write-Log "Visual ajustado para performance." Green
-    } catch { Write-Log "Erro ao ajustar visual: $_" Red }
-}
-# ==== Diagnóstico Avançado ====
-function Invoke-All-DiagnosticsAdvanced {
-    Show-SystemInfo
-    Show-DiskUsage
-    Show-NetworkInfo
-    Invoke-SFC-Scan
-    Invoke-DISM-Scan
-    Test-SMART-Drives
-    Test-Memory
-    Show-SuccessMessage
-}
-
-# ==== Função Colégio ====
-function Invoke-Colégio {
-    Clear-Host
-    $start = Get-Date
-    Write-Log "`n🚀 Iniciando sequência personalizada para o Colégio..." Cyan
-
-    try {
-        # ===== AJUSTES E TWEAKS ====
-        Write-Log "🔧 Aplicando ajustes e tweaks de sistema..." Yellow
-        Grant-ControlPanelTweaks
-        Grant-ExtraTweaks
-        Grant-PrivacyTweaks
-        Enable-PrivacyHardening
-        Set-VisualPerformance
-        Disable-ActionCenter-Notifications
-        Disable-BloatwareScheduledTasks
-        Disable-Cortana-AndSearch
-        Disable-IPv6
-        Grant-HardenOfficeMacros
-
-        # ===== LIMPEZA ====
-        Write-Log "🧹 Realizando limpeza profunda do sistema..." Yellow
-        Clear-Prefetch
-        Clear-PrintSpooler
-        Clear-TemporaryFiles
-        Clear-WinSxS
-        Clear-WUCache
-        Remove-WindowsOld
-        Clear-DeepSystemCleanup
-
-        # ===== REMOÇÕES ====
-        Write-Log "❌ Removendo bloatware e recursos desnecessários..." Yellow
-        Remove-Bloatware
-        Remove-Copilot
-        Remove-OneDrive-AndRestoreFolders
-        Stop-BloatwareProcesses
-
-        # ===== OTIMIZAÇÃO ====
-        Write-Log "🚀 Otimizando rede e desempenho..." Yellow
-        Clear-DNS
-        Optimize-NetworkPerformance
-
-        # ===== INSTALAÇÕES ====
-        Write-Log "⬇️ Instalando aplicativos essenciais..." Yellow
-        Install-Applications
-        Update-PowerShell
-
-        # ===== EXTERNOS ====
-        Write-Log "⚙️ Executando scripts externos, se houver..." Yellow
-        Invoke-ExternalDebloaters
-
-        $end = Get-Date
-        $duration = $end - $start
-        Write-Log "✅ Sequência para o Colégio concluída com sucesso em $($duration.ToString("hh\:mm\:ss"))" Green
-        Show-SuccessMessage
-    }
-    catch {
-        Write-Log "❌ Erro crítico durante a sequência do Colégio: $_" Red
-    }
-}
-
-function Invoke-SFC-Scan {
-    Write-Log "Executando verificação SFC..." Yellow
-    sfc /scannow | Out-Host
-    Write-Log "Verificação SFC concluída." Green
-}
-function Invoke-DISM-Scan {
-    Write-Log "Executando verificação DISM..." Yellow
-    DISM /Online /Cleanup-Image /RestoreHealth | Out-Host
-    Write-Log "Verificação DISM concluída." Green
-}
-function Test-SMART-Drives {
-    Write-Log "Verificando saúde dos discos (SMART)..." Yellow
-    Get-WmiObject -Namespace root\wmi -Class MSStorageDriver_FailurePredictStatus | ForEach-Object {
-        if ($_.PredictFailure) {
-            Write-Log "Disco com problemas: $($_.InstanceName)" Red
-        } else {
-            Write-Log "Disco OK: $($_.InstanceName)" Green
-        }
-    }
-}
-function Test-Memory {
-    Write-Log "Agendando teste de memória na próxima inicialização..." Yellow
-    mdsched.exe
-    Write-Log "Teste de memória agendado." Green
-}
-
-function Invoke-WindowsActivator {
-    Clear-Host
-    Write-Host "==== ATIVAÇÃO DO WINDOWS ====" -ForegroundColor Cyan
-    Write-Host "Executando script de ativação oficial (get.activated.win)..." -ForegroundColor Yellow
-    try {
-        irm https://get.activated.win | iex
-        Write-Log "Script de ativação executado com sucesso." Green
-    } catch {
-        Write-Log "Erro ao executar o script de ativação: $_" Red
-    }
-    
-}
-
-function Invoke-ChrisTitusToolbox {
-    Clear-Host
-    Write-Host "==== CHRIS TITUS TOOLBOX ====" -ForegroundColor Cyan
-    Write-Host "Executando toolbox oficial do site christitus.com..." -ForegroundColor Yellow
-    try {
-        irm christitus.com/win | iex
-        Write-Log "Chris Titus Toolbox executado com sucesso." Green
-    } catch {
-        Write-Log "Erro ao executar o script do Chris Titus: $_" Red
-    }
-}
-
-function Update-ScriptFromCloud {
-    Clear-Host
-    Write-Host "=======================" -ForegroundColor Cyan
-    Write-Host "ATUALIZANDO SCRIPT..." -ForegroundColor Cyan
-    Write-Host "=======================" -ForegroundColor Cyan
-
-    try {
-        Write-Log "Verificando conexão com servidor..." Yellow
-        if (-not (Test-Connection -ComputerName "script.colegiomundodosaber.com.br" -Count 1 -Quiet)) {
-            Write-Log "❌ Sem conexão. Atualização abortada." Red
-            return
-        }
-
-        Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." Yellow
-        irm script.colegiomundodosaber.com.br | iex
-        Write-Log "✅ Script atualizado com sucesso!" Green
-        Show-SuccessMessage
-    } catch {
-        Write-Log "❌ Falha ao atualizar script: $_" Red
-        Show-SuccessMessage
-    }
-}
-
-# Autologin seguro
-function Show-AutoLoginMenu {
-    Write-Host "=== Configurar Autologin ===" -ForegroundColor Cyan
-    $username = Read-Host "Digite o usuário para autologin (ex: Administrator ou SeuUsuario)"
-    $password = Read-Host "Digite a senha para autologin (não aparecerá na tela)" -AsSecureString
-    $passwordPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
-    $domain = $env:USERDOMAIN
-    reg export "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "$env:TEMP\backup_winlogon_autologin.reg" /y | Out-Null
-    try {
-        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "AutoAdminLogon" -Value "1"
-        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultUserName" -Value $username
-        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultDomainName" -Value $domain
-        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultPassword" -Value $passwordPlain
-        Write-Log "Autologin configurado para o usuário $username." Green
-    } catch { Write-Log "Erro ao configurar autologin: $_" Red }
-    Show-SuccessMessage
-}
-#endregion
-
-function Restore-DefaultUAC {
-    Write-Log "Restaurando UAC para padrão..." Yellow
-    try {
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "UAC restaurado." Green
-    } catch { Write-Log "Erro ao restaurar UAC: $_" Red }
-}
-
-function Restore-DefaultIPv6 {
-    Write-Log "Reabilitando IPv6..." Yellow
-    try {
-        Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Name "DisabledComponents" -ErrorAction SilentlyContinue
-        Write-Log "IPv6 reabilitado." Green
-    } catch { Write-Log "Erro ao reabilitar IPv6: $_" Red }
-}
-
-function Restore-Registry-FromBackup {
-    Write-Host "Digite o caminho do backup do registro para restaurar (pasta):" -ForegroundColor Cyan
-    $bkpPath = Read-Host
-    try {
-        reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
-        reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
-        reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
-        Write-Log "Registro restaurado a partir de $bkpPath." Green
-    } catch { Write-Log "Erro ao restaurar o registro: $_" Red }
-}
-
-function Undo-PrivacyHardening {
-    Write-Log "Desfazendo ajustes de privacidade agressivos..." Yellow
-    try {
-        reg.exe delete "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /f | Out-Null
-        reg.exe delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /f | Out-Null
-        reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /f | Out-Null
-        reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /f | Out-Null
-        reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /f | Out-Null
-        Write-Log "Ajustes de privacidade revertidos." Green
-    } catch { Write-Log "Erro ao desfazer privacidade: $_" Red }
-}
-
-function Restore-VisualPerformanceDefault {
-    Write-Log "Restaurando configurações visuais para o padrão..." Yellow
-    try {
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 0 /f | Out-Null
-        Write-Log "Configurações visuais restauradas." Green
-    } catch { Write-Log "Erro ao restaurar visual: $_" Red }
-}
-
-function Grant-ActionCenter-Notifications {
-    Write-Log "Reabilitando Action Center e notificações..." Yellow
-    try {
-        reg.exe delete "HKCU\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 1 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 0 /f | Out-Null
-        Write-Log "Action Center e notificações reabilitados." Green
-    } catch { Write-Log "Erro ao reabilitar Action Center: $_" Red }
-}
-
-function Enable-SMBv1 {
-    Write-Log "Habilitando SMBv1 (NÃO RECOMENDADO em redes modernas)..." Yellow
-    try {
-        Enable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -All -NoRestart
-        Write-Log "SMBv1 habilitado." Green
-    } catch { Write-Log "Erro ao habilitar SMBv1: $_" Red }
-}
-
-function Disable-SMBv1 {
-    Write-Log "Desabilitando SMBv1 (recomendado para segurança)..." Yellow
-    try {
-        Disable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart
-        Write-Log "SMBv1 desabilitado." Green
-    } catch { Write-Log "Erro ao desabilitar SMBv1: $_" Red }
-}
-
-function Grant-HardenOfficeMacros {
-    Write-Log "Desabilitando macros perigosos do Office..." Yellow
-    try {
-        $officePaths = @(
-        "HKCU:\Software\Microsoft\Office\16.0\Word\Security",
-        "HKCU:\Software\Microsoft\Office\16.0\Excel\Security",
-        "HKCU:\Software\Microsoft\Office\16.0\PowerPoint\Security"
-    )
-
-    foreach ($path in $officePaths) {
-        try {
-            New-Item -Path $path -Force | Out-Null
-            Set-ItemProperty -Path $path -Name "VBAWarnings" -Value 4
-            Set-ItemProperty -Path $path -Name "AccessVBOM" -Value 0
-            Write-Log "Macros desativadas em: $path" Green
-        } 
-        catch {
-            Write-Log "Erro ao ajustar segurança em ${path}: $_" Yellow
-        }
-    }
-    }
-    catch {
-        Write-Log "Erro ao desabilitar macros perigosos do Office: $_" Red
-    }
-
-}
-
-function Restore-OfficeMacros {
-    Write-Log "Restaurando comportamento padrão de macros do Office..." Yellow
-    try {
-        reg.exe delete "HKCU\Software\Microsoft\Office\16.0\Word\Security" /v VBAWarnings /f | Out-Null
-        reg.exe delete "HKCU\Software\Microsoft\Office\16.0\Excel\Security" /v VBAWarnings /f | Out-Null
-        Write-Log "Macros do Office retornaram ao padrão." Green
-    } catch { Write-Log "Erro ao restaurar macros: $_" Red }
-}
-
-function Restore-OneDrive {
-    $onedriveSetup = "$env:SystemRoot\SysWOW64\OneDriveSetup.exe"
-    if (Test-Path $onedriveSetup) {
-        Start-Process $onedriveSetup
-        Write-Log "OneDrive reinstalado." Green
-    } else {
-        Write-Log "OneDriveSetup.exe não encontrado!" Red
-    }
-}
-
-function Restore-BloatwareSafe {
-    Write-Log "Reinstalando aplicativos essenciais..." Yellow
-    $apps = @(
-        "Microsoft.WindowsCalculator",
-        "Microsoft.WindowsNotepad",
-        "Microsoft.ScreenSketch",           # Ferramenta de Captura
-        "Microsoft.WindowsSoundRecorder",   # Gravador de Voz
-        "Microsoft.WindowsCamera",
-        "Microsoft.OutlookForWindows",      # Outlook novo
-        "Microsoft.Outlook",                # Outlook clássico
-        "Microsoft.Linkedin"
-    )
-
-    foreach ($app in $apps) {
-        try {
-            $pkg = Get-AppxPackage -AllUsers -Name $app
-            if ($pkg) {
-                $manifest = Join-Path $pkg.InstallLocation "AppxManifest.xml"
-                if (Test-Path $manifest) {
-                    Add-AppxPackage -DisableDevelopmentMode -Register $manifest
-                    Write-Log "$app reinstalado com sucesso." Green
-                } else {
-                    Write-Log "AppxManifest não encontrado para $app." Red
-                }
-            } else {
-                Write-Log "$app não está instalado. Pulando." Yellow
-            }
-        } catch {
-            Write-Log "❌ Erro ao reinstalar $(app): $_" Red
-        }
-    }
-
-    Show-SuccessMessage
-}
+# === FUNÇÃO GRANT-CONTROLPANELTWEAKS (PRINCIPAL) ===
 
 function Grant-ControlPanelTweaks {
     Write-Host "Aplicando ajustes visuais e de desempenho..." -ForegroundColor Cyan
@@ -1850,6 +1394,400 @@ function Grant-ControlPanelTweaks {
     Write-Host "✔️ Ajustes aplicados com sucesso!" -ForegroundColor Green
 }
 
+function Grant-ExtraTweaks {
+    Write-Log "Aplicando tweaks extras..." Yellow
+    try {
+        # Bloqueio de anúncios
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338393Enabled /t REG_DWORD /d 0 /f | Out-Null
+        # F8 no boot
+        bcdedit /set {current} bootmenupolicy Legacy | Out-Null
+        # Desativar sons do sistema
+        reg.exe add "HKCU\AppEvents\Schemes" /ve /d ".None" /f | Out-Null
+        # Desativar web search
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" /v BingSearchEnabled /t REG_DWORD /d 0 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" /v CortanaConsent /t REG_DWORD /d 0 /f | Out-Null
+        # Remover "Cast to Device"
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked" /V "{7AD84985-87B4-4a16-BE58-8B72A5B390F7}" /T REG_SZ /D "Play to Menu" /F | Out-Null
+        Write-Log "Tweaks extras aplicados." Green
+    Write-Output "Apply MarkC's mouse acceleration fix"
+Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseSensitivity" "10"
+Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseSpeed" "0"
+Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseThreshold1" "0"
+Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseThreshold2" "0"
+Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "SmoothMouseXCurve" ([byte[]](0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0xCC, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x80, 0x99, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x66, 0x26, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x33, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00))
+Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "SmoothMouseYCurve" ([byte[]](0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00))
+
+Write-Output "Disable mouse pointer hiding"
+Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" "UserPreferencesMask" ([byte[]](0x9e,
+0x1e, 0x06, 0x80, 0x12, 0x00, 0x00, 0x00))
+
+Write-Output "Disable Game DVR and Game Bar"
+New-FolderForced -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR"
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowgameDVR" 0
+
+Write-Output "Disable easy access keyboard stuff"
+Set-ItemProperty -Path "HKCU:\Control Panel\Accessibility\StickyKeys" "Flags" "506"
+Set-ItemProperty -Path "HKCU:\Control Panel\Accessibility\Keyboard Response" "Flags" "122"
+Set-ItemProperty -Path "HKCU:\Control Panel\Accessibility\ToggleKeys" "Flags" "58"
+
+Write-Output "Disable Edge desktop shortcut on new profiles"
+New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer" -Name DisableEdgeDesktopShortcutCreation -PropertyType DWORD -Value 1
+
+Write-Output "Restoring old volume slider"
+New-FolderForced -Path "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\MTCUVC"
+Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\MTCUVC" "EnableMtcUvc" 0
+
+Write-Output "Setting folder view options"
+Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Hidden" 1
+Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideFileExt" 0
+Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideDrivesWithNoMedia" 0
+Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "ShowSyncProviderNotifications" 0
+
+Write-Output "Disable Aero-Shake Minimize feature"
+Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "DisallowShaking" 1
+
+Write-Output "Setting default explorer view to This PC"
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "LaunchTo" 1
+
+# This removes the "Trending Searches" results shown when you click on the windows search bar
+Write-Output "Disabling Trending Searches"
+New-FolderForced -Path "HKLM:\Software\Policies\Microsoft\Windows\Explorer"
+Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\Explorer" "DisableSearchBoxSuggestions" 1
+    } catch { Write-Log "Erro ao aplicar tweaks extras: $_" Red }
+}
+
+function Grant-HardenOfficeMacros {
+    Write-Log "Desabilitando macros perigosos do Office..." Yellow
+    try {
+        $officePaths = @(
+        "HKCU:\Software\Microsoft\Office\16.0\Word\Security",
+        "HKCU:\Software\Microsoft\Office\16.0\Excel\Security",
+        "HKCU:\Software\Microsoft\Office\16.0\PowerPoint\Security"
+    )
+
+    foreach ($path in $officePaths) {
+        try {
+            New-Item -Path $path -Force | Out-Null
+            Set-ItemProperty -Path $path -Name "VBAWarnings" -Value 4
+            Set-ItemProperty -Path $path -Name "AccessVBOM" -Value 0
+            Write-Log "Macros desativadas em: $path" Green
+        } 
+        catch {
+            Write-Log "Erro ao ajustar segurança em ${path}: $_" Yellow
+        }
+    }
+    }
+    catch {
+        Write-Log "Erro ao desabilitar macros perigosos do Office: $_" Red
+    }
+}
+
+
+# === FUNÇÕES ESPECIAIS ===
+
+function Remove-OneDrive-AndRestoreFolders {
+    Write-Log "Removendo OneDrive e restaurando pastas padrão..." Yellow
+    try {
+        taskkill.exe /F /IM "OneDrive.exe"
+        taskkill.exe /F /IM "explorer.exe"
+    } 
+    catch {
+        Write-Log "Erro ao remover OneDrive: $_" Red
+    }
+Write-Output "Remove OneDrive"
+if (Test-Path "$env:systemroot\System32\OneDriveSetup.exe") {
+    & "$env:systemroot\System32\OneDriveSetup.exe" /uninstall
+}
+if (Test-Path "$env:systemroot\SysWOW64\OneDriveSetup.exe") {
+    & "$env:systemroot\SysWOW64\OneDriveSetup.exe" /uninstall
+}
+
+Write-Output "Removing OneDrive leftovers"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:localappdata\Microsoft\OneDrive"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:programdata\Microsoft OneDrive"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:systemdrive\OneDriveTemp"
+# check if directory is empty before removing:
+If ((Get-ChildItem "$env:userprofile\OneDrive" -Recurse | Measure-Object).Count -eq 0) {
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:userprofile\OneDrive"
+}
+
+Write-Output "Disable OneDrive via Group Policies"
+New-FolderForced -Path "HKLM:\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\OneDrive"
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\OneDrive" "DisableFileSyncNGSC" 1
+
+Write-Output "Remove Onedrive from explorer sidebar"
+New-PSDrive -PSProvider "Registry" -Root "HKEY_CLASSES_ROOT" -Name "HKCR"
+mkdir -Force "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}"
+Set-ItemProperty -Path "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" "System.IsPinnedToNameSpaceTree" 0
+mkdir -Force "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}"
+Set-ItemProperty -Path "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" "System.IsPinnedToNameSpaceTree" 0
+Remove-PSDrive "HKCR"
+
+# Thank you Matthew Israelsson
+Write-Output "Removing run hook for new users"
+reg load "hku\Default" "C:\Users\Default\NTUSER.DAT"
+reg delete "HKEY_USERS\Default\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "OneDriveSetup" /f
+reg unload "hku\Default"
+
+Write-Output "Removing startmenu entry"
+Remove-Item -Force -ErrorAction SilentlyContinue "$env:userprofile\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\OneDrive.lnk"
+
+Write-Output "Removing scheduled task"
+Get-ScheduledTask -TaskPath '\' -TaskName 'OneDrive*' -ea SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
+
+Write-Output "Restarting explorer"
+Start-Process "explorer.exe"
+
+Write-Output "Waiting for explorer to complete loading"
+Start-Sleep 10
+}
+
+function Backup-Registry {
+    Write-Log "Fazendo backup do registro (SOFTWARE, SYSTEM, HKCU)..." Yellow
+    try {
+        $bkpPath = "$env:USERPROFILE\Desktop\reg_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+        New-Item -Path $bkpPath -ItemType Directory | Out-Null
+        reg.exe save HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" /y | Out-Null
+        reg.exe save HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" /y | Out-Null
+        reg.exe save HKCU "$bkpPath\HKCU.reg" /y | Out-Null
+        Write-Log "Backup do registro salvo em: $bkpPath" Green
+    } catch { Write-Log "Erro ao fazer backup do registro: $_" Red }
+}
+
+function Restore-Registry {
+    Write-Host "Digite o caminho da pasta onde está o backup do registro:" -ForegroundColor Cyan
+    $bkpPath = Read-Host "Exemplo: C:\Users\SeuUsuario\Desktop\reg_backup_20250704_140000"
+    try {
+        reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
+        reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
+        reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
+        Write-Log "Registro restaurado a partir de $bkpPath." Green
+    } catch { Write-Log "Erro ao restaurar o registro: $_" Red }
+}
+
+function Invoke-ExternalDebloaters {
+    $scripts = @("Win11Debloat.ps1", "WinUtil.ps1", "OOSU10.exe", "OpenShellSetup.exe", "SpeedyFox.exe", "_Win10-BlackViper.bat")
+    foreach ($scr in $scripts) {
+        $path = Join-Path $PSScriptRoot $scr
+        if (Test-Path $path) {
+            Write-Log "Executando $scr..." Yellow
+            if ($scr -like "*.ps1") {
+                powershell.exe -ExecutionPolicy Bypass -File $path
+            } elseif ($scr -like "*.exe") {
+                Start-Process $path -Wait
+            } elseif ($scr -like "*.bat") {
+                Start-Process "cmd.exe" -ArgumentList "/c `"$path`"" -Wait
+            }
+            Write-Log "$scr executado." Green
+        } else {
+            Write-Log "$scr não encontrado, pulando." Cyan
+        }
+    }
+}
+
+function Invoke-WindowsActivator {
+    Clear-Host
+    Write-Host "==== ATIVAÇÃO DO WINDOWS ====" -ForegroundColor Cyan
+    Write-Host "Executando script de ativação oficial (get.activated.win)..." -ForegroundColor Yellow
+    try {
+        irm https://get.activated.win | iex
+        Write-Log "Script de ativação executado com sucesso." Green
+    } catch {
+        Write-Log "Erro ao executar o script de ativação: $_" Red
+    }
+    
+}
+
+function Invoke-ChrisTitusToolbox {
+    Clear-Host
+    Write-Host "==== CHRIS TITUS TOOLBOX ====" -ForegroundColor Cyan
+    Write-Host "Executando toolbox oficial do site christitus.com..." -ForegroundColor Yellow
+    try {
+        irm christitus.com/win | iex
+        Write-Log "Chris Titus Toolbox executado com sucesso." Green
+    } catch {
+        Write-Log "Erro ao executar o script do Chris Titus: $_" Red
+    }
+}
+
+function Update-ScriptFromCloud {
+    Clear-Host
+    Write-Host "=======================" -ForegroundColor Cyan
+    Write-Host "ATUALIZANDO SCRIPT..." -ForegroundColor Cyan
+    Write-Host "=======================" -ForegroundColor Cyan
+
+    try {
+        Write-Log "Verificando conexão com servidor..." Yellow
+        if (-not (Test-Connection -ComputerName "script.colegiomundodosaber.com.br" -Count 1 -Quiet)) {
+            Write-Log "❌ Sem conexão. Atualização abortada." Red
+            return
+        }
+
+        Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." Yellow
+        irm script.colegiomundodosaber.com.br | iex
+        Write-Log "✅ Script atualizado com sucesso!" Green
+        Show-SuccessMessage
+    } catch {
+        Write-Log "❌ Falha ao atualizar script: $_" Red
+        Show-SuccessMessage
+    }
+}
+
+function Show-AutoLoginMenu {
+    Write-Host "=== Configurar Autologin ===" -ForegroundColor Cyan
+    $username = Read-Host "Digite o usuário para autologin (ex: Administrator ou SeuUsuario)"
+    $password = Read-Host "Digite a senha para autologin (não aparecerá na tela)" -AsSecureString
+    $passwordPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
+    $domain = $env:USERDOMAIN
+    reg export "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "$env:TEMP\backup_winlogon_autologin.reg" /y | Out-Null
+    try {
+        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "AutoAdminLogon" -Value "1"
+        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultUserName" -Value $username
+        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultDomainName" -Value $domain
+        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultPassword" -Value $passwordPlain
+        Write-Log "Autologin configurado para o usuário $username." Green
+    } catch { Write-Log "Erro ao configurar autologin: $_" Red }
+    Show-SuccessMessage
+}
+
+
+# === FUNÇÕES DE RESTAURAÇÃO E UNDO ===
+
+function Restore-DefaultUAC {
+    Write-Log "Restaurando UAC para padrão..." Yellow
+    try {
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 1 /f | Out-Null
+        Write-Log "UAC restaurado." Green
+    } catch { Write-Log "Erro ao restaurar UAC: $_" Red }
+}
+
+function Restore-DefaultIPv6 {
+    Write-Log "Reabilitando IPv6..." Yellow
+    try {
+        Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Name "DisabledComponents" -ErrorAction SilentlyContinue
+        Write-Log "IPv6 reabilitado." Green
+    } catch { Write-Log "Erro ao reabilitar IPv6: $_" Red }
+}
+
+function Restore-Registry-FromBackup {
+    Write-Host "Digite o caminho do backup do registro para restaurar (pasta):" -ForegroundColor Cyan
+    $bkpPath = Read-Host
+    try {
+        reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
+        reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
+        reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
+        Write-Log "Registro restaurado a partir de $bkpPath." Green
+    } catch { Write-Log "Erro ao restaurar o registro: $_" Red }
+}
+
+function Undo-PrivacyHardening {
+    Write-Log "Desfazendo ajustes de privacidade agressivos..." Yellow
+    try {
+        reg.exe delete "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /f | Out-Null
+        reg.exe delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /f | Out-Null
+        reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /f | Out-Null
+        reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /f | Out-Null
+        reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /f | Out-Null
+        Write-Log "Ajustes de privacidade revertidos." Green
+    } catch { Write-Log "Erro ao desfazer privacidade: $_" Red }
+}
+
+function Restore-VisualPerformanceDefault {
+    Write-Log "Restaurando configurações visuais para o padrão..." Yellow
+    try {
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 0 /f | Out-Null
+        Write-Log "Configurações visuais restauradas." Green
+    } catch { Write-Log "Erro ao restaurar visual: $_" Red }
+}
+
+function Grant-ActionCenter-Notifications {
+    Write-Log "Reabilitando Action Center e notificações..." Yellow
+    try {
+        reg.exe delete "HKCU\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 1 /f | Out-Null
+        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 0 /f | Out-Null
+        Write-Log "Action Center e notificações reabilitados." Green
+    } catch { Write-Log "Erro ao reabilitar Action Center: $_" Red }
+}
+
+function Enable-SMBv1 {
+    Write-Log "Habilitando SMBv1 (NÃO RECOMENDADO em redes modernas)..." Yellow
+    try {
+        Enable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -All -NoRestart
+        Write-Log "SMBv1 habilitado." Green
+    } catch { Write-Log "Erro ao habilitar SMBv1: $_" Red }
+}
+
+function Disable-SMBv1 {
+    Write-Log "Desabilitando SMBv1 (recomendado para segurança)..." Yellow
+    try {
+        Disable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart
+        Write-Log "SMBv1 desabilitado." Green
+    } catch { Write-Log "Erro ao desabilitar SMBv1: $_" Red }
+}
+
+function Restore-OfficeMacros {
+    Write-Log "Restaurando comportamento padrão de macros do Office..." Yellow
+    try {
+        reg.exe delete "HKCU\Software\Microsoft\Office\16.0\Word\Security" /v VBAWarnings /f | Out-Null
+        reg.exe delete "HKCU\Software\Microsoft\Office\16.0\Excel\Security" /v VBAWarnings /f | Out-Null
+        Write-Log "Macros do Office retornaram ao padrão." Green
+    } catch { Write-Log "Erro ao restaurar macros: $_" Red }
+}
+
+function Restore-OneDrive {
+    $onedriveSetup = "$env:SystemRoot\SysWOW64\OneDriveSetup.exe"
+    if (Test-Path $onedriveSetup) {
+        Start-Process $onedriveSetup
+        Write-Log "OneDrive reinstalado." Green
+    } else {
+        Write-Log "OneDriveSetup.exe não encontrado!" Red
+    }
+}
+
+function Restore-BloatwareSafe {
+    Write-Log "Reinstalando aplicativos essenciais..." Yellow
+    $apps = @(
+        "Microsoft.WindowsCalculator",
+        "Microsoft.WindowsNotepad",
+        "Microsoft.ScreenSketch",           # Ferramenta de Captura
+        "Microsoft.WindowsSoundRecorder",   # Gravador de Voz
+        "Microsoft.WindowsCamera",
+        "Microsoft.OutlookForWindows",      # Outlook novo
+        "Microsoft.Outlook",                # Outlook clássico
+        "Microsoft.Linkedin"
+    )
+
+    foreach ($app in $apps) {
+        try {
+            $pkg = Get-AppxPackage -AllUsers -Name $app
+            if ($pkg) {
+                $manifest = Join-Path $pkg.InstallLocation "AppxManifest.xml"
+                if (Test-Path $manifest) {
+                    Add-AppxPackage -DisableDevelopmentMode -Register $manifest
+                    Write-Log "$app reinstalado com sucesso." Green
+                } else {
+                    Write-Log "AppxManifest não encontrado para $app." Red
+                }
+            } else {
+                Write-Log "$app não está instalado. Pulando." Yellow
+            }
+        } catch {
+            Write-Log "❌ Erro ao reinstalar $(app): $_" Red
+        }
+    }
+
+    Show-SuccessMessage
+}
+
 function Restore-ControlPanelTweaks {
     Write-Host "Restaurando configurações visuais e de desempenho padrão..." -ForegroundColor Cyan
 
@@ -1922,86 +1860,81 @@ function Restore-ControlPanelTweaks {
     Write-Host "✔️ Configurações restauradas para o padrão!" -ForegroundColor Green
 }
 
-$FuncoesCriticas = @(
-    'Disable-Cortana-AndSearch',
-    'Disable-SMBv1'
-    'Disable-UAC',
-    'Enable-PrivacyHardening',
-	'Enable-SMBv1',
-	'Grant-ActionCenter-Notifications',
-    'Grant-ControlPanelTweaks',
-    'Grant-ExtraTweaks',
-	'Grant-HardenOfficeMacros',
-    'Optimize-NetworkPerformance',
-    'Remove-Bloatware',
-    'Remove-OneDrive-AndRestoreFolders',
-	'Restore-ControlPanelTweaks',
-	'Restore-DefaultIPv6',
-	'Restore-DefaultUAC',
-	'Restore-Registry-FromBackup',
-	'Restore-VisualPerformanceDefault',
-    'Show-AutoLoginMenu',
-    'Show-BloatwareMenu',
-    'Show-CleanupMenu',
-    'Show-DiagnosticsMenu',
-    'Show-ExternalScriptsMenu',
-    'Show-SuccessMessage',
-    'Show-SystemPerformanceMenu',
-    'Undo-PrivacyHardening'
-)
 
-Test-RequiredFunctions -FunctionList $FuncoesCriticas
+# === FUNÇÃO COLÉGIO (PRINCIPAL) ===
 
-# === MENU PRINCIPAL ===
-function Show-MainMenu {
-    do {
-        Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " SCRIPT DE MANUTENÇÃO WINDOWS - MENU PRINCIPAL" -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " B. Configurações Avançadas" -ForegroundColor Yellow
-        Write-Host " C. Diagnóstico e Informações" -ForegroundColor Yellow
-        Write-Host " D. Instalação de Programas" -ForegroundColor Yellow
-        Write-Host " F. Rede e Impressoras" -ForegroundColor Yellow
-        Write-Host " G. Restauração e Segurança (Undo)" -ForegroundColor Yellow
-        Write-Host " H. Scripts Externos e Ativadores" -ForegroundColor Yellow
-        Write-Host " U. Utilitários do Sistema (Bloat, Limpeza e Desempenho)" -ForegroundColor Yellow
-        Write-Host " M. Manutenção Completa (Tudo em um)" -ForegroundColor Green
-        Write-Host " Z. Colégio (Sequência Completa)" -ForegroundColor Magenta
-        Write-Host " R. Reiniciar o PC" -ForegroundColor Red
-        Write-Host " 0. Sair" -ForegroundColor Magenta
-        Write-Host "=============================================" -ForegroundColor Cyan
+function Invoke-Colégio {
+    Clear-Host
+    $start = Get-Date
+    Write-Log "`n🚀 Iniciando sequência personalizada para o Colégio..." Cyan
 
-        $key = [Console]::ReadKey($true).Key
-        switch ($key) {
-            'B' { Show-AdvancedSettingsMenu }
-            'C' { Show-DiagnosticsMenu }
-            'D' { Show-InstallationMenu }
-            'F' { Show-NetworkMenu }
-            'G' { Show-RestoreUndoMenu }
-            'H' { Show-ExternalScriptsMenu }
-            'U' { Show-UtilitiesMenu }  # 🔧 Novo menu combinado
-            'M' { Show-FullMaintenance } 
-            'Z' { Invoke-Colégio }
-            'R' {
-                Write-Log "Reiniciando o computador..." Cyan
-                Restart-Computer -Force
-            }
-            '0' {
-                $duration = (Get-Date) - $startTime
-                Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
-                Write-Log "Log salvo em: $logFile" Cyan
-                return
-            }
-            default {
-                Write-Host "`nOpção inválida!" -ForegroundColor Red
-                Start-Sleep 1
-            }
-        }
-    } while ($true)
+    try {
+        # ===== AJUSTES E TWEAKS ====
+        Write-Log "🔧 Aplicando ajustes e tweaks de sistema..." Yellow
+        Grant-ControlPanelTweaks
+        Grant-ExtraTweaks
+        Grant-PrivacyTweaks
+        Enable-PrivacyHardening
+        Set-VisualPerformance
+        Disable-ActionCenter-Notifications
+        Disable-BloatwareScheduledTasks
+        Disable-Cortana-AndSearch
+        Disable-IPv6
+        Grant-HardenOfficeMacros
+
+        # ===== LIMPEZA ====
+        Write-Log "🧹 Realizando limpeza profunda do sistema..." Yellow
+        Clear-Prefetch
+        Clear-PrintSpooler
+        Clear-TemporaryFiles
+        Clear-WinSxS
+        Clear-WUCache
+        Remove-WindowsOld
+        Clear-DeepSystemCleanup
+
+        # ===== REMOÇÕES ====
+        Write-Log "❌ Removendo bloatware e recursos desnecessários..." Yellow
+        Remove-Bloatware
+        Remove-Copilot
+        Remove-OneDrive-AndRestoreFolders
+        Stop-BloatwareProcesses
+
+        # ===== OTIMIZAÇÃO ====
+        Write-Log "🚀 Otimizando rede e desempenho..." Yellow
+        Clear-DNS
+        Optimize-NetworkPerformance
+
+        # ===== INSTALAÇÕES ====
+        Write-Log "⬇️ Instalando aplicativos essenciais..." Yellow
+        Install-Applications
+        Update-PowerShell
+
+        # ===== EXTERNOS ====
+        Write-Log "⚙️ Executando scripts externos, se houver..." Yellow
+        Invoke-ExternalDebloaters
+
+        $end = Get-Date
+        $duration = $end - $start
+        Write-Log "✅ Sequência para o Colégio concluída com sucesso em $($duration.ToString("hh\:mm\:ss"))" Green
+        Show-SuccessMessage
+    }
+    catch {
+        Write-Log "❌ Erro crítico durante a sequência do Colégio: $_" Red
+    }
 }
 
-function Show-FullMaintenanceMenu {
+# === FUNÇÕES AUXILIARES PARA MENUS ===
+
+function New-FolderForced {
+    param (
+        [string]$Path
+    )
+    if (-not (Test-Path $Path)) {
+        New-Item -Path $Path -ItemType Directory -Force | Out-Null
+    }
+}
+
+function Show-FullMaintenance {
     do {
         Clear-Host
         Write-Host "=========== MENU: MANUTENÇÃO COMPLETA ===========" -ForegroundColor Cyan
@@ -2055,7 +1988,9 @@ function Show-FullMaintenanceMenu {
     } while ($true)
 }
 
-# === MENU: CONFIGURAÇÕES AVANÇADAS ===
+
+# === FUNÇÕES DE MENU ===
+
 function Show-AdvancedSettingsMenu {
     do {
         Clear-Host
@@ -2088,8 +2023,6 @@ function Show-AdvancedSettingsMenu {
     } while ($true)
 }
 
-
-# === MENU: DIAGNÓSTICO E INFORMAÇÕES ===
 function Show-DiagnosticsMenu {
     do {
         Clear-Host
@@ -2132,7 +2065,6 @@ function Show-DiagnosticsMenu {
     } while ($true)
 }
 
-# === MENU: INSTALAÇÃO DE PROGRAMAS ===
 function Show-InstallationMenu {
     do {
         Clear-Host
@@ -2169,7 +2101,6 @@ function Show-InstallationMenu {
     } while ($true)
 }
 
-# === MENU: REDE E IMPRESSORAS ===
 function Show-NetworkMenu {
     do {
         Clear-Host
@@ -2216,7 +2147,6 @@ function Show-NetworkMenu {
     } while ($true)
 }
 
-# === MENU: SCRIPTS EXTERNOS E ATIVADORES ===
 function Show-ExternalScriptsMenu {
     do {
         Clear-Host
@@ -2247,7 +2177,6 @@ function Show-ExternalScriptsMenu {
     } while ($true)
 }
 
-# === MENU: REVERTER AJUSTES / RESTAURAR APLICATIVOS ===
 function Show-RestoreUndoMenu {
     do {
         Clear-Host
@@ -2310,9 +2239,271 @@ function Show-RestoreUndoMenu {
         }
     } while ($true)
 }
+
+function Show-UtilitiesMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: UTILITÁRIOS DO SISTEMA ====" -ForegroundColor Cyan
+        Write-Host " A. Executar todas as tarefas deste menu" -ForegroundColor Green
+        Write-Host " B. Limpeza e Otimização"
+        Write-Host " C. Remoção de Bloatware"
+        Write-Host " D. Desempenho do Sistema"
+        Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
+
+        $key = [Console]::ReadKey($true).Key
+        switch ($key) {
+            'A' {
+                # Limpeza
+                Clear-TemporaryFiles
+                Clear-WUCache
+                Clear-DNS
+                Clear-Prefetch
+                Clear-PrintSpooler
+                Clear-DeepSystemCleanup
+                Clear-WinSxS
+                Remove-WindowsOld
+                
+                # Bloatware
+                Remove-Bloatware
+                Remove-Copilot
+                Remove-OneDrive-AndRestoreFolders
+                Stop-BloatwareProcesses
+                Disable-BloatwareScheduledTasks
+                
+                # Desempenho
+                Set-PerformanceTheme
+                Optimize-ExplorerPerformance
+                Disable-UnnecessaryServices
+                Optimize-Volumes
+                
+                Show-SuccessMessage
+            }
+            'B' { Show-CleanupMenu }
+            'C' { Show-BloatwareMenu }
+            'D' { Show-SystemPerformanceMenu }
+            'X' { return }
+            default {
+                Write-Host "`nOpção inválida!" -ForegroundColor Red
+                Start-Sleep 1
+            }
+        }
+    } while ($true)
+}
+
+function Show-CleanupMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: LIMPEZA E OTIMIZAÇÃO ====" -ForegroundColor Cyan
+        Write-Host " A. Executar todas as limpezas" -ForegroundColor Green
+        Write-Host " B. Limpar arquivos temporários"
+        Write-Host " C. Limpar cache do Windows Update"
+        Write-Host " D. Limpar cache DNS"
+        Write-Host " E. Limpar Prefetch"
+        Write-Host " F. Limpar spooler de impressão"
+        Write-Host " G. Limpeza profunda do sistema"
+        Write-Host " H. Limpar WinSxS"
+        Write-Host " I. Remover Windows.old"
+        Write-Host " J. Otimizar volumes"
+        Write-Host " X. Voltar ao menu anterior" -ForegroundColor Green
+
+        $key = [Console]::ReadKey($true).Key
+        switch ($key) {
+            'A' {
+                Clear-TemporaryFiles
+                Clear-WUCache
+                Clear-DNS
+                Clear-Prefetch
+                Clear-PrintSpooler
+                Clear-DeepSystemCleanup
+                Clear-WinSxS
+                Remove-WindowsOld
+                Optimize-Volumes
+                Show-SuccessMessage
+            }
+            'B' { Clear-TemporaryFiles; Show-SuccessMessage }
+            'C' { Clear-WUCache; Show-SuccessMessage }
+            'D' { Clear-DNS; Show-SuccessMessage }
+            'E' { Clear-Prefetch; Show-SuccessMessage }
+            'F' { Clear-PrintSpooler; Show-SuccessMessage }
+            'G' { Clear-DeepSystemCleanup; Show-SuccessMessage }
+            'H' { Clear-WinSxS; Show-SuccessMessage }
+            'I' { Remove-WindowsOld; Show-SuccessMessage }
+            'J' { Optimize-Volumes; Show-SuccessMessage }
+            'X' { return }
+            default {
+                Write-Host "`nOpção inválida!" -ForegroundColor Red
+                Start-Sleep 1
+            }
+        }
+    } while ($true)
+}
+
+function Show-BloatwareMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: REMOÇÃO DE BLOATWARE ====" -ForegroundColor Cyan
+        Write-Host " A. Executar todas as remoções" -ForegroundColor Green
+        Write-Host " B. Remover bloatware (LinkedIn, Xbox, etc.)"
+        Write-Host " C. Remover Copilot"
+        Write-Host " D. Remover OneDrive"
+        Write-Host " E. Encerrar processos dispensáveis"
+        Write-Host " F. Desativar tarefas agendadas de bloatware"
+        Write-Host " G. Remover UWP bloatware"
+        Write-Host " H. Remover pins do Menu Iniciar"
+        Write-Host " X. Voltar ao menu anterior" -ForegroundColor Green
+
+        $key = [Console]::ReadKey($true).Key
+        switch ($key) {
+            'A' {
+                Remove-Bloatware
+                Remove-Copilot
+                Remove-OneDrive-AndRestoreFolders
+                Stop-BloatwareProcesses
+                Disable-BloatwareScheduledTasks
+                Remove-UWPBloatware
+                Remove-StartAndTaskbarPins
+                Show-SuccessMessage
+            }
+            'B' { Remove-Bloatware; Show-SuccessMessage }
+            'C' { Remove-Copilot; Show-SuccessMessage }
+            'D' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
+            'E' { Stop-BloatwareProcesses; Show-SuccessMessage }
+            'F' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
+            'G' { Remove-UWPBloatware; Show-SuccessMessage }
+            'H' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
+            'X' { return }
+            default {
+                Write-Host "`nOpção inválida!" -ForegroundColor Red
+                Start-Sleep 1
+            }
+        }
+    } while ($true)
+}
+
+function Show-SystemPerformanceMenu {
+    do {
+        Clear-Host
+        Write-Host "==== MENU: DESEMPENHO DO SISTEMA ====" -ForegroundColor Cyan
+        Write-Host " A. Executar todas as otimizações" -ForegroundColor Green
+        Write-Host " B. Aplicar tema de desempenho"
+        Write-Host " C. Otimizar Windows Explorer"
+        Write-Host " D. Desativar serviços desnecessários"
+        Write-Host " E. Ajustar visual para performance"
+        Write-Host " F. Criar ponto de restauração"
+        Write-Host " G. Aplicar hardening de segurança"
+        Write-Host " X. Voltar ao menu anterior" -ForegroundColor Green
+
+        $key = [Console]::ReadKey($true).Key
+        switch ($key) {
+            'A' {
+                Set-PerformanceTheme
+                Optimize-ExplorerPerformance
+                Disable-UnnecessaryServices
+                Set-VisualPerformance
+                New-SystemRestorePoint
+                Enable-WindowsHardening
+                Show-SuccessMessage
+            }
+            'B' { Set-PerformanceTheme; Show-SuccessMessage }
+            'C' { Optimize-ExplorerPerformance; Show-SuccessMessage }
+            'D' { Disable-UnnecessaryServices; Show-SuccessMessage }
+            'E' { Set-VisualPerformance; Show-SuccessMessage }
+            'F' { New-SystemRestorePoint; Show-SuccessMessage }
+            'G' { Enable-WindowsHardening; Show-SuccessMessage }
+            'X' { return }
+            default {
+                Write-Host "`nOpção inválida!" -ForegroundColor Red
+                Start-Sleep 1
+            }
+        }
+    } while ($true)
+}
+
+
+# === MENU PRINCIPAL ===
+
+function Show-MainMenu {
+    do {
+        Clear-Host
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " SCRIPT DE MANUTENÇÃO WINDOWS - MENU PRINCIPAL" -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " B. Configurações Avançadas" -ForegroundColor Yellow
+        Write-Host " C. Diagnóstico e Informações" -ForegroundColor Yellow
+        Write-Host " D. Instalação de Programas" -ForegroundColor Yellow
+        Write-Host " F. Rede e Impressoras" -ForegroundColor Yellow
+        Write-Host " G. Restauração e Segurança (Undo)" -ForegroundColor Yellow
+        Write-Host " H. Scripts Externos e Ativadores" -ForegroundColor Yellow
+        Write-Host " U. Utilitários do Sistema (Bloat, Limpeza e Desempenho)" -ForegroundColor Yellow
+        Write-Host " M. Manutenção Completa (Tudo em um)" -ForegroundColor Green
+        Write-Host " Z. Colégio (Sequência Completa)" -ForegroundColor Magenta
+        Write-Host " R. Reiniciar o PC" -ForegroundColor Red
+        Write-Host " 0. Sair" -ForegroundColor Magenta
+        Write-Host "=============================================" -ForegroundColor Cyan
+
+        $key = [Console]::ReadKey($true).Key
+        switch ($key) {
+            'B' { Show-AdvancedSettingsMenu }
+            'C' { Show-DiagnosticsMenu }
+            'D' { Show-InstallationMenu }
+            'F' { Show-NetworkMenu }
+            'G' { Show-RestoreUndoMenu }
+            'H' { Show-ExternalScriptsMenu }
+            'U' { Show-UtilitiesMenu }  # 🔧 Novo menu combinado
+            'M' { Show-FullMaintenance } 
+            'Z' { Invoke-Colégio }
+            'R' {
+                Write-Log "Reiniciando o computador..." Cyan
+                Restart-Computer -Force
+            }
+            '0' {
+                $duration = (Get-Date) - $startTime
+                Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
+                Write-Log "Log salvo em: $logFile" Cyan
+                return
+            }
+            default {
+                Write-Host "`nOpção inválida!" -ForegroundColor Red
+                Start-Sleep 1
+            }
+        }
+    } while ($true)
+}
+
 #endregion
 
-# ==== EXECUÇÃO COM SEGURANÇA ====
+# === VERIFICAÇÃO DE FUNÇÕES CRÍTICAS ===
+$FuncoesCriticas = @(
+    'Disable-Cortana-AndSearch',
+    'Disable-SMBv1',
+    'Disable-UAC',
+    'Enable-PrivacyHardening',
+    'Enable-SMBv1',
+    'Grant-ActionCenter-Notifications',
+    'Grant-ControlPanelTweaks',
+    'Grant-ExtraTweaks',
+    'Grant-HardenOfficeMacros',
+    'Optimize-NetworkPerformance',
+    'Remove-Bloatware',
+    'Remove-OneDrive-AndRestoreFolders',
+    'Restore-ControlPanelTweaks',
+    'Restore-DefaultIPv6',
+    'Restore-DefaultUAC',
+    'Restore-Registry-FromBackup',
+    'Restore-VisualPerformanceDefault',
+    'Show-AutoLoginMenu',
+    'Show-BloatwareMenu',
+    'Show-CleanupMenu',
+    'Show-DiagnosticsMenu',
+    'Show-ExternalScriptsMenu',
+    'Show-SuccessMessage',
+    'Show-SystemPerformanceMenu',
+    'Undo-PrivacyHardening'
+)
+
+Test-RequiredFunctions -FunctionList $FuncoesCriticas
+
+# === EXECUÇÃO COM SEGURANÇA ===
 try {
     Show-MainMenu
 }
@@ -2321,4 +2512,6 @@ catch {
     Write-Host "Consulte o log em: `"$logFile`"" -ForegroundColor Yellow
 }
 finally {
+    # Cleanup se necessário
 }
+
