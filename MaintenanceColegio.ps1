@@ -1283,7 +1283,125 @@ function Grant-ControlPanelTweaks {
             Write-Warning "Falha ao definir $Name em $Path"
         }
     }
-  
+    # Função interna para setar valores no registro
+    function Set-RegistryValue {
+    param (
+        [string]$Path,
+        [string]$Name,
+        [object]$Value,
+        [Microsoft.Win32.RegistryValueKind]$Type
+    )
+    try {
+        New-Item -Path $Path -Force | Out-Null
+
+        if (-not (Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue)) {
+            New-ItemProperty -Path $Path -Name $Name -Value $Value -PropertyType $Type -Force | Out-Null
+        } else {
+            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force
+        }
+    } catch {
+        Write-Warning "⚠️ Falha ao definir $Name em $Path: $($_.Exception.Message)"
+    }
+}
+
+function Apply-ExplorerTweaks {
+
+    try {
+        # === Ajustes: Control Panel\Desktop ===
+        $desktopKey = "HKCU:\Control Panel\Desktop"
+        Set-RegistryValue $desktopKey "DragFullWindows" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $desktopKey "MenuShowDelay" "0" ([Microsoft.Win32.RegistryValueKind]::String)
+        Set-RegistryValue $desktopKey "CursorBlinkRate" "530" ([Microsoft.Win32.RegistryValueKind]::String)
+        Set-RegistryValue $desktopKey "CaretWidth" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $desktopKey "PaintDesktopVersion" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $desktopKey "SnapSizing" "1" ([Microsoft.Win32.RegistryValueKind]::String)
+        Set-RegistryValue $desktopKey "FontSmoothingType" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $desktopKey "ForegroundFlashCount" 7 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $desktopKey "MouseWheelRouting" 2 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $desktopKey "ScreenSaveActive" "1" ([Microsoft.Win32.RegistryValueKind]::String)
+        Set-RegistryValue $desktopKey "WallpaperStyle" "10" ([Microsoft.Win32.RegistryValueKind]::String)
+        Set-RegistryValue $desktopKey "WheelScrollLines" "3" ([Microsoft.Win32.RegistryValueKind]::String)
+        Set-RegistryValue $desktopKey "WindowArrangementActive" "1" ([Microsoft.Win32.RegistryValueKind]::String)
+
+        # === Ajustes: Explorer\Advanced ===
+        $advKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+        Set-RegistryValue $advKey "HideFileExt" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "Hidden" 2 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ShowSuperHidden" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ShowInfoTip" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ShowTypeOverlay" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "TaskbarAnimations" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "TaskbarSizeMove" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "TaskbarSmallIcons" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "TaskbarAutoHideInTabletMode" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ShowCompColor" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ShowStatusBar" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ListviewAlphaSelect" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ListviewShadow" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "IconsOnly" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "LaunchTo" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "NavPaneExpandToCurrentFolder" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "WebView" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ShowSecondsInSystemClock" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "DisablePreviewDesktop" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "SeparateProcess" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "Start_SearchFiles" 2 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "StartShownOnUpgrade" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "StartMenuInit" 13 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ServerAdminUI" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "DontPrettyPath" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "Filter" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "AutoCheckSelect" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ShellMigrationLevel" 3 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ReindexedProfile" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ProgrammableTaskbarStatus" 2 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "WinXMigrationLevel" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "OTPTBImprSuccess" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $advKey "ShellViewReentered" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+
+        Write-Host "🛠️ Configurações do Explorer aplicadas com sucesso!" -ForegroundColor Green
+
+        # === Visual Effects ===
+        $veBase = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
+        Set-RegistryValue $veBase "VisualFXSetting" 2 ([Microsoft.Win32.RegistryValueKind]::DWord)
+
+        $visualTweaks = @(
+            "AnimateMinMax", "ComboBoxAnimation", "ControlAnimations", "CursorShadow",
+            "DragFullWindows", "DropShadow", "DWMAeroPeekEnabled", "DWMEnabled",
+            "DWMSaveThumbnailEnabled", "ListBoxSmoothScrolling", "ListviewAlphaSelect",
+            "ListviewShadow", "MenuAnimation", "SelectionFade", "TaskbarAnimations",
+            "Themes", "ThumbnailsOrIcon", "TooltipAnimation"
+        )
+        foreach ($vt in $visualTweaks) {
+            Set-RegistryValue "$veBase\$vt" "DefaultApplied" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        }
+
+        # === Themes ===
+        $themesKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes"
+        Set-RegistryValue $themesKey "ColorSetFromTheme" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue $themesKey "WallpaperSetFromTheme" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue "$themesKey\Personalize" "EnableTransparency" 1 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue "$themesKey\Personalize" "SystemUsesLightTheme" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+        Set-RegistryValue "$themesKey\Personalize" "AppsUseLightTheme" 0 ([Microsoft.Win32.RegistryValueKind]::DWord)
+
+        # === Outras diretivas (direto com Set-ItemProperty) ===
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SystemPaneSuggestionsEnabled" -Value 0 -Force
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ShowSyncProviderNotifications" -Value 0 -Force
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" -Name "ShellFeedsTaskbarViewMode" -Value 2 -Force
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoControlPanel" -Value 0 -Force
+
+        Write-Host "✔️ Todos os ajustes aplicados com sucesso!" -ForegroundColor Green
+
+    } catch {
+        Write-Warning "❌ Erro geral ao aplicar ajustes: $($_.Exception.Message)"
+    }
+
+}
+
+# 🔔 Execução controlada
+Apply-ExplorerTweaks
+
 
 function Grant-ExtraTweaks {
     Write-Log "Aplicando tweaks extras..." Yellow
