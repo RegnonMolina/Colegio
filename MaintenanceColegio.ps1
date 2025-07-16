@@ -1957,7 +1957,6 @@ $FuncoesCriticas = @(
     'Show-SuccessMessage',
     'Show-SystemPerformanceMenu',
     'Undo-PrivacyHardening'
-    # Adicione mais funções importantes aqui
 )
 
 Test-RequiredFunctions -FunctionList $FuncoesCriticas
@@ -2040,7 +2039,6 @@ function Show-FullMaintenanceMenu {
                 Remove-StartAndTaskbarPins
                 Remove-ScheduledTasksAggressive
                 Disable-SMBv1
-
                 New-ChkDsk
                 Clear-WUCache
                 Clear-TemporaryFiles
@@ -2050,13 +2048,11 @@ function Show-FullMaintenanceMenu {
                 Optimize-Volumes
                 Remove-WindowsOld
                 Clear-WinSxS
-
                 Grant-ControlPanelTweaks
                 Set-PerformanceTheme
                 Disable-UnnecessaryServices
                 Optimize-ExplorerPerformance
                 Rename-Notebook
-
                 Show-SuccessMessage
             }
             'B' { Show-PerformanceSubmenu }
