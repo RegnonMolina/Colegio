@@ -1956,7 +1956,7 @@ $FuncoesCriticas = @(
     'Show-ExternalScriptsMenu',
     'Show-SuccessMessage',
     'Show-SystemPerformanceMenu',
-	'Undo-PrivacyHardening',
+    'Undo-PrivacyHardening'
     # Adicione mais funções importantes aqui
 )
 
