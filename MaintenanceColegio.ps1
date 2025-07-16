@@ -1,3 +1,4 @@
+
 # ===============================
 # SCRIPT SUPREMO DE MANUTENÇÃO 🛠️
 # ===============================
@@ -1553,8 +1554,6 @@ function Show-AutoLoginMenu {
 }
 #endregion
 
-# ==== PARTE 6: Bloco de Reversão/Desfazer Tweaks e Segurança Extra ====
-
 function Restore-DefaultUAC {
     Write-Log "Restaurando UAC para padrão..." Yellow
     try {
@@ -1914,118 +1913,101 @@ function Show-MainMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " SCRIPT DE MANUTENÇÃO WINDOWS - MENU PRINCIPAL" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A. Bloatware, Privacidade e Hardening" -ForegroundColor Yellow
         Write-Host " B. Configurações Avançadas" -ForegroundColor Yellow
         Write-Host " C. Diagnóstico e Informações" -ForegroundColor Yellow
         Write-Host " D. Instalação de Programas" -ForegroundColor Yellow
-        Write-Host " E. Limpeza e Otimização" -ForegroundColor Yellow
         Write-Host " F. Rede e Impressoras" -ForegroundColor Yellow
         Write-Host " G. Restauração e Segurança (Undo)" -ForegroundColor Yellow
         Write-Host " H. Scripts Externos e Ativadores" -ForegroundColor Yellow
-        Write-Host " I. Sistema e Desempenho" -ForegroundColor Yellow
+        Write-Host " U. Utilitários do Sistema (Bloat, Limpeza e Desempenho)" -ForegroundColor Yellow
+        Write-Host " M. Manutenção Completa (Tudo em um)" -ForegroundColor Green
         Write-Host " Z. Colégio (Sequência Completa)" -ForegroundColor Magenta
         Write-Host " R. Reiniciar o PC" -ForegroundColor Red
-        Write-Host " X. Sair" -ForegroundColor Magenta
+        Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host "Pressione a tecla correspondente à opção desejada..." -ForegroundColor DarkGray
 
         $key = [Console]::ReadKey($true).Key
         switch ($key) {
-            'A' { Show-BloatwareMenu }
             'B' { Show-AdvancedSettingsMenu }
             'C' { Show-DiagnosticsMenu }
             'D' { Show-InstallationMenu }
-            'E' { Show-CleanupMenu }
             'F' { Show-NetworkMenu }
             'G' { Show-RestoreUndoMenu }
             'H' { Show-ExternalScriptsMenu }
-            'I' { Show-SystemPerformanceMenu }
-            'Z' { Run-Colégio }
+            'U' { Show-UtilitiesMenu }  # 🔧 Novo menu combinado
+            'M' { Show-FullMaintenance } 
+            'Z' { Invoke-Colégio }
             'R' {
                 Write-Log "Reiniciando o computador..." Cyan
                 Restart-Computer -Force
             }
-            'X' {
+            '0' {
                 $duration = (Get-Date) - $startTime
                 Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
                 Write-Log "Log salvo em: $logFile" Cyan
                 return
             }
             default {
-                Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
-                Start-Sleep -Seconds 1
+                Write-Host "`nOpção inválida!" -ForegroundColor Red
+                Start-Sleep 1
             }
         }
     } while ($true)
 }
 
-# === MENU: BLOATWARE, PRIVACIDADE E HARDENING ===
-function Show-BloatwareMenu {
+function Show-FullMaintenanceMenu {
     do {
         Clear-Host
-        Write-Host "==== MENU: BLOATWARE, PRIVACIDADE E HARDENING ====" -ForegroundColor Cyan
-        Write-Host " A. Executar todas as tarefas deste menu" -ForegroundColor Green
-        Write-Host " B. Aplicar privacidade agressiva"
-        Write-Host " C. Aplicar tweaks extras"
-        Write-Host " D. Ajustar visual para performance"
-        Write-Host " E. Backup do registro"
-        Write-Host " F. Desabilitar IPv6"
-        Write-Host " G. Desabilitar UAC"
-        Write-Host " H. Desativar Cortana, Search, Telemetria"
-        Write-Host " I. Desativar notificações (Action Center)"
-        Write-Host " J. Desativar tarefas agendadas de bloatware"
-        Write-Host " K. Encerrar processos dispensáveis"
-        Write-Host " L. Otimizar rede (TCP/DNS)"
-        Write-Host " M. Remover bloatware"
-        Write-Host " N. Remover Copilot"
-        Write-Host " O. Remover OneDrive e restaurar pastas"
-        Write-Host " P. Remover pins do Menu Iniciar/Barra de Tarefas"
-        Write-Host " Q. Remover tarefas agendadas (agressivo)"
+        Write-Host "=========== MENU: MANUTENÇÃO COMPLETA ===========" -ForegroundColor Cyan
+        Write-Host " A. Executar TODAS as tarefas de manutenção" -ForegroundColor Green
+        Write-Host " B. Desempenho e Sistema"
+        Write-Host " C. Limpeza e Otimização"
+        Write-Host " D. Privacidade e Hardening"
         Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
-        Write-Host "=====================================================" -ForegroundColor Cyan
+        Write-Host "===============================================" -ForegroundColor Cyan
 
         $key = [Console]::ReadKey($true).Key
         switch ($key) {
             'A' {
+                # Execução TOTAL
                 Enable-PrivacyHardening
                 Grant-ExtraTweaks
                 Set-VisualPerformance
-                Backup-Registry
-                Disable-IPv6
                 Disable-UAC
                 Disable-Cortana-AndSearch
                 Disable-ActionCenter-Notifications
                 Disable-BloatwareScheduledTasks
                 Stop-BloatwareProcesses
-                Optimize-NetworkPerformance
                 Remove-Bloatware
                 Remove-Copilot
                 Remove-OneDrive-AndRestoreFolders
                 Remove-StartAndTaskbarPins
                 Remove-ScheduledTasksAggressive
+                Disable-SMBv1
+
+                New-ChkDsk
+                Clear-WUCache
+                Clear-TemporaryFiles
+                Clear-Prefetch
+                Clear-PrintSpooler
+                Clear-DeepSystemCleanup
+                Optimize-Volumes
+                Remove-WindowsOld
+                Clear-WinSxS
+
+                Grant-ControlPanelTweaks
+                Set-PerformanceTheme
+                Disable-UnnecessaryServices
+                Optimize-ExplorerPerformance
+                Rename-Notebook
+
                 Show-SuccessMessage
             }
-            'B' { Enable-PrivacyHardening; Show-SuccessMessage }
-            'C' { Grant-ExtraTweaks; Show-SuccessMessage }
-            'D' { Set-VisualPerformance; Show-SuccessMessage }
-            'E' { Backup-Registry; Show-SuccessMessage }
-            'F' { Disable-IPv6; Show-SuccessMessage }
-            'G' { Disable-UAC; Show-SuccessMessage }
-            'H' { Disable-Cortana-AndSearch; Show-SuccessMessage }
-            'I' { Disable-ActionCenter-Notifications; Show-SuccessMessage }
-            'J' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
-            'K' { Stop-BloatwareProcesses; Show-SuccessMessage }
-            'L' { Optimize-NetworkPerformance; Show-SuccessMessage }
-            'M' { Remove-Bloatware; Show-SuccessMessage }
-            'N' { Remove-Copilot; Show-SuccessMessage }
-            'O' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
-            'P' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
-            'Q' { Remove-ScheduledTasksAggressive; Show-SuccessMessage }
+            'B' { Show-PerformanceSubmenu }
+            'C' { Show-CleanupSubmenu }
+            'D' { Show-PrivacyHardeningMenu }
             'X' { return }
-            default {
-                Write-Host "`nOpção inválida!" -ForegroundColor Red
-                Start-Sleep -Seconds 1
-            }
+            default { Write-Host "`nOpção inválida!" -ForegroundColor Red; Start-Sleep 1 }
         }
     } while ($true)
 }
@@ -2038,22 +2020,22 @@ function Show-AdvancedSettingsMenu {
         Write-Host " A. Executar todos os ajustes deste menu" -ForegroundColor Green
         Write-Host " B. Ajustes do Painel de Controle/Configurações"
         Write-Host " C. Configurar Autologin"
-        Write-Host " D. Tweaks de interface do Explorer"
-        Write-Host " E. Scripts externos (Ativador e Chris Titus)"
+        Write-Host " D. Scripts externos (Ativador e Chris Titus)"
+        Write-Host " E. Tweaks de interface do Explorer"
         Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
 
         $key = [Console]::ReadKey($true).Key
         switch ($key) {
             'A' {
-                Show-ControlPanelTweaksMenu
+                Grant-ControlPanelTweaks
                 Show-AutoLoginMenu
-                Show-ExplorerTweaksMenu
                 Show-ExternalScriptsMenu
+                Grant-ExtraTweaks
             }
-            'B' { Show-ControlPanelTweaksMenu }
+            'B' { Grant-ControlPanelTweaks }
             'C' { Show-AutoLoginMenu }
-            'D' { Show-ExplorerTweaksMenu }
-            'E' { Show-ExternalScriptsMenu }
+            'D' { Show-ExternalScriptsMenu }
+            'E' { Grant-ExtraTweaks }
             'X' { return }
             default {
                 Write-Host "`nOpção inválida!" -ForegroundColor Red
@@ -2063,19 +2045,20 @@ function Show-AdvancedSettingsMenu {
     } while ($true)
 }
 
+
 # === MENU: DIAGNÓSTICO E INFORMAÇÕES ===
 function Show-DiagnosticsMenu {
     do {
         Clear-Host
         Write-Host "==== MENU: DIAGNÓSTICO E INFORMAÇÕES ====" -ForegroundColor Cyan
         Write-Host " A. Executar todos os diagnósticos" -ForegroundColor Green
-        Write-Host " B. Verificar integridade do sistema (DISM)"
-        Write-Host " C. Verificar arquivos do sistema (SFC)"
-        Write-Host " D. Verificar saúde dos discos (SMART)"
+        Write-Host " B. Exibir informações de rede"
+        Write-Host " C. Exibir informações do sistema"
+        Write-Host " D. Exibir uso do disco"
         Write-Host " E. Testar memória RAM"
-        Write-Host " F. Exibir informações do sistema"
-        Write-Host " G. Exibir informações de rede"
-        Write-Host " H. Exibir uso do disco"
+        Write-Host " F. Verificar arquivos do sistema (SFC)"
+        Write-Host " G. Verificar integridade do sistema (DISM)"
+        Write-Host " H. Verificar saúde dos discos (SMART)"
         Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
 
         $key = [Console]::ReadKey($true).Key
@@ -2090,13 +2073,13 @@ function Show-DiagnosticsMenu {
                 Show-DiskUsage
                 Show-SuccessMessage
             }
-            'B' { Invoke-DISM-Scan; Show-SuccessMessage }
-            'C' { Invoke-SFC-Scan; Show-SuccessMessage }
-            'D' { Test-SMART-Drives; Show-SuccessMessage }
+            'B' { Show-NetworkInfo; Show-SuccessMessage }
+            'C' { Show-SystemInfo; Show-SuccessMessage }
+            'D' { Show-DiskUsage; Show-SuccessMessage }
             'E' { Test-Memory; Show-SuccessMessage }
-            'F' { Show-SystemInfo; Show-SuccessMessage }
-            'G' { Show-NetworkInfo; Show-SuccessMessage }
-            'H' { Show-DiskUsage; Show-SuccessMessage }
+            'F' { Invoke-SFC-Scan; Show-SuccessMessage }
+            'G' { Invoke-DISM-Scan; Show-SuccessMessage }
+            'H' { Test-SMART-Drives; Show-SuccessMessage }
             'X' { return }
             default {
                 Write-Host "`nOpção inválida!" -ForegroundColor Red
@@ -2143,55 +2126,6 @@ function Show-InstallationMenu {
     } while ($true)
 }
 
-# === MENU: LIMPEZA E OTIMIZAÇÃO ===
-function Show-CleanupMenu {
-    do {
-        Clear-Host
-        Write-Host "==== MENU: LIMPEZA E OTIMIZAÇÃO ====" -ForegroundColor Cyan
-        Write-Host " A. Executar todas as tarefas deste menu" -ForegroundColor Green
-        Write-Host " B. Agendar verificação de disco (chkdsk)"
-        Write-Host " C. Limpar cache DNS"
-        Write-Host " D. Limpar cache do Windows Update"
-        Write-Host " E. Limpar arquivos temporários"
-        Write-Host " F. Limpar Prefetch"
-        Write-Host " G. Limpar Spooler de Impressão"
-        Write-Host " H. Limpeza profunda (cache, logs, drivers)"
-        Write-Host " I. Otimizar volumes"
-        Write-Host " J. Remover pasta Windows.old"
-        Write-Host " K. Remover pasta WinSxS"
-        Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
-
-        $key = [Console]::ReadKey($true).Key
-        switch ($key) {
-            'A' {
-                New-ChkDsk
-                Clear-DNS
-                Clear-WUCache
-                Clear-TemporaryFiles
-                Clear-Prefetch
-                Clear-PrintSpooler
-                Clear-DeepSystemCleanup
-                Optimize-Volumes
-                Remove-WindowsOld
-                Clear-WinSxS
-                Show-SuccessMessage
-            }
-            'B' { New-ChkDsk; Show-SuccessMessage }
-            'C' { Clear-DNS; Show-SuccessMessage }
-            'D' { Clear-WUCache; Show-SuccessMessage }
-            'E' { Clear-TemporaryFiles; Show-SuccessMessage }
-            'F' { Clear-Prefetch; Show-SuccessMessage }
-            'G' { Clear-PrintSpooler; Show-SuccessMessage }
-            'H' { Clear-DeepSystemCleanup; Show-SuccessMessage }
-            'I' { Optimize-Volumes; Show-SuccessMessage }
-            'J' { Remove-WindowsOld; Show-SuccessMessage }
-            'K' { Clear-WinSxS; Show-SuccessMessage }
-            'X' { return }
-            default { Write-Host "`nOpção inválida!" -ForegroundColor Red; Start-Sleep 1 }
-        }
-    } while ($true)
-}
-
 # === MENU: REDE E IMPRESSORAS ===
 function Show-NetworkMenu {
     do {
@@ -2199,11 +2133,12 @@ function Show-NetworkMenu {
         Write-Host "==== MENU: REDE E IMPRESSORAS ====" -ForegroundColor Cyan
         Write-Host " A. Executar todas as tarefas deste menu" -ForegroundColor Green
         Write-Host " B. Adicionar rede Wi-Fi administrativa"
-        Write-Host " C. Definir DNS (Google/Cloudflare)"
-        Write-Host " D. Instalar impressoras de rede"
-        Write-Host " E. Limpar cache ARP"
-        Write-Host " F. Limpar cache DNS"
-        Write-Host " G. Otimizar TCP/DNS"
+        Write-Host " C. Aplicar DNS (TCP/Cloudflare)"
+        Write-Host " D. Definir DNS (Google/Cloudflare)"
+        Write-Host " E. Desabilitar IPv6"
+        Write-Host " F. Instalar impressoras de rede"
+        Write-Host " G. Limpar cache ARP"
+        Write-Host " H. Limpar cache DNS"
         Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
 
         $key = [Console]::ReadKey($true).Key
@@ -2211,24 +2146,29 @@ function Show-NetworkMenu {
             'A' {
                 try {
                     Add-WiFiNetwork
+                    Optimize-NetworkPerformance
                     Set-DnsGoogleCloudflare
+                    Disable-IPv6
                     Install-NetworkPrinters
                     Clear-ARP
                     Clear-DNS
-                    Optimize-NetworkPerformance
                     Show-SuccessMessage
                 } catch {
                     Write-Log "❌ Erro durante execução de tarefas de rede: $_" Red
                 }
             }
             'B' { Add-WiFiNetwork; Show-SuccessMessage }
-            'C' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
-            'D' { Install-NetworkPrinters; Show-SuccessMessage }
-            'E' { Clear-ARP; Show-SuccessMessage }
-            'F' { Clear-DNS; Show-SuccessMessage }
-            'G' { Optimize-NetworkPerformance; Show-SuccessMessage }
+            'C' { Optimize-NetworkPerformance; Show-SuccessMessage }
+            'D' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
+            'E' { Disable-IPv6; Show-SuccessMessage }
+            'F' { Install-NetworkPrinters; Show-SuccessMessage }
+            'G' { Clear-ARP; Show-SuccessMessage }
+            'H' { Clear-DNS; Show-SuccessMessage }
             'X' { return }
-            default { Write-Host "`nOpção inválida!" -ForegroundColor Red; Start-Sleep 1 }
+            default {
+                Write-Host "`nOpção inválida!" -ForegroundColor Red
+                Start-Sleep 1
+            }
         }
     } while ($true)
 }
@@ -2264,40 +2204,6 @@ function Show-ExternalScriptsMenu {
     } while ($true)
 }
 
-# === MENU: SISTEMA E DESEMPENHO ===
-function Show-SystemPerformanceMenu {
-    do {
-        Clear-Host
-        Write-Host "==== MENU: SISTEMA E DESEMPENHO ====" -ForegroundColor Cyan
-        Write-Host " A. Executar todas as tarefas deste menu" -ForegroundColor Green
-        Write-Host " B. Ajustes do Painel de Controle (visual e desempenho)"
-        Write-Host " C. Ajustar tema do Windows para desempenho"
-        Write-Host " D. Desativar serviços desnecessários"
-        Write-Host " E. Otimizar Windows Explorer para desempenho"
-        Write-Host " F. Renomear o notebook"
-        Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
-
-        $key = [Console]::ReadKey($true).Key
-        switch ($key) {
-            'A' {
-                Grant-ControlPanelTweaks
-                Set-PerformanceTheme
-                Disable-UnnecessaryServices
-                Optimize-ExplorerPerformance
-                Rename-Notebook
-                Show-SuccessMessage
-            }
-            'B' { Grant-ControlPanelTweaks; Show-SuccessMessage }
-            'C' { Set-PerformanceTheme; Show-SuccessMessage }
-            'D' { Disable-UnnecessaryServices; Show-SuccessMessage }
-            'E' { Optimize-ExplorerPerformance; Show-SuccessMessage }
-            'F' { Rename-Notebook; Show-SuccessMessage }
-            'X' { return }
-            default { Write-Host "`nOpção inválida!" -ForegroundColor Red; Start-Sleep 1 }
-        }
-    } while ($true)
-}
-
 # === MENU: REVERTER AJUSTES / RESTAURAR APLICATIVOS ===
 function Show-RestoreUndoMenu {
     do {
@@ -2310,14 +2216,14 @@ function Show-RestoreUndoMenu {
         Write-Host " E. Habilitar SMBv1 (NÃO RECOMENDADO)"
         Write-Host " F. Reabilitar Action Center/Notificações"
         Write-Host " G. Reabilitar IPv6"
-        Write-Host " H. Restaurar backup do registro"
-        Write-Host " I. Restaurar macros Office (padrão)"
-        Write-Host " J. Restaurar UAC para padrão"
-        Write-Host " K. Restaurar visual padrão"
-        Write-Host " L. Restaurar menu de contexto clássico"
-        Write-Host " M. Restaurar backup do registro (alternativo)"
-        Write-Host " N. Reinstalar aplicativos essenciais"
-        Write-Host " O. Reinstalar o OneDrive"
+        Write-Host " H. Reinstalar aplicativos essenciais"
+        Write-Host " I. Reinstalar o OneDrive"
+        Write-Host " J. Restaurar backup do registro"
+        Write-Host " K. Restaurar backup do registro (alternativo)"
+        Write-Host " L. Restaurar macros Office (padrão)"
+        Write-Host " M. Restaurar menu de contexto clássico"
+        Write-Host " N. Restaurar UAC para padrão"
+        Write-Host " O. Restaurar visual padrão"
         Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
 
         $key = [Console]::ReadKey($true).Key
@@ -2329,31 +2235,31 @@ function Show-RestoreUndoMenu {
                 Enable-SMBv1
                 Grant-ActionCenter-Notifications
                 Restore-DefaultIPv6
-                Restore-Registry-FromBackup
-                Restore-OfficeMacros
-                Restore-DefaultUAC
-                Restore-VisualPerformanceDefault
-                Enable-ClassicContextMenu
-                Restore-Registry
                 Restore-BloatwareSafe
                 Restore-OneDrive
+                Restore-Registry-FromBackup
+                Restore-Registry
+                Restore-OfficeMacros
+                Enable-ClassicContextMenu
+                Restore-DefaultUAC
+                Restore-VisualPerformanceDefault
                 Show-SuccessMessage
             }
-            'B'  { Grant-HardenOfficeMacros; Show-SuccessMessage }
-            'C'  { Disable-SMBv1; Show-SuccessMessage }
-            'D'  { Undo-PrivacyHardening; Show-SuccessMessage }
-            'E'  { Enable-SMBv1; Show-SuccessMessage }
-            'F'  { Grant-ActionCenter-Notifications; Show-SuccessMessage }
-            'G'  { Restore-DefaultIPv6; Show-SuccessMessage }
-            'H'  { Restore-Registry-FromBackup; Show-SuccessMessage }
-            'I'  { Restore-OfficeMacros; Show-SuccessMessage }
-            'J'  { Restore-DefaultUAC; Show-SuccessMessage }
-            'K'  { Restore-VisualPerformanceDefault; Show-SuccessMessage }
-            'L'  { Enable-ClassicContextMenu; Show-SuccessMessage }
-            'M'  { Restore-Registry; Show-SuccessMessage }
-            'N'  { Restore-BloatwareSafe; Show-SuccessMessage }
-            'O'  { Restore-OneDrive; Show-SuccessMessage }
-            'X'  { return }
+            'B' { Grant-HardenOfficeMacros; Show-SuccessMessage }
+            'C' { Disable-SMBv1; Show-SuccessMessage }
+            'D' { Undo-PrivacyHardening; Show-SuccessMessage }
+            'E' { Enable-SMBv1; Show-SuccessMessage }
+            'F' { Grant-ActionCenter-Notifications; Show-SuccessMessage }
+            'G' { Restore-DefaultIPv6; Show-SuccessMessage }
+            'H' { Restore-BloatwareSafe; Show-SuccessMessage }
+            'I' { Restore-OneDrive; Show-SuccessMessage }
+            'J' { Restore-Registry-FromBackup; Show-SuccessMessage }
+            'K' { Restore-Registry; Show-SuccessMessage }
+            'L' { Restore-OfficeMacros; Show-SuccessMessage }
+            'M' { Enable-ClassicContextMenu; Show-SuccessMessage }
+            'N' { Restore-DefaultUAC; Show-SuccessMessage }
+            'O' { Restore-VisualPerformanceDefault; Show-SuccessMessage }
+            'X' { return }
             default {
                 Write-Host "`nOpção inválida!" -ForegroundColor Red
                 Start-Sleep 1
