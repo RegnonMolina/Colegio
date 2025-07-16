@@ -86,7 +86,6 @@ function Test-RequiredFunctions {
 
 function Show-SuccessMessage {
     Write-Host "`n✅ Tarefa concluída com sucesso!" -ForegroundColor Green
-    Suspend-Script
 }
 
 Write-Log "Iniciando script de manutenção..." Cyan
