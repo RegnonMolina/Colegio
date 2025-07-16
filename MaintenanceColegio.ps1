@@ -2093,7 +2093,7 @@ function Show-InstallationMenu {
             'K' { Update-PowerShell; Show-SuccessMessage 
             # ✅ Após a última instalação, copia o atalho pro Startup
 $atalhoOrigem = "G:\Drives compartilhados\MundoCOC\Tecnologia\AutoHotKey\Colegio - Atalho.lnk"
-$atalhoDestino = [Environment]::GetFolderPath("Startup") + "\Colegio - Atalho.lnk"
+$atalhoDestino = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\" + "\Colegio - Atalho.lnk"
 Copy-Item -Path $atalhoOrigem -Destination $atalhoDestino -Force
             }
             'X' { return }
