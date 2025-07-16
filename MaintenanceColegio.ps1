@@ -843,7 +843,7 @@ reg.exe add "HKCU\SOFTWARE\Microsoft\input" /v IsInputAppPreloadEnabled /t REG_D
 reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Dsh" /v IsPrelaunchEnabled /t REG_DWORD /d 0 /f
 
 # Desativar informações de publicidade
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0
+    Set-ItemProperty -Path "HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0
 
     # Bloquear rastreadores via tarefas agendadas
     schtasks /Change /TN "Microsoft\Windows\Application Experience\ProgramDataUpdater" /Disable
@@ -1286,7 +1286,7 @@ function Grant-ControlPanelTweaks {
     }
 
     # === Ajustes: Control Panel\Desktop ===
-    $desktopKey = "HKCU:\Control Panel\Desktop"
+    $desktopKey = "HKCU\Control Panel\Desktop"
     Set-RegistryValue $desktopKey "DragFullWindows" 0 DWord
     Set-RegistryValue $desktopKey "MenuShowDelay" 0 String
     Set-RegistryValue $desktopKey "CursorBlinkRate" "530" String
@@ -1302,7 +1302,7 @@ function Grant-ControlPanelTweaks {
     Set-RegistryValue $desktopKey "WindowArrangementActive" 1 String
 
     # === Ajustes: Explorer\Advanced ===
-    $advKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    $advKey = "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
     
     # === Configurações de exibição de arquivos ===
     Set-RegistryValue $advKey "HideFileExt" 1 DWord               # Oculta extensões de arquivos
@@ -1355,7 +1355,7 @@ function Grant-ControlPanelTweaks {
     Write-Host "Configurações do Explorer atualizadas com sucesso!" -ForegroundColor Green
 
     # === Ajustes: Explorer\VisualEffects ===
-    $veBase = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
+    $veBase = "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
     Set-RegistryValue $veBase "VisualFXSetting" 2 DWord
     $visualTweaks = @(
         "AnimateMinMax", "ComboBoxAnimation", "ControlAnimations", "CursorShadow",
@@ -1369,7 +1369,7 @@ function Grant-ControlPanelTweaks {
     }
 
     # === Ajustes: Themes e Personalização ===
-    $themesKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes"
+    $themesKey = "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes"
     Set-RegistryValue $themesKey "ColorSetFromTheme" 1 DWord
     Set-RegistryValue $themesKey "WallpaperSetFromTheme" 1 DWord
     Set-RegistryValue "$themesKey\Personalize" "EnableTransparency" 1 DWord
@@ -1377,14 +1377,14 @@ function Grant-ControlPanelTweaks {
     Set-RegistryValue "$themesKey\Personalize" "AppsUseLightTheme" 0 DWord
 
     # Remover sugestões e conteúdo online
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SystemPaneSuggestionsEnabled" -Value 0 -Force
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ShowSyncProviderNotifications" -Value 0 -Force
+    Set-ItemProperty -Path "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SystemPaneSuggestionsEnabled" -Value 0 -Force
+    Set-ItemProperty -Path "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ShowSyncProviderNotifications" -Value 0 -Force
 
     # Desativar feed de notícias da barra de tarefas
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" -Name "ShellFeedsTaskbarViewMode" -Value 2 -Force
+    Set-ItemProperty -Path "HKCU\Software\Microsoft\Windows\CurrentVersion\Feeds" -Name "ShellFeedsTaskbarViewMode" -Value 2 -Force
 
     # Esconder itens do painel de controle
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoControlPanel" -Value 0 -Force
+    Set-ItemProperty -Path "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoControlPanel" -Value 0 -Force
 
     Write-Log "Painel de controle ajustado com sucesso." Green
     Write-Host "✔️ Ajustes aplicados com sucesso!" -ForegroundColor Green
@@ -1408,21 +1408,21 @@ function Grant-ExtraTweaks {
         reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked" /V "{7AD84985-87B4-4a16-BE58-8B72A5B390F7}" /T REG_SZ /D "Play to Menu" /F | Out-Null
         Write-Log "Tweaks extras aplicados." Green
     Write-Output "Apply MarkC's mouse acceleration fix"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseSensitivity" "10"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseSpeed" "0"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseThreshold1" "0"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "MouseThreshold2" "0"
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "SmoothMouseXCurve" ([byte[]](0x00, 0x00, 0x00,
+Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "MouseSensitivity" "10"
+Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "MouseSpeed" "0"
+Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "MouseThreshold1" "0"
+Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "MouseThreshold2" "0"
+Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "SmoothMouseXCurve" ([byte[]](0x00, 0x00, 0x00,
 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0xCC, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00,
 0x80, 0x99, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x66, 0x26, 0x00, 0x00,
 0x00, 0x00, 0x00, 0x00, 0x33, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00))
-Set-ItemProperty -Path "HKCU:\Control Panel\Mouse" "SmoothMouseYCurve" ([byte[]](0x00, 0x00, 0x00,
+Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "SmoothMouseYCurve" ([byte[]](0x00, 0x00, 0x00,
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00,
 0x00, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x00,
 0x00, 0x00, 0x00, 0x00, 0x00, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00))
 
 Write-Output "Disable mouse pointer hiding"
-Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" "UserPreferencesMask" ([byte[]](0x9e,
+Set-ItemProperty -Path "HKCU\Control Panel\Desktop" "UserPreferencesMask" ([byte[]](0x9e,
 0x1e, 0x06, 0x80, 0x12, 0x00, 0x00, 0x00))
 
 Write-Output "Disable Game DVR and Game Bar"
@@ -1430,9 +1430,9 @@ New-FolderForced -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR"
 Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowgameDVR" 0
 
 Write-Output "Disable easy access keyboard stuff"
-Set-ItemProperty -Path "HKCU:\Control Panel\Accessibility\StickyKeys" "Flags" "506"
-Set-ItemProperty -Path "HKCU:\Control Panel\Accessibility\Keyboard Response" "Flags" "122"
-Set-ItemProperty -Path "HKCU:\Control Panel\Accessibility\ToggleKeys" "Flags" "58"
+Set-ItemProperty -Path "HKCU\Control Panel\Accessibility\StickyKeys" "Flags" "506"
+Set-ItemProperty -Path "HKCU\Control Panel\Accessibility\Keyboard Response" "Flags" "122"
+Set-ItemProperty -Path "HKCU\Control Panel\Accessibility\ToggleKeys" "Flags" "58"
 
 Write-Output "Disable Edge desktop shortcut on new profiles"
 New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer" -Name DisableEdgeDesktopShortcutCreation -PropertyType DWORD -Value 1
@@ -1442,16 +1442,16 @@ New-FolderForced -Path "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\MTCUV
 Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\MTCUVC" "EnableMtcUvc" 0
 
 Write-Output "Setting folder view options"
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Hidden" 1
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideFileExt" 0
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideDrivesWithNoMedia" 0
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "ShowSyncProviderNotifications" 0
+Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Hidden" 1
+Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideFileExt" 0
+Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideDrivesWithNoMedia" 0
+Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "ShowSyncProviderNotifications" 0
 
 Write-Output "Disable Aero-Shake Minimize feature"
-Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "DisallowShaking" 1
+Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "DisallowShaking" 1
 
 Write-Output "Setting default explorer view to This PC"
-Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "LaunchTo" 1
+Set-ItemProperty -Path "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "LaunchTo" 1
 
 # This removes the "Trending Searches" results shown when you click on the windows search bar
 Write-Output "Disabling Trending Searches"
@@ -1464,9 +1464,9 @@ function Grant-HardenOfficeMacros {
     Write-Log "Desabilitando macros perigosos do Office..." Yellow
     try {
         $officePaths = @(
-        "HKCU:\Software\Microsoft\Office\16.0\Word\Security",
-        "HKCU:\Software\Microsoft\Office\16.0\Excel\Security",
-        "HKCU:\Software\Microsoft\Office\16.0\PowerPoint\Security"
+        "HKCU\Software\Microsoft\Office\16.0\Word\Security",
+        "HKCU\Software\Microsoft\Office\16.0\Excel\Security",
+        "HKCU\Software\Microsoft\Office\16.0\PowerPoint\Security"
     )
 
     foreach ($path in $officePaths) {
@@ -1803,7 +1803,7 @@ function Restore-ControlPanelTweaks {
     }
 
     # === Restaurar Desktop ===
-    $desktopKey = "HKCU:\Control Panel\Desktop"
+    $desktopKey = "HKCU\Control Panel\Desktop"
     Set-RegistryValue $desktopKey "DragFullWindows" 1 DWord
     Set-RegistryValue $desktopKey "MenuShowDelay" "400" String
     Set-RegistryValue $desktopKey "CursorBlinkRate" "530" String
@@ -1819,7 +1819,7 @@ function Restore-ControlPanelTweaks {
     Set-RegistryValue $desktopKey "WindowArrangementActive" 1 String
 
     # === Restaurar Explorer\Advanced ===
-    $advKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    $advKey = "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
     Set-RegistryValue $advKey "HideFileExt" 0 DWord
     Set-RegistryValue $advKey "ShowSuperHidden" 0 DWord
     Set-RegistryValue $advKey "TaskbarAnimations" 1 DWord
@@ -1832,7 +1832,7 @@ function Restore-ControlPanelTweaks {
     Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 1 DWord
 
     # === Restaurar Visual Effects ===
-    $veBase = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
+    $veBase = "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
     Set-RegistryValue $veBase "VisualFXSetting" 1 DWord
     $visualTweaks = @(
         "AnimateMinMax", "ComboBoxAnimation", "ControlAnimations", "CursorShadow",
@@ -1846,7 +1846,7 @@ function Restore-ControlPanelTweaks {
     }
 
     # === Restaurar Personalize ===
-    $themesKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes"
+    $themesKey = "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes"
     Set-RegistryValue $themesKey "ColorSetFromTheme" 1 DWord
     Set-RegistryValue $themesKey "WallpaperSetFromTheme" 1 DWord
     Set-RegistryValue "$themesKey\Personalize" "EnableTransparency" 1 DWord
