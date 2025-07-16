@@ -1268,7 +1268,21 @@ function Rename-Notebook {
 
 function Grant-ControlPanelTweaks {
     Write-Host "Aplicando ajustes visuais e de desempenho..." -ForegroundColor Cyan
-
+		try {
+			Enable-PowerOptions
+			Enable-DarkTheme
+			Enable-ClipboardHistory
+			Enable-WindowsUpdateFast
+			Enable-RestartAppsAfterReboot
+			Enable-OtherMicrosoftUpdates
+			Enable-Sudo
+			Enable-TaskbarEndTask
+			Rename-Notebook
+		}
+		catch {
+            Write-Warning "Falha ao definir $Name em $Path"
+        }
+		
     # Função interna para setar valores no registro
     function Set-RegistryValue {
         param (
@@ -1393,6 +1407,7 @@ function Grant-ControlPanelTweaks {
 function Grant-ExtraTweaks {
     Write-Log "Aplicando tweaks extras..." Yellow
     try {
+		
         # Bloqueio de anúncios
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f | Out-Null
@@ -2515,4 +2530,3 @@ catch {
 finally {
     # Cleanup se necessário
 }
-
