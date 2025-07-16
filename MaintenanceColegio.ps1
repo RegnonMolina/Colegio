@@ -1,4 +1,3 @@
-
 # ===============================
 # SCRIPT SUPREMO DE MANUTENÇÃO 🛠️
 # ===============================
@@ -32,6 +31,32 @@ $logFile = "$PSScriptRoot\log.txt"
 $startTime = Get-Date
 
 # === FUNÇÕES DE UTILIDADE ===
+function Test-RequiredFunctions {
+    param (
+        [string[]]$FunctionList
+    )
+
+    Write-Host "🔎 Verificando funções exigidas pelo script..." -ForegroundColor Cyan
+    $allGood = $true
+
+    foreach ($func in $FunctionList) {
+        if (Get-Command $func -ErrorAction SilentlyContinue) {
+            Write-Host "✅ $func" -ForegroundColor Green
+        } else {
+            Write-Host "❌ $func (não encontrada)" -ForegroundColor Red
+            $allGood = $false
+        }
+    }
+
+    if (-not $allGood) {
+        Write-Host "`n❗ Algumas funções estão faltando. O script pode falhar!" -ForegroundColor Yellow
+        # Você pode descomentar para abortar:
+        # throw "Funções ausentes detectadas. Corrija antes de continuar."
+    } else {
+        Write-Host "`n✔️ Todas as funções estão disponíveis. Continuando execução..." -ForegroundColor Cyan
+    }
+}
+
 function Show-SuccessMessage {
     Write-Host "`n✅ Tarefa concluída com sucesso!" -ForegroundColor Green
 }
@@ -1905,6 +1930,37 @@ function Restore-ControlPanelTweaks {
 
     Write-Host "✔️ Configurações restauradas para o padrão!" -ForegroundColor Green
 }
+
+$FuncoesCriticas = @(
+    'Disable-Cortana-AndSearch',
+    'Disable-SMBv1'
+    'Disable-UAC',
+    'Enable-PrivacyHardening',
+	'Enable-SMBv1',
+	'Grant-ActionCenter-Notifications',
+    'Grant-ControlPanelTweaks',
+    'Grant-ExtraTweaks',
+	'Grant-HardenOfficeMacros',
+    'Optimize-NetworkPerformance',
+    'Remove-Bloatware',
+    'Remove-OneDrive-AndRestoreFolders',
+	'Restore-ControlPanelTweaks',
+	'Restore-DefaultIPv6',
+	'Restore-DefaultUAC',
+	'Restore-Registry-FromBackup',
+	'Restore-VisualPerformanceDefault',
+    'Show-AutoLoginMenu',
+    'Show-BloatwareMenu',
+    'Show-CleanupMenu',
+    'Show-DiagnosticsMenu',
+    'Show-ExternalScriptsMenu',
+    'Show-SuccessMessage',
+    'Show-SystemPerformanceMenu',
+	'Undo-PrivacyHardening',
+    # Adicione mais funções importantes aqui
+)
+
+Test-RequiredFunctions -FunctionList $FuncoesCriticas
 
 # === MENU PRINCIPAL ===
 function Show-MainMenu {
