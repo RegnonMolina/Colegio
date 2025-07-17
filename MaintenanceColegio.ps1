@@ -2477,16 +2477,20 @@ function Show-UtilitiesMenu {
             'B' {
                 do {
                     Clear-Host
-                    Write-Host "----------------------------------------------------" -ForegroundColor Green
-                    Write-Host "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -ForegroundColor Green
-                    Write-Host "----------------------------------------------------" -ForegroundColor Green
-                    Write-Host "`n[A] Remover Bloatware (Todos em sequência)"
-                    Write-Host "[B] Remover Aplicativos Pré-instalados (Bloatware)"
-                    Write-Host "[C] Remover OneDrive e Restaurar Pastas"
-                    Write-Host "`n[X] Voltar ao Menu Anterior"
-                    Write-Host "----------------------------------------------------"
-                    $subChoice = Read-Host "Escolha uma opção"
+                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Log "Exibindo submenu de Bloatware..." Blue
+
+                    Write-Host " A. Remover Bloatware (Todos em sequência)" # PADRONIZADO
+                    Write-Host " B. Remover Aplicativos Pré-instalados (Bloatware)" # PADRONIZADO
+                    Write-Host " C. Remover OneDrive e Restaurar Pastas" # PADRONIZADO
+                    Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta # PADRONIZADO
+                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+
+                    $subChoice = [Console]::ReadKey($true).Key # PADRONIZADO: Não precisa de Enter
                     Write-Log "Opção escolhida no submenu de Bloatware: $subChoice" Blue
+
                     switch ($subChoice) {
                         'A' {
                             Write-Host "Executando: Remover Bloatware (Todos em sequência)..." -ForegroundColor Yellow
@@ -2500,8 +2504,8 @@ function Show-UtilitiesMenu {
                         'x' { return }
                         'X' { return }
                         default {
-                            Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
-                            Start-Sleep 1
+                            Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red # PADRONIZADO
+                            [Console]::ReadKey($true) | Out-Null # PADRONIZADO
                         }
                     }
                 } while ($true)
@@ -2509,16 +2513,20 @@ function Show-UtilitiesMenu {
             'C' {
                 do {
                     Clear-Host
-                    Write-Host "----------------------------------------------------" -ForegroundColor Green
-                    Write-Host "      SUBMENU DE LIMPEZA E OTIMIZAÇÃO DE DISCO      " -ForegroundColor Green
-                    Write-Host "----------------------------------------------------" -ForegroundColor Green
-                    Write-Host "`n[A] Executar Todas as Tarefas de Limpeza e Otimização"
-                    Write-Host "[B] Limpeza de Arquivos Temporários"
-                    Write-Host "[C] Desfragmentar/Otimizar Drives"
-                    Write-Host "`n[X] Voltar ao Menu Anterior"
-                    Write-Host "----------------------------------------------------"
-                    $subChoice = Read-Host "Escolha uma opção"
+                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host "      SUBMENU DE LIMPEZA E OTIMIZAÇÃO DE DISCO      " -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Log "Exibindo submenu de Limpeza e Otimização..." Blue
+
+                    Write-Host " A. Executar Todas as Tarefas de Limpeza e Otimização" # PADRONIZADO
+                    Write-Host " B. Limpeza de Arquivos Temporários" # PADRONIZADO
+                    Write-Host " C. Desfragmentar/Otimizar Drives" # PADRONIZADO
+                    Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta # PADRONIZADO
+                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+
+                    $subChoice = [Console]::ReadKey($true).Key # PADRONIZADO: Não precisa de Enter
                     Write-Log "Opção escolhida no submenu de Limpeza: $subChoice" Blue
+
                     switch ($subChoice) {
                         'A' {
                             Write-Host "Executando: Todas as Tarefas de Limpeza e Otimização..." -ForegroundColor Yellow
@@ -2532,8 +2540,8 @@ function Show-UtilitiesMenu {
                         'x' { return }
                         'X' { return }
                         default {
-                            Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
-                            Start-Sleep 1
+                            Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red # PADRONIZADO
+                            [Console]::ReadKey($true) | Out-Null # PADRONIZADO
                         }
                     }
                 } while ($true)
@@ -2541,17 +2549,21 @@ function Show-UtilitiesMenu {
             'D' {
                 do {
                     Clear-Host
-                    Write-Host "----------------------------------------------------" -ForegroundColor Green
-                    Write-Host "    SUBMENU DE OTIMIZAÇÕES DE DESEMPENHO E PRIVACIDADE    " -ForegroundColor Green
-                    Write-Host "----------------------------------------------------" -ForegroundColor Green
-                    Write-Host "`n[A] Aplicar Todas as Otimizações de Desempenho e Privacidade"
-                    Write-Host "[B] Aplicar Tweaks de Privacidade"
-                    Write-Host "[C] Ajustar Painel de Controle e Explorer"
-                    Write-Host "[D] Aplicar Tweaks Extras"
-                    Write-Host "`n[X] Voltar ao Menu Anterior"
-                    Write-Host "----------------------------------------------------"
-                    $subChoice = Read-Host "Escolha uma opção"
+                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host "    SUBMENU DE OTIMIZAÇÕES DE DESEMPENHO E PRIVACIDADE    " -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Log "Exibindo submenu de Otimizações de Desempenho e Privacidade..." Blue
+
+                    Write-Host " A. Aplicar Todas as Otimizações de Desempenho e Privacidade" # PADRONIZADO
+                    Write-Host " B. Aplicar Tweaks de Privacidade" # PADRONIZADO
+                    Write-Host " C. Ajustar Painel de Controle e Explorer" # PADRONIZADO
+                    Write-Host " D. Aplicar Tweaks Extras" # PADRONIZADO
+                    Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta # PADRONIZADO
+                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+
+                    $subChoice = [Console]::ReadKey($true).Key # PADRONIZADO: Não precisa de Enter
                     Write-Log "Opção escolhida no submenu de Desempenho e Privacidade: $subChoice" Blue
+
                     switch ($subChoice) {
                         'A' {
                             Write-Host "Executando: Todas as Otimizações de Desempenho e Privacidade..." -ForegroundColor Yellow
@@ -2567,8 +2579,8 @@ function Show-UtilitiesMenu {
                         'x' { return }
                         'X' { return }
                         default {
-                            Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
-                            Start-Sleep 1
+                            Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red # PADRONIZADO
+                            [Console]::ReadKey($true) | Out-Null # PADRONIZADO
                         }
                     }
                 } while ($true)
