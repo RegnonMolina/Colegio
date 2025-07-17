@@ -1124,7 +1124,7 @@ function Enable-PowerOptions {
     if ($config.EconomiaEnergiaAtivada) {
         # Ativar economia de energia
         powercfg /setdcvalueindex SCHEME_CURRENT SUB_ENERGYSAVER ESBATTTHRESHOLD $config.NivelAtivacaoEconomia
-        powercfg /setdcvalueindex SCHEME_CURRENT SUB_ENERGYSAVER ESBRIGHTNESS $($config.ReduzirBrilho ? 1 : 0)
+  	powercfg /setdcvalueindex SCHEME_CURRENT SUB_ENERGYSAVER ESBRIGHTNESS $(if ($config.ReduzirBrilho) {1} else {0})
         
         # Habilitar "Sempre usar economia de energia"
         powercfg /setdcvalueindex SCHEME_CURRENT SUB_ENERGYSAVER ES_POLICY 1
@@ -1140,9 +1140,10 @@ function Enable-PowerOptions {
     Write-Host " - Hibernação (AC/DC): $($config.TempoHibernarAC == 0 ? 'Nunca' : $config.TempoHibernarAC+'min') / $($config.TempoHibernarBateria)min"
     Write-Host " - Tampa (AC/DC): $($config.ComportamentoTampaAC) / $($config.ComportamentoTampaBateria)"
     Write-Host " - Botão Energia (AC/DC): $($config.BotaoEnergiaAC) / $($config.BotaoEnergiaBateria)"
-    Write-Host " - Economia de energia: $($config.EconomiaEnergiaAtivada ? 'Ativada' : 'Desativada')"
     Write-Host "   - Nível ativação: $($config.NivelAtivacaoEconomia)%"
-    Write-Host "   - Reduzir brilho: $($config.ReduzirBrilho ? 'Sim' : 'Não')"
+    Write-Host (" - Economia de energia: " + (if ($config.EconomiaEnergiaAtivada) {'Ativada'} else {'Desativada'}))
+    Write-Host ("   - Reduzir brilho: " + (if ($config.ReduzirBrilho) {'Sim'} else {'Não'}))
+
 }
 
 function Enable-DarkTheme {
