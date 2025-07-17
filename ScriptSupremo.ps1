@@ -38,14 +38,20 @@ param (
     [Parameter(HelpMessage="Remove e desativa o Windows Copilot.")]
     [bool]$RemoveCopilot = $false,
 
-    [Parameter(HelpMessage="Desativa o recurso Windows Recall.")]
-    [bool]$DisableRecall = $false,
+    [Parameter(HelpMessage="Aplica as configurações de GPO/Registro.")]
+    [bool]$ApplyGPOSettings = $false,
 
-    [Parameter(HelpMessage="Executa o processo de atualização do Windows via PSWindowsUpdate.")]
-    [bool]$RunWindowsUpdate = $false,
+    [Parameter(HelpMessage="Define o plano de energia para Alto Desempenho.")]
+    [bool]$SetHighPerformancePowerPlan = $false,
 
-    [Parameter(HelpMessage="Aplica a configuração de plano de energia otimizado.")]
-    [bool]$ApplyOptimizedPowerPlan = $false
+    [Parameter(HelpMessage="Aplica ajustes de interface do usuário.")]
+    [bool]$ApplyUITweaks = $false,
+
+    [Parameter(HelpMessage="Exibe o menu principal após a execução.")]
+    [bool]$ShowMainMenu = $true,
+
+    [Parameter(HelpMessage="Solicita confirmação antes de ações destrutivas.")]
+    [bool]$ConfirmationRequired = $true
 )
 #endregion
 
