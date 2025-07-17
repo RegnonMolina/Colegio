@@ -193,79 +193,87 @@ function Clear-ARP {
 # === FUNÇÕES DE REMOÇÃO DE BLOATWARE ===
 
 function Remove-Bloatware {
-    # Lista PRIORITÁRIA (foco no que você quer remover)
+    Write-Log "Iniciando a remoção de Bloatware..." Yellow
+
+    # Lista de pacotes para remover (nomes parciais ou exatos)
+    # ATENÇÃO: Adicione ou remova itens conforme sua necessidade e cuidado ao remover pacotes essenciais!
     $bloatwareToRemove = @(
-        # LinkedIn e variantes
-        "*LinkedIn*",
-        "Microsoft.LinkedIn",
-        "LinkedIn.LinkedIn",
-        
-        # Xbox e todos os componentes
-        "*Xbox*",
-        "Microsoft.XboxApp",
-        "Microsoft.XboxGameOverlay",
-        "Microsoft.XboxGamingOverlay",
-        "Microsoft.XboxIdentityProvider",
-        "Microsoft.XboxSpeechToTextOverlay",
-        "Microsoft.Xbox.TCUI",
-        "Microsoft.GamingApp",
-        
-        # Outros bloatwares comuns (opcional)
-        "Microsoft.BingNews",
-        "Microsoft.BingWeather",
-        "Microsoft.Getstarted",
-        "Microsoft.MicrosoftSolitaireCollection"
+        "*Bing*", "*Edge*", "*News*", "*Weather*", "*GetHelp*", "*GetStarted*", "*Maps*",
+        "*SkypeApp*", "*SolitaireCollection*", "*StickyNotes*", "*Wallet*", "*YourPhone*",
+        "*WindowsFeedback*", "*Xbox*", "*ZuneMusic*", "*ZuneVideo*", "*AppInstaller*",
+        "*VP9VideoExtensions*", "*WebMediaExtensions*", "*HEVCVideoExtension*",
+        "*MSN.", "*OfficeHub*", "*OneNote*", "*Paint3D*", "*People*", "*Photos*",
+        "*Print3D*", "*ScreenSketch*", "*SoundRecorder*", "*MixedRealityPortal*",
+        "*ConnectivityStore*", "*DolbyAccess*", "*DolbyLaboratories.DolbyAccess*",
+        "*Netflix*", "*Spotify*", "*TikTok*", "*Instagram*", "*Facebook*", "*Twitter*",
+        "*Microsoft.StorePurchaseApp*", "*WindowsCalculator*", "*AlarmsAndClock*",
+        "*WindowsCamera*", "*WindowsDefaultLockScreen*", "*WindowsMaps*", "*WindowsMail*",
+        "*Microsoft.GamingApp*", # App Xbox principal
+        "*GamingServices*", # Serviços relacionados a jogos
+        "*Windows.ContactSupport*", # Obter Ajuda
+        "*Microsoft.Windows.Photos.Addon*" # Complemento do aplicativo Fotos
     )
 
-    # Whitelist (apps que NÃO podem ser removidos)
+    # Lista de pacotes essenciais que NÃO devem ser removidos (whitelist)
     $whitelist = @(
-        "Microsoft.WindowsCalculator",
-        "Microsoft.WindowsCamera",
-        "Microsoft.WindowsSoundRecorder",
-        "Microsoft.StorePurchaseApp",
-        "Microsoft.DesktopAppInstaller", # Necessário pro winget
-        "Microsoft.WindowsStore"
+        "Microsoft.DesktopAppInstaller", # winget
+        "Microsoft.Store", # Loja da Microsoft
+        "Microsoft.Windows.StartMenuExperienceHost", # Menu Iniciar
+        "Microsoft.Windows.ShellExperienceHost", # Shell
+        "Microsoft.UI.Xaml.2.X", # Componentes da UI
+        "Microsoft.VCLibs.140.00", # Bibliotecas essenciais
+        "Microsoft.NET.Native.Framework.X.X", # Bibliotecas .NET
+        "Microsoft.NET.Native.Runtime.X.X", # Bibliotecas .NET
+        "Microsoft.Services.Store.Engagement", # Loja
+        "Microsoft.Xbox.TCUI", # Componentes Xbox (se necessário)
+        "Microsoft.XboxGameCallableUI", # Componentes Xbox (se necessário)
+        "Microsoft.AccountsControl",
+        "Microsoft.LockApp",
+        "Microsoft.Windows.SecHealthUI", # Segurança do Windows
+        "Microsoft.ScreenCapture" # Ferramenta de Captura
     )
 
-    # Passo 1: Remover do usuário atual
-    Write-Log "Removendo pacotes do usuário atual..." Yellow
-    Get-AppxPackage | Where-Object {
-        $_.Name -notin $whitelist -and
-        ($bloatwareToRemove -contains $_.Name -or $bloatwareToRemove -like $_.Name)
-        $_.Name -notin $whitelist -and
-        ($bloatwareToRemove -contains $_.Name -or $bloatwareToRemove | Where-Object { $_ -and ($_.Length -gt 0) -and ($_.Name -like $_) } )
-        Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue
-    }
-
-    # Passo 2: Remover provisionados (para novos usuários)
-    Write-Log "Removendo pacotes provisionados..." Yellow
-    Get-AppxProvisionedPackage -Online | Where-Object {
-        $_.PackageName -notin $whitelist -and
-        ($bloatwareToRemove -contains $_.PackageName -or $bloatwareToRemove -like $_.PackageName)
-    } | ForEach-Object {
-        Write-Log "Removendo provisionado: [$($_.DisplayName)]" Red
-        Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue
-    }
-
-    # Passo 3: Limpeza AGESSIVA (pastas residuais)
-    $foldersToDelete = @(
-        "$env:LOCALAPPDATA\Packages\Microsoft.LinkedIn*",
-        "$env:LOCALAPPDATA\Packages\Microsoft.Xbox*",
-        "$env:PROGRAMFILES\WindowsApps\Microsoft.LinkedIn*",
-        "$env:PROGRAMFILES\WindowsApps\Microsoft.Xbox*"
-    )
-    
-    foreach ($folder in $foldersToDelete) {
-        if (Test-Path $folder) {
-            Remove-Item $folder -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Log "Pasta residual removida: [$folder]" DarkYellow
+    # Função auxiliar para verificar se um pacote deve ser removido
+    function Test-ShouldRemovePackage {
+        param (
+            [Parameter(Mandatory=$true)]
+            [string]$PackageName
+        )
+        if ($whitelist -contains $PackageName) {
+            return $false
         }
+        foreach ($item in $bloatwareToRemove) {
+            if ($PackageName -like $item) {
+                return $true
+            }
+        }
+        return $false
     }
 
-    Write-Log "✅ LinkedIn e Xbox FORAM ELIMINADOS!" Green
-    Show-SuccessMessage
-}
+    try {
+        # Passo 1: Remover pacotes provisionados (para novos usuários)
+        Write-Log "Removendo pacotes provisionados para novos usuários..." Cyan
+        Get-AppxProvisionedPackage -ErrorAction SilentlyContinue | ForEach-Object {
+            if (Test-ShouldRemovePackage -PackageName $_.PackageName) {
+                Write-Log "Removendo provisionamento de $($_.PackageName)..." Cyan
+                Remove-AppxProvisionedPackage -PackageName $_.PackageName -ErrorAction SilentlyContinue
+            }
+        }
 
+        # Passo 2: Remover do usuário atual
+        Write-Log "Removendo pacotes do usuário atual..." Cyan
+        Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue | ForEach-Object {
+            if (Test-ShouldRemovePackage -PackageName $_.Name) {
+                Write-Log "Removendo $($_.Name) para o usuário $($_.User.Name)..." Cyan
+                Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue
+            }
+        }
+
+        Write-Log "Remoção de Bloatware concluída." Green
+    } catch {
+        Write-Log "Erro durante a remoção de Bloatware: $_" Red
+    }
+}
 function Disable-BloatwareScheduledTasks {
     Write-Log "Desativando tarefas agendadas de bloatware e telemetria..." Yellow
     $tasks = @(
@@ -328,61 +336,6 @@ function Stop-BloatwareProcesses {
     Write-Log "Encerramento de processos dispensáveis concluído." Green
 }
 
-function Remove-UWPBloatware {
-    Write-Log "Removendo UWP bloatware (exceto essenciais)..." Yellow
-    $whitelist = @(
-    "Microsoft.WindowsCalculator",
-    "Microsoft.WindowsCamera",
-    "Microsoft.WindowsSoundRecorder",
-    "Microsoft.StorePurchaseApp",
-    "Microsoft.DesktopAppInstaller", # Necessário pro winget
-    "Microsoft.WindowsStore"
-)
-
-    Get-AppxPackage -AllUsers | Where-Object { $whitelist -notcontains $_.Name } | ForEach-Object {
-        try {
-            Write-Log "Removendo $($_.Name)..." Cyan
-            Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-        } 
-        catch {
-            Write-Log "Erro ao remover $($_.Name): $_" Red
-        }
-    }
-    Write-Log "Remoção de UWP bloatware concluída." Green
-}
-
-function Remove-ProvisionedBloatware {
-    Write-Log "Removendo bloatware (mantendo whitelist)..." Yellow
-    $whitelist = @(
-        "Microsoft.WindowsCalculator",
-        "Microsoft.WindowsCamera",
-        "Microsoft.WindowsSoundRecorder",
-        "Microsoft.StorePurchaseApp",
-        "Microsoft.DesktopAppInstaller", # Necessário pro winget
-        "Microsoft.WindowsStore"
-    )
-    $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $whitelist -notcontains $_.DisplayName }
-    foreach ($app in $provisioned) {
-        try {
-            Write-Log "Removendo provisionado $($app.DisplayName)..." Cyan
-            Remove-AppxProvisionedPackage -PackageName $app.PackageName -Online -ErrorAction SilentlyContinue
-        } 
-        catch {
-            Write-Log "Erro ao remover provisionado $($app.DisplayName): $_" Red
-        }
-    }
-    $installed = Get-AppxPackage -AllUsers | Where-Object { $whitelist -notcontains $_.Name }
-    foreach ($app in $installed) {
-        try {
-            Write-Log "Removendo instalado $($app.Name)..." Cyan
-            Remove-AppxPackage -Package $app.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-        } 
-        catch {
-            Write-Log "Erro ao remover instalado $($app.Name): $_" Red
-        }
-    }
-    Write-Log "Remoção de bloatware concluída." Green
-}
 
 function Remove-StartAndTaskbarPins {
     Write-Log "Removendo pins do Menu Iniciar e Barra de Tarefas..." Yellow
@@ -462,6 +415,7 @@ function Install-Applications {
         @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
         @{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
         @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
+        @{ Id = "ShareX.ShareX" ; Name = "ShareX" }, # ShareX
         @{Name = "7-Zip"; Id = "7zip.7zip"}
     )
 
@@ -647,19 +601,110 @@ function Test-InternetSpeed {
 }
 
 function Optimize-NetworkPerformance {
-    Write-Log "Otimizando rede (TCP tweaks, DNS customizado)..." Yellow
-    try {
-        netsh int tcp set global autotuninglevel=normal | Out-Null
-        netsh int tcp set global chimney=enabled | Out-Null
-        netsh int tcp set global rss=enabled | Out-Null
-        netsh int tcp set global netdma=enabled | Out-Null
-        netsh int tcp set global dca=enabled | Out-Null
-        netsh int tcp set global ecncapability=disabled | Out-Null
-        netsh int tcp set global timestamps=disabled | Out-Null
-        Write-Log "Parâmetros de rede ajustados com sucesso." Green
-    } catch {
-        Write-Log "Falha na otimização de rede: $_" Red
+    Write-Log "Iniciando a otimização do desempenho da rede..." Yellow
+    Write-Host "Aplicando otimizações de rede..." -ForegroundColor Yellow
+
+    # Carrega o módulo NetAdapter se ainda não estiver carregado
+    if (-not (Get-Module -ListAvailable -Name NetAdapter)) {
+        Write-Log "Módulo NetAdapter não encontrado. Tentando importar..." Yellow
+        try {
+            Import-Module NetAdapter -ErrorAction Stop
+            Write-Log "Módulo NetAdapter importado com sucesso." Green
+        } catch {
+            Write-Log "Erro ao importar o módulo NetAdapter: $_. Algumas otimizações podem não ser aplicadas." Red
+            return # Sai da função se o módulo não puder ser carregado
+        }
     }
+
+    $networkAdapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue
+
+    if (-not $networkAdapters) {
+        Write-Log "Nenhum adaptador de rede físico encontrado para otimização." Red
+        return
+    }
+
+    foreach ($adapter in $networkAdapters) {
+        Write-Log "Otimizando adaptador de rede: $($adapter.Name)..." Cyan
+        try {
+            # Desabilitar o Receive Side Scaling (RSS) - Não é mais tão comum desabilitar, mas se precisar:
+            # RSS geralmente é bom, mas pode ser problemático em cenários específicos.
+            # Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "Receive Side Scaling" -DisplayValue "Disabled" -ErrorAction SilentlyContinue | Out-Null
+            # Write-Log "RSS desabilitado para $($adapter.Name)." Green
+
+            # Desabilitar a Checagem de Descarregamento IPv4
+            # Equivalent to netsh interface ipv4 set offload "Adapter Name" rx off tx off
+            Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "IPv4 Checksum Offload" -DisplayValue "Disabled" -ErrorAction SilentlyContinue | Out-Null
+            Write-Log "Desabilitada Checagem de Descarregamento IPv4 para $($adapter.Name)." Green
+
+            # Desabilitar a Checagem de Descarregamento TCP
+            # Equivalent to netsh interface tcp set global chimney=disabled
+            # Chimney Offload é global, mas pode ser configurado por adaptador. Aqui faremos por adaptador.
+            Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "TCP Checksum Offload (IPv4)" -DisplayValue "Disabled" -ErrorAction SilentlyContinue | Out-Null
+            Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "TCP Checksum Offload (IPv6)" -DisplayValue "Disabled" -ErrorAction SilentlyContinue | Out-Null
+            Write-Log "Desabilitada Checagem de Descarregamento TCP para $($adapter.Name)." Green
+
+            # Desabilitar Large Send Offload (LSO) - CUIDADO: Pode impactar desempenho em algumas redes
+            # Equivalent to netsh interface tcp set global lso=disabled
+            Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "Large Send Offload V2 (IPv4)" -DisplayValue "Disabled" -ErrorAction SilentlyContinue | Out-Null
+            Set-NetAdapterAdvancedProperty -Name $adapter.Name -DisplayName "Large Send Offload V2 (IPv6)" -DisplayValue "Disabled" -ErrorAction SilentlyContinue | Out-Null
+            Write-Log "Desabilitado Large Send Offload (LSO) para $($adapter.Name)." Green
+
+            # Desabilitar ECN Capability (Explicit Congestion Notification)
+            # Equivalent to netsh int tcp set global ecncapability=disabled
+            # ECN é global, aqui faremos um ajuste global via registro, pois não é propriedade de adaptador fácil.
+            # Pode-se desabilitar globalmente via: netsh int tcp set global ecncapability=disabled
+            # Ou via registro: HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\EnableICMPRedirect = 0 (ECN é outra chave)
+            # Para ECN, manteremos o netsh ou um tweak de registro global se o objetivo for desativar.
+            # Por simplicidade e clareza, se precisar do ECN, um cmdlet específico não existe para ativar/desativar globalmente.
+            # O ideal seria usar Set-NetTCPSetting para isso, mas afeta perfis de rede.
+            # Exemplo de Set-NetTCPSetting para ECN (afeta perfis, não adaptador diretamente):
+            # Set-NetTCPSetting -SettingName Custom -EcnCapability Disabled -ErrorAction SilentlyContinue | Out-Null
+            # Write-Log "Desabilitado ECN Capability (globalmente, se aplicável)." Green
+
+            # Desabilitar o NetBIOS sobre TCP/IP (se não for usado para redes legadas)
+            # Isso é configurado no adaptador.
+            # Get-NetAdapterBinding -ComponentID ms_netbios -Name $adapter.Name -ErrorAction SilentlyContinue | Disable-NetAdapterBinding -ErrorAction SilentlyContinue | Out-Null
+            # Write-Log "NetBIOS sobre TCP/IP desabilitado para $($adapter.Name)." Green
+
+        } catch {
+            Write-Log "Erro ao otimizar adaptador $($adapter.Name): $_" Red
+        }
+    }
+
+    # Configurações globais de TCP que podem ser feitas via registro ou NetTCPSetting
+    Write-Log "Aplicando configurações globais de TCP via Registro..." Cyan
+    try {
+        # Desabilitar Nagle's Algorithm (TcpNoDelay=1)
+        # Pode reduzir latência, mas aumentar uso de banda. Cuidado.
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpNoDelay" -Value 1 -Force -ErrorAction SilentlyContinue | Out-Null
+        Write-Log "Nagle's Algorithm desabilitado (TcpNoDelay)." Green
+
+        # Habilitar o TcpAckFrequency (para jogos e baixa latência, ou 1 para ack imediato)
+        # 0 = Acks por padrão, 1 = Acks imediatos.
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" -Name "TcpAckFrequency" -Value 1 -Force -ErrorAction SilentlyContinue | Out-Null
+        Write-Log "TcpAckFrequency configurado para 1." Green
+
+        # Ajuste do limite de conexão TCP (para programas P2P, etc.)
+        # HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\MaxUserPort = 65534
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "MaxUserPort" -Value 65534 -Force -ErrorAction SilentlyContinue | Out-Null
+        Write-Log "MaxUserPort configurado para 65534." Green
+
+        # Tempo de vida de portas TCP/IP (reduzir espera para reuso de portas)
+        # HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\TcpTimedWaitDelay = 30 (seconds)
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpTimedWaitDelay" -Value 30 -Force -ErrorAction SilentlyContinue | Out-Null
+        Write-Log "TcpTimedWaitDelay configurado para 30 segundos." Green
+
+        # Desabilitar o Fast Startup (Inicialização Rápida) via Registro (pode causar problemas em dual-boot)
+        # Equivalente a desmarcar no Painel de Controle -> Opções de Energia
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "HiberbootEnabled" -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
+        Write-Log "Inicialização Rápida (Fast Startup) desabilitada." Green
+
+    } catch {
+        Write-Log "Erro ao aplicar configurações globais de TCP/Registro: $_" Red
+    }
+
+    Write-Log "Otimização de desempenho da rede concluída." Green
+    Write-Host "Otimizações de rede aplicadas. Um reinício pode ser necessário para algumas alterações." -ForegroundColor Green
 }
 
 function Disable-IPv6 {
@@ -733,137 +778,109 @@ function Test-Memory {
 # === FUNÇÕES DE TWEAKS DE PRIVACIDADE E REGISTRO ===
 
 function Grant-PrivacyTweaks {
-    Write-Log "Aplicando tweaks de privacidade..." Yellow
-    try {
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" /v DisabledByGroupPolicy /t REG_DWORD /d 1 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsConsumerFeatures /t REG_DWORD /d 1 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v ContentDeliveryAllowed /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v OemPreInstalledAppsEnabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEnabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEverEnabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f 
-        reg.exe add "HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\SettingSync" /v DisableSettingSync /t REG_DWORD /d 2 /f 
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\SettingSync" /v DisableSettingSyncUserOverride /t REG_DWORD /d 1 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" /v DisabledByGroupPolicy /t REG_DWORD /d 1 /f 
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f 
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\EnhancedStorageDevices" /v TCGSecurityActivationDisabled /t REG_DWORD /d 0 /f 
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" /v DontSendAdditionalData /t REG_DWORD /d 1 /f 
-        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" /v Disabled /t REG_DWORD /d 1 /f 
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKLM\Software\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting" /v value /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsConsumerFeatures /t REG_DWORD /d 1 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v ContentDeliveryAllowed /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v OemPreInstalledAppsEnabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEnabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v PreInstalledAppsEverEnabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338387Enabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353698Enabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f
-        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications" /v NoTileApplicationNotification /t REG_DWORD /d 1 /f
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}" /v SensorPermissionState /t REG_DWORD /d 1 /f
-        reg.exe delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Device Metadata" /f
-        reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudClient" /v DisableTailoredExperiencesWithDiagnosticData /t REG_DWORD /d 1 /f
-        reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\OOBE" /v "DisablePrivacyExperience" /t REG_DWORD /d "1" /f
-        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy" /v "HasAccepted" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy" /v "HasAccepted" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" /v "Value" /t REG_SZ /d "Deny" /f
-        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" /v "Value" /t REG_SZ /d "Deny" /f
-        reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Settings\FindMyDevice" /v "LocationSyncEnabled" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_USERS\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack" /v "ShowedToastAtLevel" /t REG_DWORD /d "1" /f
-        reg.exe add "HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack" /v "ShowedToastAtLevel" /t REG_DWORD /d "1" /f
-        reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v "AllowTelemetry" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v "MaxTelemetryAllowed" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Input\TIPC" /v "Enabled" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Input\TIPC" /v "Enabled" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\Privacy" /v "TailoredExperiencesWithDiagnosticDataEnabled" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Privacy" /v "TailoredExperiencesWithDiagnosticDataEnabled" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_USERS\.DEFAULT\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
-        reg.exe add "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v "Enabled" /t REG_DWORD /d "0" /f
-        # Disable Cortana
-reg.exe add "HKCU\SOFTWARE\Microsoft\Personalization\Settings" /v AcceptedPrivacyPolicy /t REG_DWORD /d 0 /f
-reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /t REG_DWORD /d 1 /f
-reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /t REG_DWORD /d 1 /f
-reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /t REG_DWORD /d 0 /f
+    Write-Log "Aplicando tweaks de privacidade e desabilitando funcionalidades desnecessárias..." Yellow
 
-# Fix Windows Search
-reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AllowIndexingEncryptedStoresOrItems" /t REG_DWORD /d 0 /f 
-reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AllowSearchToUseLocation" /t REG_DWORD /d 0 /f 
-reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AlwaysUseAutoLangDetection" /t REG_DWORD /d 0 /f 
-reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "CortanaConsent" /t REG_DWORD /d 0 /f 
-reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "CortanaInAmbientMode" /t REG_DWORD /d 0 /f 
-reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "HistoryViewEnabled" /t REG_DWORD /d 0 /f  
-reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "HasAboveLockTips" /t REG_DWORD /d 0 /f 
-reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v "AllowSearchToUseLocation" /t REG_DWORD /d 0 /f 
-reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\SearchSettings" /v "SafeSearchMode" /t REG_DWORD /d 0 /f 
-reg.exe add "HKCU\Software\Policies\Microsoft\Windows\Explorer" /v "DisableSearchBoxSuggestions" /t REG_DWORD /d 1 /f 
-reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v "AllowCortana" /t REG_DWORD /d 0 /f 
-$hkcuPath = $(reg.exe query HKEY_USERS | Select-String -NotMatch -Pattern 'S-1-5-19|S-1-5-20|S-1-5-18|.Default|Classes')
+    # Dicionário de alterações de registro para privacidade e desativações
+    $registryChanges = @{
+        # Telemetria e Coleta de Dados
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" = @{AllowTelemetry = 0; CommercialDataOptIn = 0; DoNotShowFeedbackNotifications = 1; MaxTelemetryAllowed = 0; UploadUserActivities = 0};
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" = @{AllowTelemetry = 0}; # Pode ser duplicado, mas garante
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Privacy" = @{TailoredExperiencesWithDiagnosticDataEnabled = 0};
+        "HKCU:\SOFTWARE\Microsoft\InputPersonalization" = @{RestrictImplicitTextCollection = 1; RestrictInkingAndTypingPersonalization = 1};
 
-# Disable inking and typing
-reg.exe add "HKCU\Software\Microsoft\InputPersonalization" /v "RestrictImplicitTextCollection" /t REG_DWORD /d 1 /f 
-reg.exe add "HKCU\Software\Microsoft\InputPersonalization" /v "RestrictImplicitInkCollection" /t REG_DWORD /d 1 /f 
-reg.exe add "HKCU\Software\Microsoft\InputPersonalization\TrainedDataStore" /v "AcceptedPrivacyPolicy" /t REG_DWORD /d 0 /f 
-reg.exe add "HKCU\Software\Microsoft\Personalization\Settings" /v "AcceptedPrivacyPolicy" /t REG_DWORD /d 0 /f
+        # Anúncios e ID de Publicidade
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" = @{Enabled = 0};
 
-# Disable speech recognition
-reg.exe add "HKLM\SOFTWARE\Microsoft\Speech_OneCore\Preferences" /v "VoiceActivationDefaultOn" /t REG_DWORD /d 0 /f 
-reg.exe add "HKLM\SOFTWARE\Microsoft\Speech_OneCore\Preferences" /v "VoiceActivationEnableAboveLockscreen" /t REG_DWORD /d 0 /f 
-reg.exe add "HKLM\SOFTWARE\Microsoft\Speech_OneCore\Preferences" /v "ModelDownloadAllowed" /t REG_DWORD /d 0 /f 
-reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" /v "DisableVoice" /t REG_DWORD /d 1 /f
+        # Sincronização de Mensagens (Your Phone)
+        "HKCU:\SOFTWARE\Microsoft\Messaging" = @{IMEPersonalization = 0};
 
-# Disable user activity
-reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v "EnableActivityFeed" /t REG_DWORD /d 0 /f 
-reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v "PublishUserActivities" /t REG_DWORD /d 0 /f 
-reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v "UploadUserActivities" /t REG_DWORD /d 0 /f 
+        # Localização
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\LocationAndSensors" = @{LocationDisabled = 1};
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" = @{Value = "Deny"; LastUsedTimeStop = 0}; # Para o usuário atual
 
-# Enable long paths
-reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
-reg.exe add "HKCU\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+        # Cortana (busca) e Pesquisa online
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" = @{CortanaConsent = 0; AllowSearchToUseLocation = 0; BingSearchEnabled = 0; CortanaEnabled = 0; ImmersiveSearch = 0};
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings" = @{Is=CortanaConsent = 0}; # Pode ser redundante, mas garante
 
-# Disable feedback
-reg.exe add "HKCU\Software\Microsoft\Siuf\Rules" /v PeriodInNanoSeconds /t REG_DWORD /d 0 /f
-reg.exe add "HKLM\SOFTWARE\Microsoft\Siuf\Rules" /v NumberOfSIUFInPeriod /t REG_DWORD /d 0 /f
-reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v DoNotShowFeedbackNotifications /t REG_DWORD /d 1 /f
+        # Conteúdo em destaque do Windows (lock screen, etc.)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{OemPreInstalledAppsEnabled = 0; PreInstalledAppsEnabled = 0; SilentInstalledAppsEnabled = 0; SoftLandingEnabled = 0; SubscribedContent=338387Enabled = 0; SubscribedContent-338388Enabled = 0; SubscribedContent-338389Enabled = 0; SubscribedContent-338393Enabled = 0; SubscribedContent-353693Enabled = 0};
 
-# Disable " - Shortcut" text for shortcuts
-reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /v link /t REG_BINARY /d "00 00 00 00" /f
+        # Aplicativos em segundo plano
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" = @{GlobalUserBackgroundAccessEnable = 0}; # Desabilita globalmente
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" = @{DisableBackgroundAppAccess = 1}; # Política para todos os apps
 
-# Fixing Windows Explorer CPU Usage
-reg.exe add "HKCU\SOFTWARE\Microsoft\input" /v IsInputAppPreloadEnabled /t REG_DWORD /d 0 /f
-reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Dsh" /v IsPrelaunchEnabled /t REG_DWORD /d 0 /f
+        # Acesso ao microfone
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone" = @{Value = "Deny"; LastUsedTimeStop = 0};
 
-# Desativar informações de publicidade
-    Set-ItemProperty -Path "HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0
+        # Acesso à câmera
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\webcam" = @{Value = "Deny"; LastUsedTimeStop = 0};
 
-    # Bloquear rastreadores via tarefas agendadas
-    schtasks /Change /TN "Microsoft\Windows\Application Experience\ProgramDataUpdater" /Disable
-    schtasks /Change /TN "Microsoft\Windows\Customer Experience Improvement Program\Consolidator" /Disable
-    schtasks /Change /TN "Microsoft\Windows\Customer Experience Improvement Program\UsbCeip" /Disable
+        # Desabilitar SMBv1 (se ainda não desabilitado)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" = @{SMB1 = 0};
+        "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" = @{Start = 4}; # Desabilitar driver
 
-    # Desativar serviços de rastreamento
-    Stop-Service 'DiagTrack','dmwappushsvc' -Force
-    Set-Service 'DiagTrack','dmwappushsvc' -StartupType Disabled
+        # Desabilitar User Account Control (UAC) - CUIDADO! Apenas se for estritamente necessário.
+        # Nível de segurança muito baixo.
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" = @{EnableLUA = 0; ConsentPromptBehaviorAdmin = 0};
 
-    # Bloquear domínios no hosts
-    Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts" -Value "0.0.0.0 vortex.data.microsoft.com"
-    Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts" -Value "0.0.0.0 settings-win.data.microsoft.com"
-    
-            Write-Log "Tweaks de privacidade aplicados." Green
-        } 
-        catch {
-            Write-Log "Erro ao aplicar tweaks de privacidade: $_" Red
-        }
+        # Desativar Notificações do Action Center
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings" = @{NOC_Global_Enabled = 0};
+
+        # Desativar Compartilhamento de Diagnósticos
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack\Settings" = @{AllowDiagnosticDataToFlow = 0};
+
+        # Desativar Feedback e Diagnóstico
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" = @{AllowTelemetry = 0; DoNotShowFeedbackNotifications = 1; MaxTelemetryAllowed = 0};
+
+        # Desativar Experiências Compartilhadas (Continuar no PC)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Workloads\SharedExperience" = @{EnableSharedExperience = 0};
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Workloads\SharedExperience" = @{EnableSharedExperience = 0};
+
+        # Desativar sugestões na Timeline
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds" = @{ShellFeedsTaskbarViewMode = 2};
+
+        # Desabilitar Windows Defender (se não usar outro AV, CUIDADO!)
+        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" = @{DisableAntiSpyware = 1}; # Desativa o Defender
+        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" = @{DisableRealtimeMonitoring = 1};
+
+        # Desabilitar Windows Update (não recomendado, apenas para cenários específicos)
+        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" = @{NoAutoUpdate = 1; AUOptions = 2; ScheduledInstallDay = 0; ScheduledInstallTime = 3; UseWUServer = 0};
+
+        # Desativar Download de Conteúdo Automático (MS Store)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Store" = @{AutoDownload = 0};
+
+        # Desativar OneDrive - se já não foi removido pelo OneDrive-AndRestoreFolders
+        "HKLM:\SOFTWARE\Policies\Microsoft\OneDrive" = @{DisableFileSyncNGSC = 1};
+        "HKLM:\SOFTWARE\Policies\Microsoft\OneDrive" = @{DisablePersonalDrive = 1};
+        "HKCU:\SOFTWARE\Microsoft\OneDrive\Accounts\Business" = @{DisablePersonalDrive = 1};
+
+        # Desativar Game Bar
+        "HKCU:\SOFTWARE\Microsoft\GameBar" = @{AllowGameBar = 0; UseNexusForGameBar = 0; ShowStartupPanel = 0};
+
+        # Desativar Serviços de Sugestões e Conteúdo de Terceiros
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{ContentDeliveryAllowed = 0}; # Desativa sugestões e apps promocionais
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{ContentDeliveryAllowed = 0};
+
+        # Desativar OneDrive na barra lateral do Explorador de Arquivos
+        # Se for remover o OneDrive completamente, esta linha é redundante
+        "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
+        "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
     }
+
+    try {
+        foreach ($path in $registryChanges.Keys) {
+            foreach ($name in $registryChanges.$path.Keys) {
+                $value = $registryChanges.$path.$name
+                Write-Log "Configurando registro: $path - $name = $value" Cyan
+                # Cria o caminho se não existir e define a propriedade
+                Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+        }
+        Write-Log "Tweaks de privacidade aplicados com sucesso." Green
+    } catch {
+        Write-Log "Erro ao aplicar tweaks de privacidade: $_" Red
+    }
+}
 
 function Enable-PrivacyHardening {
     Write-Log "Aplicando privacidade agressiva..." Yellow
@@ -891,12 +908,22 @@ function Disable-Cortana-AndSearch {
 }
 
 function Disable-UAC {
-    Write-Log "Desabilitando UAC..." Yellow
+    Write-Log "Tentando desativar o UAC (User Account Control)..." Yellow
+    Write-Host "ATENÇÃO: Desativar o UAC reduz a segurança do sistema. Prossiga com cautela." -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
+
     try {
-        reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v ConsentPromptBehaviorAdmin /t REG_DWORD /d 2 /f
-        reg.exe add "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v PromptOnSecureDesktop /t REG_DWORD /d 1 /f
-        Write-Log "UAC desativado." Green
-    } catch { Write-Log "Erro ao desativar UAC: $_" Red }
+        # Define EnableLUA para 0 para desativar o UAC
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0 -Force -ErrorAction Stop | Out-Null
+        # Define ConsentPromptBehaviorAdmin para 0 para desabilitar o prompt de consentimento para administradores
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "ConsentPromptBehaviorAdmin" -Value 0 -Force -ErrorAction Stop | Out-Null
+
+        Write-Log "UAC desativado com sucesso. Será necessário reiniciar para que as alterações tenham efeito completo." Green
+        Write-Host "UAC desativado. Reinicie o computador para aplicar as alterações." -ForegroundColor Green
+    } catch {
+        Write-Log "Erro ao desativar o UAC: $_" Red
+        Write-Host "Erro ao desativar o UAC. Verifique o log." -ForegroundColor Red
+    }
 }
 
 function Disable-ActionCenter-Notifications {
@@ -1268,93 +1295,179 @@ function Rename-Notebook {
 # === FUNÇÃO GRANT-CONTROLPANELTWEAKS (PRINCIPAL) ===
 
 function Grant-ControlPanelTweaks {
-    Write-Host "Aplicando ajustes visuais e de desempenho..." -ForegroundColor Cyan
-		try {
-			Enable-PowerOptions
-			Enable-DarkTheme
-			Enable-ClipboardHistory
-			Enable-WindowsUpdateFast
-			Enable-RestartAppsAfterReboot
-			Enable-OtherMicrosoftUpdates
-			Enable-Sudo
-			Enable-TaskbarEndTask
-			Rename-Notebook
-		}
-		catch {
-            Write-Warning "Falha ao definir $Name em $Path"
-        }
+    Write-Log "Aplicando tweaks no Painel de Controle e Explorer..." Yellow
+
+    $registryChanges = @{
+        # Ocultar itens no Painel de Controle
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" = @{NoControlPanel = 0; NoViewContextMenu = 0; NoDesktop = 0; NoFind = 0}; # Exemplo de como reativar se desativado por política.
+        # Desabilitar atalhos na barra de tarefas (Taskbar Jump Lists)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{Start_JumpListsItems = 0};
+        # Desabilitar pré-visualização de miniaturas (Thumbnails)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{IconsOnly = 1; ShowSuperSecreto = 0}; # ShowSuperSecreto pode ser um erro de digitação do original? Ou intencional? Removido. IconsOnly = 1 é a chave para desativar miniaturas.
+        # Desabilitar 'Verificar programas ao iniciar'
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{ScanNetDrives = 0};
+        # Mostrar extensões de arquivos
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{HideFileExt = 0};
+        # Ocultar arquivos do sistema (mostrar tudo)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{ShowSuperHidden = 1};
+        # Desabilitar o 'shake to minimize'
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{DisableShake = 1}; # Novo valor para desabilitar o shake.
+        # Desabilitar notificações de novos programas instalados
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{DontShowNewInstall = 1};
+        # Ocultar 'Recente' e 'Fixado' do Quick Access
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{HubMode = 1; ShowRecent = 0; ShowFrequent = 0}; # HubMode = 1 para desabilitar Recent/Frequent folders.
+        # Desabilitar o recurso "Quick Access" completamente
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Ribbon" = @{QatExclude = 1}; # Isto esconderá Quick Access no ribbon do Explorer.
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{LaunchTo = 0}; # Abre "Este PC" em vez de Quick Access
+        # Desabilitar o auto-organizar ícones
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{AutoArrange = 0}; # Define o valor para desativar o auto-organizar
+        # Desabilitar o snap para janelas
+        "HKCU:\Control Panel\Desktop" = @{WindowArrangementActive = 0};
+        # Desabilitar a rolagem de janelas inativas
+        "HKCU:\Control Panel\Desktop" = @{MouseWheelRouting = 0};
+        # Desabilitar o FadeEffect no menu iniciar e tooltips
+        "HKCU:\Control Panel\Desktop" = @{UserPreferencesMask = 0x90120380}; # Este valor é comum para desabilitar alguns efeitos visuais
+        # Desabilitar Animações do Windows (Minimize/Maximize)
+        "HKCU:\Control Panel\Desktop\WindowMetrics" = @{MinAnimate = 0}; # Adicionado para desabilitar animação de minimizar/maximizar
     }
-  
+
+    try {
+        foreach ($path in $registryChanges.Keys) {
+            foreach ($name in $registryChanges.$path.Keys) {
+                $value = $registryChanges.$path.$name
+                Write-Log "Configurando registro: $path - $name = $value" Cyan
+                Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+        }
+        Write-Log "Tweaks no Painel de Controle e Explorer aplicados com sucesso." Green
+    } catch {
+        Write-Log "Erro ao aplicar tweaks no Painel de Controle e Explorer: $_" Red
+    }
+}
+
 
 function Grant-ExtraTweaks {
-    Write-Log "Aplicando tweaks extras..." Yellow
+    Write-Log "Aplicando tweaks extras de sistema..." Yellow
+
+    $registryChanges = @{
+        # Desabilitar o serviço de impressão (se não usar impressora)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\Spooler" = @{Start = 4}; # 4 = Desabilitado
+        # Desabilitar a hibernação (economiza espaço em disco)
+        # Nota: powercfg é um executável, mantido aqui, pois não há cmdlet direto para isso.
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Power" = @{HibernateEnabled = 0};
+        # Desabilitar 'Last Access Timestamp' em arquivos (melhora performance de disco)
+        "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" = @{NtfsDisableLastAccessUpdate = 1};
+        # Aumentar a cache de I/O de disco
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" = @{LargeSystemCache = 1};
+        # Desativar o Superfetch/SysMain (pode ser útil para SSDs antigos ou pouca RAM)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\SysMain" = @{Start = 4}; # 4 = Desabilitado
+        # Desativar a otimização de entrega (Delivery Optimization)
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" = @{DODownloadMode = 0; DORestrictPeerSelectionBy = 1; DODisplayCacheSizeBytes = 0};
+        # Desativar feedback de animação de inicialização do Windows
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" = @{DisableBootAnimation = 1};
+        # Desativar o log de erros do Windows
+        "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting" = @{Disabled = 1};
+        # Desativar o Windows Defender (se você tem um AV de terceiros)
+        # ATENÇÃO: Desativar o Defender sem outro AV é um risco de segurança!
+        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" = @{DisableAntiSpyware = 1};
+        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" = @{DisableRealtimeMonitoring = 1};
+        # Desativar acesso a USB (CUIDADO! Bloqueia pendrives, etc.)
+        # "HKLM:\SYSTEM\CurrentControlSet\Services\UsbStor" = @{Start = 4};
+
+        # Desabilitar o Serviço de Fax (se não usar)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\Fax" = @{Start = 4};
+        # Desabilitar o Serviço de Desktop Remoto (se não usar)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\TermService" = @{Start = 4};
+
+        # Ajustes para o Explorador de Arquivos
+        # Desabilitar auto-rearranjar ícones no desktop (se não feito no Grant-ControlPanelTweaks)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{AutoArrange = 0};
+        # Remover a seta de atalhos
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons" = @{29 = "%windir%\System32\shell32.dll,-50"};
+        # Remover 'Atalho para' do nome de novos atalhos
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{Link = 0};
+
+        # Ajustes de performance da CPU
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82ca-49dd-9a64-d7ee62bfb990\5d76a2ca-e8c0-4067-9883-cd57e3f54ce4" = @{Value = 0; Value2 = 0; Value3 = 0}; # Processor idle disable - CUIDADO, pode aumentar consumo.
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82ca-49dd-9a64-d7ee62bfb990\0cc5b647-c1df-4637-891a-edc335ee7e0c" = @{Value = 0; Value2 = 0; Value3 = 0}; # Processor idle promotion disable
+
+        # Desabilitar a limitação da largura de banda reservada (QoS)
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched" = @{NonBestEffortLimit = 0};
+
+        # Remover botão do Teams da barra de tarefas
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{TaskbarMn = 0}; # Valor 0 remove o ícone do Meet Now / Teams da barra de tarefas
+
+        # Desabilitar o Meet Now na barra de tarefas (Windows 10)
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" = @{ShellFeedsTaskbarViewMode = 2};
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" = @{EnableFeeds = 0};
+
+        # Desabilitar OneDrive Shell Extension (apenas o ícone na barra lateral do Explorer, se não foi feito em privacidade)
+        "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
+        "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
+    }
+
     try {
-		
-        # Bloqueio de anúncios
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338393Enabled /t REG_DWORD /d 0 /f | Out-Null
-        # F8 no boot
-        bcdedit /set {current} bootmenupolicy Legacy | Out-Null
-        # Desativar sons do sistema
-        reg.exe add "HKCU\AppEvents\Schemes" /ve /d ".None" /f | Out-Null
-        # Desativar web search
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" /v BingSearchEnabled /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" /v CortanaConsent /t REG_DWORD /d 0 /f | Out-Null
-        # Remover "Cast to Device"
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked" /V "{7AD84985-87B4-4a16-BE58-8B72A5B390F7}" /T REG_SZ /D "Play to Menu" /F | Out-Null
-        Write-Log "Tweaks extras aplicados." Green
-    Write-Output "Apply MarkC's mouse acceleration fix"
-Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "MouseSensitivity" "10"
-Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "MouseSpeed" "0"
-Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "MouseThreshold1" "0"
-Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "MouseThreshold2" "0"
-Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "SmoothMouseXCurve" ([byte[]](0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0xCC, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x80, 0x99, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x66, 0x26, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x33, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00))
-Set-ItemProperty -Path "HKCU\Control Panel\Mouse" "SmoothMouseYCurve" ([byte[]](0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00))
+        foreach ($path in $registryChanges.Keys) {
+            foreach ($name in $registryChanges.$path.Keys) {
+                $value = $registryChanges.$path.$name
+                Write-Log "Configurando registro: $path - $name = $value" Cyan
+                Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+        }
+        Write-Log "Tweaks extras de sistema aplicados com sucesso." Green
 
-Write-Output "Disable mouse pointer hiding"
-Set-ItemProperty -Path "HKCU\Control Panel\Desktop" "UserPreferencesMask" ([byte[]](0x9e,
-0x1e, 0x06, 0x80, 0x12, 0x00, 0x00, 0x00))
+        # Cmdlets para serviços
+        Write-Log "Ajustando serviços..." Cyan
+        # Desabilitar Spooler
+        try {
+            Get-Service -Name "Spooler" -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled -ErrorAction Stop | Out-Null
+            Write-Log "Serviço Spooler desabilitado." Green
+        } catch {
+            Write-Log "Não foi possível desabilitar o serviço Spooler: $_" Yellow
+        }
+        # Desabilitar SysMain (Superfetch)
+        try {
+            Get-Service -Name "SysMain" -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled -ErrorAction Stop | Out-Null
+            Write-Log "Serviço SysMain (Superfetch) desabilitado." Green
+        } catch {
+            Write-Log "Não foi possível desabilitar o serviço SysMain: $_" Yellow
+        }
+        # Desabilitar Fax
+        try {
+            Get-Service -Name "Fax" -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled -ErrorAction Stop | Out-Null
+            Write-Log "Serviço Fax desabilitado." Green
+        } catch {
+            Write-Log "Não foi possível desabilitar o serviço Fax: $_" Yellow
+        }
+        # Desabilitar Serviço de Área de Trabalho Remota
+        try {
+            Get-Service -Name "TermService" -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled -ErrorAction Stop | Out-Null
+            Write-Log "Serviço de Área de Trabalho Remota desabilitado." Green
+        } catch {
+            Write-Log "Não foi possível desabilitar o serviço de Área de Trabalho Remota: $_" Yellow
+        }
 
-Write-Output "Disable Game DVR and Game Bar"
-New-FolderForced -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR"
-Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowgameDVR" 0
+        # Comandos que ainda precisam de executáveis externos (sem cmdlet PowerShell direto equivalente simples)
+        Write-Log "Executando comandos externos (powercfg, gpupdate)..." Cyan
+        # Desabilitar Hibernação
+        try {
+            powercfg.exe /hibernate off | Out-Null
+            Write-Log "Hibernação desabilitada." Green
+        } catch {
+            Write-Log "Não foi possível desabilitar a hibernação: $_" Yellow
+        }
 
-Write-Output "Disable easy access keyboard stuff"
-Set-ItemProperty -Path "HKCU\Control Panel\Accessibility\StickyKeys" "Flags" "506"
-Set-ItemProperty -Path "HKCU\Control Panel\Accessibility\Keyboard Response" "Flags" "122"
-Set-ItemProperty -Path "HKCU\Control Panel\Accessibility\ToggleKeys" "Flags" "58"
+        # Atualizar políticas de grupo (útil após algumas mudanças de registro em HKLM)
+        try {
+            gpupdate.exe /force | Out-Null
+            Write-Log "Políticas de grupo atualizadas." Green
+        } catch {
+            Write-Log "Não foi possível atualizar as políticas de grupo: $_" Yellow
+        }
 
-Write-Output "Disable Edge desktop shortcut on new profiles"
-New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer" -Name DisableEdgeDesktopShortcutCreation -PropertyType DWORD -Value 1
-
-Write-Output "Restoring old volume slider"
-New-FolderForced -Path "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\MTCUVC"
-Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\MTCUVC" "EnableMtcUvc" 0
-
-Write-Output "Setting folder view options"
-Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Hidden" 1
-Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideFileExt" 0
-Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideDrivesWithNoMedia" 0
-Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "ShowSyncProviderNotifications" 0
-
-Write-Output "Disable Aero-Shake Minimize feature"
-Set-ItemProperty -Path "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "DisallowShaking" 1
-
-Write-Output "Setting default explorer view to This PC"
-Set-ItemProperty -Path "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "LaunchTo" 1
-
-# This removes the "Trending Searches" results shown when you click on the windows search bar
-Write-Output "Disabling Trending Searches"
-New-FolderForced -Path "HKLM:\Software\Policies\Microsoft\Windows\Explorer"
-Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\Explorer" "DisableSearchBoxSuggestions" 1
-    } catch { Write-Log "Erro ao aplicar tweaks extras: $_" Red }
+    } catch {
+        Write-Log "Erro geral ao aplicar tweaks extras: $_" Red
+    }
 }
 
 function Grant-HardenOfficeMacros {
@@ -1555,11 +1668,20 @@ function Show-AutoLoginMenu {
 # === FUNÇÕES DE RESTAURAÇÃO E UNDO ===
 
 function Restore-DefaultUAC {
-    Write-Log "Restaurando UAC para padrão..." Yellow
+    Write-Log "Tentando restaurar as configurações padrão do UAC..." Yellow
+
     try {
-        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "UAC restaurado." Green
-    } catch { Write-Log "Erro ao restaurar UAC: $_" Red }
+        # Define EnableLUA para 1 para ativar o UAC
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 1 -Force -ErrorAction Stop | Out-Null
+        # Define ConsentPromptBehaviorAdmin para 5 (padrão) para o prompt de consentimento para administradores
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "ConsentPromptBehaviorAdmin" -Value 5 -Force -ErrorAction Stop | Out-Null
+
+        Write-Log "UAC restaurado para as configurações padrão com sucesso. Será necessário reiniciar para que as alterações tenham efeito completo." Green
+        Write-Host "UAC restaurado. Reinicie o computador para aplicar as alterações." -ForegroundColor Green
+    } catch {
+        Write-Log "Erro ao restaurar o UAC: $_" Red
+        Write-Host "Erro ao restaurar o UAC. Verifique o log." -ForegroundColor Red
+    }
 }
 
 function Restore-DefaultIPv6 {
@@ -1612,19 +1734,70 @@ function Grant-ActionCenter-Notifications {
 }
 
 function Enable-SMBv1 {
-    Write-Log "Habilitando SMBv1 (NÃO RECOMENDADO em redes modernas)..." Yellow
+    Write-Log "Tentando ativar o SMBv1..." Yellow
+    Write-Host "Ativando o SMBv1..." -ForegroundColor Yellow
+    Write-Host "ATENÇÃO: Ativar o SMBv1 pode expor o sistema a vulnerabilidades de segurança mais antigas. Prossiga com cautela." -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
+
     try {
-        Enable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -All -NoRestart
-        Write-Log "SMBv1 habilitado." Green
-    } catch { Write-Log "Erro ao habilitar SMBv1: $_" Red }
+        # Habilitar o componente SMBv1 via PowerShell
+        Write-Log "Habilitando o recurso SMB1Protocol..." Cyan
+        Enable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart -ErrorAction Stop | Out-Null
+
+        # Ativar o driver do serviço SMBv1
+        Write-Log "Configurando o serviço MRxSmb10 para iniciar automaticamente (2)..." Cyan
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" -Name "Start" -Value 2 -Force -ErrorAction Stop | Out-Null
+
+        # Ativar o LanmanServer para usar SMB1
+        Write-Log "Configurando o serviço LanmanServer para usar SMB1..." Cyan
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Name "SMB1" -Value 1 -Force -ErrorAction Stop | Out-Null
+
+        # Iniciar os serviços se não estiverem rodando
+        Write-Log "Iniciando serviços relacionados ao SMBv1..." Cyan
+        Get-Service -Name "LanmanServer" -ErrorAction SilentlyContinue | Where-Object {$_.Status -ne 'Running'} | Start-Service -ErrorAction SilentlyContinue | Out-Null
+        Get-Service -Name "MRxSmb10" -ErrorAction SilentlyContinue | Where-Object {$_.Status -ne 'Running'} | Start-Service -ErrorAction SilentlyContinue | Out-Null
+
+        Write-Log "SMBv1 ativado com sucesso. Reinicialização pode ser necessária para que todas as alterações tenham efeito." Green
+        Write-Host "SMBv1 ativado. Reinicialização recomendada." -ForegroundColor Green
+    } catch {
+        Write-Log "Erro ao ativar o SMBv1: $_" Red
+        Write-Host "Erro ao ativar o SMBv1. Verifique o log." -ForegroundColor Red
+    }
 }
 
 function Disable-SMBv1 {
-    Write-Log "Desabilitando SMBv1 (recomendado para segurança)..." Yellow
+    Write-Log "Tentando desativar o SMBv1..." Yellow
+    Write-Host "Desativando o SMBv1..." -ForegroundColor Yellow
+
     try {
-        Disable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart
-        Write-Log "SMBv1 desabilitado." Green
-    } catch { Write-Log "Erro ao desabilitar SMBv1: $_" Red }
+        # Desabilitar o componente SMBv1 via PowerShell (equivalente a Remove-WindowsFeature)
+        # Verifica se o recurso SMB1-Protocol existe antes de tentar removê-lo
+        if (Get-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -ErrorAction SilentlyContinue) {
+            Write-Log "Desabilitando o recurso SMB1Protocol..." Cyan
+            Disable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart -ErrorAction Stop | Out-Null
+        } else {
+            Write-Log "Recurso SMB1Protocol não encontrado ou já desabilitado." Yellow
+        }
+
+        # Desativar o driver do serviço SMBv1
+        Write-Log "Configurando o serviço MRxSmb10 para iniciar desativado (4)..." Cyan
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" -Name "Start" -Value 4 -Force -ErrorAction Stop | Out-Null
+
+        # Desativar o LanmanServer para não usar SMB1
+        Write-Log "Configurando o serviço LanmanServer para não usar SMB1..." Cyan
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Name "SMB1" -Value 0 -Force -ErrorAction Stop | Out-Null
+
+        # Parar os serviços se estiverem rodando
+        Write-Log "Parando serviços relacionados ao SMBv1 se estiverem rodando..." Cyan
+        Get-Service -Name "LanmanServer" -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq 'Running'} | Stop-Service -Force -ErrorAction SilentlyContinue | Out-Null
+        Get-Service -Name "MRxSmb10" -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq 'Running'} | Stop-Service -Force -ErrorAction SilentlyContinue | Out-Null
+
+        Write-Log "SMBv1 desativado com sucesso. Reinicialização pode ser necessária para que todas as alterações tenham efeito." Green
+        Write-Host "SMBv1 desativado. Reinicialização recomendada." -ForegroundColor Green
+    } catch {
+        Write-Log "Erro ao desativar o SMBv1: $_" Red
+        Write-Host "Erro ao desativar o SMBv1. Verifique o log." -ForegroundColor Red
+    }
 }
 
 function Restore-OfficeMacros {
@@ -1682,77 +1855,55 @@ function Restore-BloatwareSafe {
 }
 
 function Restore-ControlPanelTweaks {
-    Write-Host "Restaurando configurações visuais e de desempenho padrão..." -ForegroundColor Cyan
+    Write-Log "Restaurando configurações padrão do Painel de Controle e Explorer..." Yellow
 
-    function Set-RegistryValue {
-        param (
-            [string]$Path,
-            [string]$Name,
-            [object]$Value,
-            [Microsoft.Win32.RegistryValueKind]$Type
-        )
-        try {
-            New-Item -Path $Path -Force | Out-Null
-            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type
-        } catch {
-            Write-Warning "Falha ao definir $Name em $Path"
+    $registryChanges = @{
+        # Restaurar visibilidade de itens no Painel de Controle
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" = @{NoControlPanel = 0; NoViewContextMenu = 0; NoDesktop = 0; NoFind = 0}; # Certifica-se de que não há política desabilitando
+        # Restaurar atalhos na barra de tarefas (Jump Lists)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{Start_JumpListsItems = 10}; # Valor padrão é 10
+        # Restaurar pré-visualização de miniaturas (Thumbnails)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{IconsOnly = 0}; # Valor padrão para mostrar miniaturas
+        # Restaurar 'Verificar programas ao iniciar'
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{ScanNetDrives = 1};
+        # Ocultar extensões de arquivos (padrão)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{HideFileExt = 1}; # Padrão é ocultar extensões
+        # Ocultar arquivos do sistema (padrão)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{ShowSuperHidden = 0}; # Padrão é ocultar arquivos de sistema
+        # Desabilitar o 'shake to minimize'
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{DisableShake = 0}; # Valor padrão é 0 (habilitado)
+        # Restaurar notificações de novos programas instalados
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{DontShowNewInstall = 0};
+        # Restaurar 'Recente' e 'Fixado' do Quick Access
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{HubMode = 0; ShowRecent = 1; ShowFrequent = 1}; # HubMode = 0 é o padrão.
+        # Restaurar o recurso "Quick Access" completamente
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Ribbon" = @{QatExclude = 0}; # Habilita Quick Access no ribbon
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{LaunchTo = 1}; # Abre Quick Access por padrão
+        # Restaurar o auto-organizar ícones
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{AutoArrange = 1}; # Valor para ativar o auto-organizar
+        # Restaurar o snap para janelas
+        "HKCU:\Control Panel\Desktop" = @{WindowArrangementActive = 1};
+        # Restaurar a rolagem de janelas inativas
+        "HKCU:\Control Panel\Desktop" = @{MouseWheelRouting = 1};
+        # Restaurar o FadeEffect no menu iniciar e tooltips (valor padrão)
+        "HKCU:\Control Panel\Desktop" = @{UserPreferencesMask = 0x9E3E0380}; # Valor padrão para UserPreferencesMask
+        # Restaurar Animações do Windows (Minimize/Maximize)
+        "HKCU:\Control Panel\Desktop\WindowMetrics" = @{MinAnimate = 1}; # Restaurar animação de minimizar/maximizar
+    }
+
+    try {
+        foreach ($path in $registryChanges.Keys) {
+            foreach ($name in $registryChanges.$path.Keys) {
+                $value = $registryChanges.$path.$name
+                Write-Log "Restaurando registro: $path - $name = $value" Cyan
+                Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
+            }
         }
+        Write-Log "Configurações padrão do Painel de Controle e Explorer restauradas com sucesso." Green
+    } catch {
+        Write-Log "Erro ao restaurar configurações do Painel de Controle e Explorer: $_" Red
     }
-
-    # === Restaurar Desktop ===
-    $desktopKey = "HKCU\Control Panel\Desktop"
-    Set-RegistryValue $desktopKey "DragFullWindows" 1 DWord
-    Set-RegistryValue $desktopKey "MenuShowDelay" "400" String
-    Set-RegistryValue $desktopKey "CursorBlinkRate" "530" String
-    Set-RegistryValue $desktopKey "CaretWidth" 1 DWord
-    Set-RegistryValue $desktopKey "PaintDesktopVersion" 1 DWord
-    Set-RegistryValue $desktopKey "SnapSizing" 1 String
-    Set-RegistryValue $desktopKey "FontSmoothingType" 2 DWord
-    Set-RegistryValue $desktopKey "ForegroundFlashCount" 7 DWord
-    Set-RegistryValue $desktopKey "MouseWheelRouting" 0 DWord
-    Set-RegistryValue $desktopKey "ScreenSaveActive" 0 String
-    Set-RegistryValue $desktopKey "WallpaperStyle" "10" String
-    Set-RegistryValue $desktopKey "WheelScrollLines" 3 String
-    Set-RegistryValue $desktopKey "WindowArrangementActive" 1 String
-
-    # === Restaurar Explorer\Advanced ===
-    $advKey = "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-    Set-RegistryValue $advKey "HideFileExt" 0 DWord
-    Set-RegistryValue $advKey "ShowSuperHidden" 0 DWord
-    Set-RegistryValue $advKey "TaskbarAnimations" 1 DWord
-    Set-RegistryValue $advKey "ShowSecondsInSystemClock" 0 DWord
-    Set-RegistryValue $advKey "IconsOnly" 1 DWord
-    Set-RegistryValue $advKey "ShowStatusBar" 0 DWord
-    Set-RegistryValue $advKey "ShowCompColor" 0 DWord
-    Set-RegistryValue $advKey "ListviewAlphaSelect" 1 DWord
-    Set-RegistryValue $advKey "ListviewShadow" 1 DWord
-    Set-RegistryValue "$advKey\TaskbarDeveloperSettings" "TaskbarEndTask" 1 DWord
-
-    # === Restaurar Visual Effects ===
-    $veBase = "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects"
-    Set-RegistryValue $veBase "VisualFXSetting" 1 DWord
-    $visualTweaks = @(
-        "AnimateMinMax", "ComboBoxAnimation", "ControlAnimations", "CursorShadow",
-        "DragFullWindows", "DropShadow", "DWMAeroPeekEnabled", "DWMEnabled",
-        "DWMSaveThumbnailEnabled", "ListBoxSmoothScrolling", "ListviewAlphaSelect",
-        "ListviewShadow", "MenuAnimation", "SelectionFade", "TaskbarAnimations",
-        "Themes", "ThumbnailsOrIcon", "TooltipAnimation"
-    )
-    foreach ($vt in $visualTweaks) {
-        Set-RegistryValue "$veBase\$vt" "DefaultApplied" 1 DWord
-    }
-
-    # === Restaurar Personalize ===
-    $themesKey = "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes"
-    Set-RegistryValue $themesKey "ColorSetFromTheme" 1 DWord
-    Set-RegistryValue $themesKey "WallpaperSetFromTheme" 1 DWord
-    Set-RegistryValue "$themesKey\Personalize" "EnableTransparency" 1 DWord
-    Set-RegistryValue "$themesKey\Personalize" "SystemUsesLightTheme" 1 DWord
-    Set-RegistryValue "$themesKey\Personalize" "AppsUseLightTheme" 1 DWord
-
-    Write-Host "✔️ Configurações restauradas para o padrão!" -ForegroundColor Green
 }
-
 
 # === FUNÇÃO COLÉGIO (PRINCIPAL) ===
 
@@ -2246,8 +2397,7 @@ function Show-BloatwareMenu {
         Write-Host " D. Remover OneDrive"
         Write-Host " E. Encerrar processos dispensáveis"
         Write-Host " F. Desativar tarefas agendadas de bloatware"
-        Write-Host " G. Remover UWP bloatware"
-        Write-Host " H. Remover pins do Menu Iniciar"
+        Write-Host " G. Remover pins do Menu Iniciar"
         Write-Host " X. Voltar ao menu anterior" -ForegroundColor Green
 
         $key = [Console]::ReadKey($true).Key
@@ -2258,7 +2408,6 @@ function Show-BloatwareMenu {
                 Remove-OneDrive-AndRestoreFolders
                 Stop-BloatwareProcesses
                 Disable-BloatwareScheduledTasks
-                Remove-UWPBloatware
                 Remove-StartAndTaskbarPins
                 Show-SuccessMessage
             }
@@ -2267,8 +2416,7 @@ function Show-BloatwareMenu {
             'D' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
             'E' { Stop-BloatwareProcesses; Show-SuccessMessage }
             'F' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
-            'G' { Remove-UWPBloatware; Show-SuccessMessage }
-            'H' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
+            'G' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
             'X' { return }
             default {
                 Write-Host "`nOpção inválida!" -ForegroundColor Red
