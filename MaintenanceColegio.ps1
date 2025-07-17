@@ -2794,37 +2794,54 @@ function Show-MainMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Log "Exibindo menu principal..." Blue
 
-        Write-Host " 1. Instalação e Configuração Inicial"
-        Write-Host " 2. Diagnóstico e Informações do Sistema"
-        Write-Host " 3. Rede e Impressoras"
-        Write-Host " 4. Restauração e Desfazer Ajustes"
-        Write-Host " 5. Utilitários do Sistema e Otimizações"
-        Write-Host " 6. Scripts Externos e Ferramentas"
+        Write-Host " B. Configurações Avançadas" -ForegroundColor Yellow
+        Write-Host " C. Diagnóstico e Informações" -ForegroundColor Yellow
+        Write-Host " D. Instalação de Programas" -ForegroundColor Yellow
+        Write-Host " F. Rede e Impressoras" -ForegroundColor Yellow
+        Write-Host " G. Restauração e Segurança (Undo)" -ForegroundColor Yellow
+        Write-Host " H. Scripts Externos e Ativadores" -ForegroundColor Yellow
+        Write-Host " U. Utilitários do Sistema (Bloat, Limpeza e Desempenho)" -ForegroundColor Yellow
         Write-Host " M. Manutenção Completa (Tudo em um)" -ForegroundColor Green
-        Write-Host "`n X. Sair do Script (Alternativo)" -ForegroundColor Red # Opção 'X' para sair, se desejar manter
-        Write-Host " 0. Sair do Script" -ForegroundColor Red # Opção '0' para sair
+        Write-Host " Z. Colégio (Sequência Completa)" -ForegroundColor Magenta
+        Write-Host " R. Reiniciar o PC" -ForegroundColor Red
+        Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
 
-        $key = [Console]::ReadKey($true).Key
+        $key = [Console]::ReadKey($true).Key # Lê a tecla pressionada sem mostrá-la
         Write-Log "Opção escolhida no menu principal: $key" Blue
 
         switch ($key) {
-            [ConsoleKey]::D1 { Show-InstallationMenu }
-            [ConsoleKey]::D2 { Show-DiagnosticsMenu }
-            [ConsoleKey]::D3 { Show-NetworkMenu }
-            [ConsoleKey]::D4 { Show-RestoreUndoMenu }
-            [ConsoleKey]::D5 { Show-UtilitiesMenu }
-            [ConsoleKey]::D6 { Show-ExternalScriptsMenu }
-            [ConsoleKey]::M { Show-FullMaintenance }
-            [ConsoleKey]::X { return } # Permite sair com 'X' também
-            [ConsoleKey]::D0 { return }      # CORRIGIDO: Para '0' do teclado principal
-            [ConsoleKey]::NumPad0 { return } # CORRIGIDO: Para '0' do teclado numérico
+            'B' { Show-AdvancedSettingsMenu }     # Nova função: Configurações do Sistema e UAC/SMBv1
+            'C' { Show-DiagnosticsMenu }          # Será atualizada: Diagnósticos e Informações
+            'D' { Show-InstallationMenu }         # Nova função: Instalação de Aplicativos
+            'F' { Show-NetworkMenu }              # Nova função: Rede, Impressoras e Performance de Rede
+            'G' { Show-RestoreUndoMenu }          # Nova função: Restauração, Backup e Desfazer Tweaks
+            'H' { Show-ExternalScriptsMenu }      # Será atualizada: Scripts Externos
+            'U' { Show-UtilitiesMenu }            # Nova função: Bloatware, Limpeza, Desempenho e Privacidade
+            'M' { Show-FullMaintenance }          # Função existente: Manutenção Completa (verificar/atualizar)
+            'Z' { Invoke-Colégio }                # Função existente: Sequência Colégio (manter como está)
+            'R' {
+                Write-Log "Reiniciando o computador..." Cyan
+                Restart-Computer -Force -Confirm:$false # Desliga e Reinicia sem confirmação
+                exit # Garante que o script saia após o comando
+            }
+            '0' {
+                # Assume que $startTime e $logFile estão definidos globalmente no início do script
+                if ($global:startTime -and $global:logFile) {
+                    $duration = (Get-Date) - $global:startTime
+                    Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
+                    Write-Log "Log salvo em: $global:logFile" Cyan
+                } else {
+                    Write-Log "Encerrando script. Variáveis de log não definidas." Yellow
+                }
+                exit # Garante que o script seja encerrado completamente, não apenas a função.
+            }
             default {
                 Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
-                [Console]::ReadKey($true) | Out-Null # Pausa para o usuário ler a mensagem
+                [Console]::ReadKey($true) | Out-Null # Espera por qualquer tecla e descarta a saída
             }
         }
-    } while ($true)
+    } while ($true) # Loop infinito para manter o menu ativo até o usuário sair
 }
 
 #endregion
