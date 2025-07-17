@@ -26,7 +26,7 @@ if (-not (Test-Path $ScriptDownloadDir)) {
     } catch {
         Write-Host "ERRO: Não foi possível criar a pasta '$ScriptDownloadDir'. Verifique suas permissões." -ForegroundColor Red
         Write-Host "Detalhes do Erro: $($_.Exception.Message)" -ForegroundColor Red
-        exit 1
+        Pause
     }
 } else {
     Write-Host "A pasta '$ScriptDownloadDir' já existe." -ForegroundColor DarkYellow
@@ -48,7 +48,7 @@ try {
     Write-Host "ERRO: Não foi possível baixar o script principal da URL '$MainScriptUrl'." -ForegroundColor Red
     Write-Host "Verifique a URL ou sua conexão com a internet." -ForegroundColor Red
     Write-Host "Detalhes do Erro: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
+Pause
 }
 
 Write-Host "Preparando para executar o script principal..." -ForegroundColor DarkCyan
@@ -64,7 +64,7 @@ try {
 } catch {
     Write-Host "ERRO: Não foi possível executar o script '$OutputFileName'." -ForegroundColor Red
     Write-Host "Detalhes do Erro: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
+pause
 }
 
 Write-Host "Processo de inicialização do Bootstrapper concluído." -ForegroundColor Green
