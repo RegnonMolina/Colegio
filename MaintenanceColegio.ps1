@@ -782,9 +782,17 @@ function Grant-PrivacyTweaks {
 
     # Dicionário de alterações de registro para privacidade e desativações
     $registryChanges = @{
-        # Telemetria e Coleta de Dados
+        # Telemetria e Coleta de Dados (HKLM) - Consolidado
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" = @{AllowTelemetry = 0; CommercialDataOptIn = 0; DoNotShowFeedbackNotifications = 1; MaxTelemetryAllowed = 0; UploadUserActivities = 0};
-        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" = @{AllowTelemetry = 0}; # Pode ser duplicado, mas garante
+
+        # Telemetria e Coleta de Dados (HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection) - Consolidado
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" = @{
+            AllowTelemetry = 0;
+            DoNotShowFeedbackNotifications = 1;
+            MaxTelemetryAllowed = 0;
+        };
+
+        # Privacidade Geral (HKCU)
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Privacy" = @{TailoredExperiencesWithDiagnosticDataEnabled = 0};
         "HKCU:\SOFTWARE\Microsoft\InputPersonalization" = @{RestrictImplicitTextCollection = 1; RestrictInkingAndTypingPersonalization = 1};
 
@@ -800,10 +808,23 @@ function Grant-PrivacyTweaks {
 
         # Cortana (busca) e Pesquisa online
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" = @{CortanaConsent = 0; AllowSearchToUseLocation = 0; BingSearchEnabled = 0; CortanaEnabled = 0; ImmersiveSearch = 0};
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings" = @{Is=CortanaConsent = 0}; # Pode ser redundante, mas garante
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings" = @{"Is-CortanaConsent" = 0}; # Chave corrigida: entre aspas
 
-        # Conteúdo em destaque do Windows (lock screen, etc.)
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{OemPreInstalledAppsEnabled = 0; PreInstalledAppsEnabled = 0; SilentInstalledAppsEnabled = 0; SoftLandingEnabled = 0; SubscribedContent=338387Enabled = 0; SubscribedContent-338388Enabled = 0; SubscribedContent-338389Enabled = 0; SubscribedContent-338393Enabled = 0; SubscribedContent-353693Enabled = 0};
+        # Conteúdo em destaque do Windows (lock screen, etc.) e Sugestões de Terceiros (HKCU) - Consolidado
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{
+            OemPreInstalledAppsEnabled = 0;
+            PreInstalledAppsEnabled = 0;
+            SilentInstalledAppsEnabled = 0;
+            SoftLandingEnabled = 0;
+            "SubscribedContent-338387Enabled" = 0;
+            "SubscribedContent-338388Enabled" = 0;
+            "SubscribedContent-338389Enabled" = 0;
+            "SubscribedContent-338393Enabled" = 0;
+            "SubscribedContent-353693Enabled" = 0;
+            ContentDeliveryAllowed = 0 # Movido para cá para unificar
+        };
+        # Conteúdo em destaque do Windows (HKLM)
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{ContentDeliveryAllowed = 0};
 
         # Aplicativos em segundo plano
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" = @{GlobalUserBackgroundAccessEnable = 0}; # Desabilita globalmente
@@ -829,9 +850,6 @@ function Grant-PrivacyTweaks {
         # Desativar Compartilhamento de Diagnósticos
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack\Settings" = @{AllowDiagnosticDataToFlow = 0};
 
-        # Desativar Feedback e Diagnóstico
-        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" = @{AllowTelemetry = 0; DoNotShowFeedbackNotifications = 1; MaxTelemetryAllowed = 0};
-
         # Desativar Experiências Compartilhadas (Continuar no PC)
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Workloads\SharedExperience" = @{EnableSharedExperience = 0};
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Workloads\SharedExperience" = @{EnableSharedExperience = 0};
@@ -839,40 +857,36 @@ function Grant-PrivacyTweaks {
         # Desativar sugestões na Timeline
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds" = @{ShellFeedsTaskbarViewMode = 2};
 
-        # Desabilitar Windows Defender (se não usar outro AV, CUIDADO!)
-        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" = @{DisableAntiSpyware = 1}; # Desativa o Defender
-        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" = @{DisableRealtimeMonitoring = 1};
-
-        # Desabilitar Windows Update (não recomendado, apenas para cenários específicos)
-        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" = @{NoAutoUpdate = 1; AUOptions = 2; ScheduledInstallDay = 0; ScheduledInstallTime = 3; UseWUServer = 0};
-
         # Desativar Download de Conteúdo Automático (MS Store)
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Store" = @{AutoDownload = 0};
 
-        # Desativar OneDrive - se já não foi removido pelo OneDrive-AndRestoreFolders
-        "HKLM:\SOFTWARE\Policies\Microsoft\OneDrive" = @{DisableFileSyncNGSC = 1};
-        "HKLM:\SOFTWARE\Policies\Microsoft\OneDrive" = @{DisablePersonalDrive = 1};
+        # Desativar OneDrive (HKLM) - Consolidado
+        "HKLM:\SOFTWARE\Policies\Microsoft\OneDrive" = @{
+            DisableFileSyncNGSC = 1;
+            DisablePersonalDrive = 1;
+        };
+        # Desativar OneDrive (HKCU) - Consolidado
         "HKCU:\SOFTWARE\Microsoft\OneDrive\Accounts\Business" = @{DisablePersonalDrive = 1};
 
         # Desativar Game Bar
         "HKCU:\SOFTWARE\Microsoft\GameBar" = @{AllowGameBar = 0; UseNexusForGameBar = 0; ShowStartupPanel = 0};
 
-        # Desativar Serviços de Sugestões e Conteúdo de Terceiros
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{ContentDeliveryAllowed = 0}; # Desativa sugestões e apps promocionais
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{ContentDeliveryAllowed = 0};
-
-        # Desativar OneDrive na barra lateral do Explorador de Arquivos
-        # Se for remover o OneDrive completamente, esta linha é redundante
+        # Desabilitar OneDrive na barra lateral do Explorador de Arquivos (Consolidado)
         "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
         "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
     }
 
     try {
         foreach ($path in $registryChanges.Keys) {
+            # Certifica-se de que o caminho existe antes de tentar definir as propriedades
+            if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
+                New-Item -Path $path -Force -ErrorAction SilentlyContinue | Out-Null
+                Write-Log "Caminho de registro criado: $path" Cyan
+            }
+
             foreach ($name in $registryChanges.$path.Keys) {
                 $value = $registryChanges.$path.$name
                 Write-Log "Configurando registro: $path - $name = $value" Cyan
-                # Cria o caminho se não existir e define a propriedade
                 Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
             }
         }
@@ -1300,39 +1314,50 @@ function Grant-ControlPanelTweaks {
     $registryChanges = @{
         # Ocultar itens no Painel de Controle
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" = @{NoControlPanel = 0; NoViewContextMenu = 0; NoDesktop = 0; NoFind = 0}; # Exemplo de como reativar se desativado por política.
-        # Desabilitar atalhos na barra de tarefas (Taskbar Jump Lists)
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{Start_JumpListsItems = 0};
-        # Desabilitar pré-visualização de miniaturas (Thumbnails)
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{IconsOnly = 1; ShowSuperSecreto = 0}; # ShowSuperSecreto pode ser um erro de digitação do original? Ou intencional? Removido. IconsOnly = 1 é a chave para desativar miniaturas.
-        # Desabilitar 'Verificar programas ao iniciar'
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{ScanNetDrives = 0};
-        # Mostrar extensões de arquivos
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{HideFileExt = 0};
-        # Ocultar arquivos do sistema (mostrar tudo)
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{ShowSuperHidden = 1};
-        # Desabilitar o 'shake to minimize'
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{DisableShake = 1}; # Novo valor para desabilitar o shake.
-        # Desabilitar notificações de novos programas instalados
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{DontShowNewInstall = 1};
-        # Ocultar 'Recente' e 'Fixado' do Quick Access
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{HubMode = 1; ShowRecent = 0; ShowFrequent = 0}; # HubMode = 1 para desabilitar Recent/Frequent folders.
-        # Desabilitar o recurso "Quick Access" completamente
+
+        # Configurações avançadas do Explorer (combinadas em uma única entrada)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{
+            Start_JumpListsItems = 0; # Desabilitar atalhos na barra de tarefas (Taskbar Jump Lists)
+            IconsOnly = 1; # Desabilitar pré-visualização de miniaturas (Thumbnails)
+            ScanNetDrives = 0; # Desabilitar 'Verificar programas ao iniciar'
+            HideFileExt = 0; # Mostrar extensões de arquivos
+            ShowSuperHidden = 1; # Ocultar arquivos do sistema (mostrar tudo)
+            DisableShake = 1; # Desabilitar o 'shake to minimize'
+            DontShowNewInstall = 1; # Desabilitar notificações de novos programas instalados
+            LaunchTo = 0; # Abre "Este PC" em vez de Quick Access
+            AutoArrange = 0; # Desabilitar o auto-organizar ícones
+        };
+
+        # Configurações do Explorer relacionadas a Quick Access (combinadas)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{
+            HubMode = 1; # Desabilitar Recent/Frequent folders
+            ShowRecent = 0;
+            ShowFrequent = 0;
+            Link = 0; # Remover 'Atalho para' do nome de novos atalhos
+        };
+
+        # Desabilitar o recurso "Quick Access" completamente no Ribbon
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Ribbon" = @{QatExclude = 1}; # Isto esconderá Quick Access no ribbon do Explorer.
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{LaunchTo = 0}; # Abre "Este PC" em vez de Quick Access
-        # Desabilitar o auto-organizar ícones
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{AutoArrange = 0}; # Define o valor para desativar o auto-organizar
-        # Desabilitar o snap para janelas
-        "HKCU:\Control Panel\Desktop" = @{WindowArrangementActive = 0};
-        # Desabilitar a rolagem de janelas inativas
-        "HKCU:\Control Panel\Desktop" = @{MouseWheelRouting = 0};
-        # Desabilitar o FadeEffect no menu iniciar e tooltips
-        "HKCU:\Control Panel\Desktop" = @{UserPreferencesMask = 0x90120380}; # Este valor é comum para desabilitar alguns efeitos visuais
+
+        # Configurações de Desktop (combinadas em uma única entrada)
+        "HKCU:\Control Panel\Desktop" = @{
+            WindowArrangementActive = 0; # Desabilitar o snap para janelas
+            MouseWheelRouting = 0; # Desabilitar a rolagem de janelas inativas
+            UserPreferencesMask = 0x90120380; # Desabilitar o FadeEffect no menu iniciar e tooltips
+        };
+
         # Desabilitar Animações do Windows (Minimize/Maximize)
-        "HKCU:\Control Panel\Desktop\WindowMetrics" = @{MinAnimate = 0}; # Adicionado para desabilitar animação de minimizar/maximizar
+        "HKCU:\Control Panel\Desktop\WindowMetrics" = @{MinAnimate = 0};
     }
 
     try {
         foreach ($path in $registryChanges.Keys) {
+            # Certifica-se de que o caminho existe antes de tentar definir as propriedades
+            if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
+                New-Item -Path $path -Force -ErrorAction SilentlyContinue | Out-Null
+                Write-Log "Caminho de registro criado: $path" Cyan
+            }
+
             foreach ($name in $registryChanges.$path.Keys) {
                 $value = $registryChanges.$path.$name
                 Write-Log "Configurando registro: $path - $name = $value" Cyan
@@ -1344,7 +1369,6 @@ function Grant-ControlPanelTweaks {
         Write-Log "Erro ao aplicar tweaks no Painel de Controle e Explorer: $_" Red
     }
 }
-
 
 function Grant-ExtraTweaks {
     Write-Log "Aplicando tweaks extras de sistema..." Yellow
