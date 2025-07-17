@@ -2171,8 +2171,8 @@ function Show-AdvancedSettingsMenu {
             'B' { Disable-UAC; Show-SuccessMessage }
             'C' { Disable-SMBv1; Show-SuccessMessage }
             'D' { Grant-HardenOfficeMacros; Show-SuccessMessage }
-            'x' { break }
-            'X' { break }
+            'x' { return }
+            'X' { return }
             default {
                 Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
                 [Console]::ReadKey($true) | Out-Null
@@ -2253,8 +2253,8 @@ function Show-DiagnosticsMenu {
                 Write-Log "Relatório de informações do sistema gerado/aberto." Green
                 [Console]::ReadKey($true) | Out-Null
             }
-            'x' { break }
-            'X' { break }
+            'x' { return }
+            'X' { return }
             default {
                 Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
                 [Console]::ReadKey($true) | Out-Null
@@ -2334,8 +2334,8 @@ function Show-NetworkMenu {
             'B' { Install-NetworkPrinters; Show-SuccessMessage }
             'C' { Optimize-NetworkPerformance; Show-SuccessMessage }
             'D' { Restore-DefaultIPv6; Show-SuccessMessage }
-            'x' { break }
-            'X' { break }
+            'x' { return }
+            'X' { return }
             default {
                 Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
                 [Console]::ReadKey($true) | Out-Null
@@ -2497,8 +2497,8 @@ function Show-UtilitiesMenu {
                         }
                         'B' { Remove-Bloatware; Show-SuccessMessage }
                         'C' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
-                        'x' { break }
-                        'X' { break }
+                        'x' { return }
+                        'X' { return }
                         default {
                             Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
                             Start-Sleep 1
@@ -2529,8 +2529,8 @@ function Show-UtilitiesMenu {
                         }
                         'B' { Cleanup-System; Show-SuccessMessage }
                         'C' { Optimize-Drives; Show-SuccessMessage }
-                        'x' { break }
-                        'X' { break }
+                        'x' { return }
+                        'X' { return }
                         default {
                             Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
                             Start-Sleep 1
@@ -2564,8 +2564,8 @@ function Show-UtilitiesMenu {
                         'B' { Grant-PrivacyTweaks; Show-SuccessMessage }
                         'C' { Grant-ControlPanelTweaks; Show-SuccessMessage }
                         'D' { Grant-ExtraTweaks; Show-SuccessMessage }
-                        'x' { break }
-                        'X' { break }
+                        'x' { return }
+                        'X' { return }
                         default {
                             Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
                             Start-Sleep 1
@@ -2574,8 +2574,8 @@ function Show-UtilitiesMenu {
                 } while ($true)
             }
             'E' { Disable-Cortana-AndSearch; Show-SuccessMessage }
-            'x' { break }
-            'X' { break }
+            'x' { return }
+            'X' { return }
             default {
                 Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
                 [Console]::ReadKey($true) | Out-Null
