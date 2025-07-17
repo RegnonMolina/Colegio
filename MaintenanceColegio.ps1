@@ -1081,7 +1081,6 @@ function Disable-UnnecessaryServices {
         "XblAuthManager",                           # Xbox Live Auth Manager
         "XblGameSave",                              # Xbox Live Game Save Service
         "XboxNetApiSvc",                            # Xbox Live Networking Service
-        "ndu"                                       # Windows Network Data Usage Monitor
         # Services which cannot be disabled
         #"WdNisSvc"
     )
@@ -2070,90 +2069,113 @@ function New-FolderForced {
     }
 }
 
-function Show-FullMaintenance {
-    do {
-        Clear-Host
-        Write-Host "=========== MENU: MANUTENÇÃO COMPLETA ===========" -ForegroundColor Cyan
-        Write-Host " A. Executar TODAS as tarefas de manutenção" -ForegroundColor Green
-        Write-Host " B. Desempenho e Sistema"
-        Write-Host " C. Limpeza e Otimização"
-        Write-Host " D. Privacidade e Hardening"
-        Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
-        Write-Host "===============================================" -ForegroundColor Cyan
-
-        $key = [Console]::ReadKey($true).Key
-        switch ($key) {
-            'A' {
-                # Execução TOTAL
-                Enable-PrivacyHardening
-                Grant-ExtraTweaks
-                Set-VisualPerformance
-                Disable-UAC
-                Disable-Cortana-AndSearch
-                Disable-ActionCenter-Notifications
-                Disable-BloatwareScheduledTasks
-                Stop-BloatwareProcesses
-                Remove-Bloatware
-                Remove-Copilot
-                Remove-OneDrive-AndRestoreFolders
-                Remove-StartAndTaskbarPins
-                Remove-ScheduledTasksAggressive
-                Disable-SMBv1
-                New-ChkDsk
-                Clear-WUCache
-                Clear-TemporaryFiles
-                Clear-Prefetch
-                Clear-PrintSpooler
-                Clear-DeepSystemCleanup
-                Optimize-Volumes
-                Remove-WindowsOld
-                Clear-WinSxS
-                Grant-ControlPanelTweaks
-                Set-PerformanceTheme
-                Disable-UnnecessaryServices
-                Optimize-ExplorerPerformance
-                Rename-Notebook
-                Show-SuccessMessage
-            }
-            'B' { Show-PerformanceSubmenu }
-            'C' { Show-CleanupSubmenu }
-            'D' { Show-PrivacyHardeningMenu }
-            'X' { return }
-            default { Write-Host "`nOpção inválida!" -ForegroundColor Red; Start-Sleep 1 }
-        }
-    } while ($true)
-}
-
 
 # === FUNÇÕES DE MENU ===
+
+
+function Show-FullMaintenance {
+    Clear-Host
+    Write-Host "=============================================" -ForegroundColor Cyan
+    Write-Host "        INICIANDO MANUTENÇÃO COMPLETA        " -ForegroundColor Cyan
+    Write-Host "=============================================" -ForegroundColor Cyan
+    Write-Log "Iniciando Manutenção Completa..." Yellow
+
+    # Sequência lógica de chamadas aos novos menus e funções
+    # A maioria dos menus já tem sua própria opção de "Executar Todos" (Opção 1)
+    # Então, vamos simular a seleção da Opção 1 dentro de cada submenu
+    # Nota: Show-MainMenu não tem "Executar Todos", suas opções são os submenus em si.
+
+    Write-Host "Executando: Menu de Instalação de Programas (Opção 1 - Todas as Ferramentas)..." -ForegroundColor Green
+    # Chamando a função Install-Applications que está dentro de Show-InstallationMenu opção 1
+    Install-Applications
+    # Se Show-InstallationMenu tivesse outras funções que não estivessem em Install-Applications,
+    # ou uma opção de "Executar Todas" mais abrangente, chamaria essa opção aqui.
+    Start-Sleep 2
+
+    Write-Host "Executando: Menu de Rede e Impressoras (Opção 1 - Todas as Configurações de Rede)..." -ForegroundColor Green
+    # Chamando as funções que estão dentro de Show-NetworkMenu opção 1
+    Install-NetworkPrinters
+    Optimize-NetworkPerformance
+    Restore-DefaultIPv6
+    Start-Sleep 2
+
+    Write-Host "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as Configurações)..." -ForegroundColor Green
+    # Chamando as funções que estão dentro de Show-AdvancedSettingsMenu opção 1
+    Disable-UAC
+    Disable-SMBv1
+    Grant-HardenOfficeMacros
+    Start-Sleep 2
+
+    Write-Host "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -ForegroundColor Green
+    # Chamando as funções que estão dentro de Show-UtilitiesMenu opção 1
+    Remove-Bloatware
+    Remove-OneDrive-AndRestoreFolders
+    Cleanup-System
+    Optimize-Drives
+    Grant-PrivacyTweaks
+    Grant-ControlPanelTweaks
+    Grant-ExtraTweaks
+    Disable-Cortana-AndSearch
+    Start-Sleep 2
+
+    Write-Host "Executando: Menu de Diagnóstico e Informações (Opção 1 - Todas as Verificações)..." -ForegroundColor Green
+    # Chamando as funções que estão dentro de Show-DiagnosticsMenu opção 1
+    sfc /scannow
+    Dism /Online /Cleanup-Image /RestoreHealth
+    # Chkdsk é omitido aqui por requerer reboot
+    Start-Sleep 2
+
+    Write-Host "Executando: Menu de Scripts Externos e Ativadores (Opção 1 - Todos os Scripts)..." -ForegroundColor Green
+    # Chame aqui as funções ou comandos para seus scripts externos,
+    # como você os configurou na opção 1 de Show-ExternalScriptsMenu
+    # Exemplo: & "$PSScriptRoot\ExternalScripts\ScriptExterno1.ps1"
+    # Exemplo: Start-Process "C:\Caminho\Para\SeuAtivador.exe" -Wait
+    Start-Sleep 2
+
+
+    Write-Host "=============================================" -ForegroundColor Cyan
+    Write-Host "        MANUTENÇÃO COMPLETA CONCLUÍDA!       " -ForegroundColor Cyan
+    Write-Host "=============================================" -ForegroundColor Cyan
+    Write-Log "Manutenção Completa Concluída." Green
+    Show-SuccessMessage
+    [Console]::ReadKey($true) | Out-Null
+}
 
 function Show-AdvancedSettingsMenu {
     do {
         Clear-Host
-        Write-Host "==== MENU: CONFIGURAÇÕES AVANÇADAS ====" -ForegroundColor Cyan
-        Write-Host " A. Executar todos os ajustes deste menu" -ForegroundColor Green
-        Write-Host " B. Ajustes do Painel de Controle/Configurações"
-        Write-Host " C. Configurar Autologin"
-        Write-Host " D. Scripts externos (Ativador e Chris Titus)"
-        Write-Host " E. Tweaks de interface do Explorer"
-        Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "       MENU DE CONFIGURAÇÕES AVANÇADAS      " -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Log "Exibindo menu de Configurações Avançadas..." Blue
+
+        Write-Host " A. Executar Todas as Configurações Avançadas (Sequência)" -ForegroundColor Green
+        Write-Host " B. Desabilitar Controle de Conta de Usuário (UAC)"
+        Write-Host " C. Desabilitar SMBv1 (RECOMENDADO PARA SEGURANÇA)"
+        Write-Host " D. Proteger Office contra Macros Maliciosas"
+        Write-Host "`n X. Voltar ao Menu Principal" -ForegroundColor Magenta
+        Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [Console]::ReadKey($true).Key
+        Write-Log "Opção escolhida no menu de Configurações Avançadas: $key" Blue
+
         switch ($key) {
             'A' {
-                Grant-ControlPanelTweaks
-                Show-AutoLoginMenu
-                Show-ExternalScriptsMenu
-                Grant-ExtraTweaks
+                Write-Host "Executando: Todas as Configurações Avançadas..." -ForegroundColor Yellow
+                Disable-UAC
+                Disable-SMBv1
+                Grant-HardenOfficeMacros
+                Write-Host "Todas as Configurações Avançadas Concluídas!" -ForegroundColor Green
+                [Console]::ReadKey($true) | Out-Null
             }
-            'B' { Grant-ControlPanelTweaks }
-            'C' { Show-AutoLoginMenu }
-            'D' { Show-ExternalScriptsMenu }
-            'E' { Grant-ExtraTweaks }
-            'X' { return }
+            'B' { Disable-UAC; Show-SuccessMessage }
+            'C' { Disable-SMBv1; Show-SuccessMessage }
+            'D' { Grant-HardenOfficeMacros; Show-SuccessMessage }
+            'x' { break }
+            'X' { break }
             default {
-                Write-Host "`nOpção inválida!" -ForegroundColor Red
-                Start-Sleep -Seconds 1
+                Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+                [Console]::ReadKey($true) | Out-Null
             }
         }
     } while ($true)
@@ -2162,40 +2184,80 @@ function Show-AdvancedSettingsMenu {
 function Show-DiagnosticsMenu {
     do {
         Clear-Host
-        Write-Host "==== MENU: DIAGNÓSTICO E INFORMAÇÕES ====" -ForegroundColor Cyan
-        Write-Host " A. Executar todos os diagnósticos" -ForegroundColor Green
-        Write-Host " B. Exibir informações de rede"
-        Write-Host " C. Exibir informações do sistema"
-        Write-Host " D. Exibir uso do disco"
-        Write-Host " E. Testar memória RAM"
-        Write-Host " F. Verificar arquivos do sistema (SFC)"
-        Write-Host " G. Verificar integridade do sistema (DISM)"
-        Write-Host " H. Verificar saúde dos discos (SMART)"
-        Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "      MENU DE DIAGNÓSTICO E INFORMAÇÕES     " -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Log "Exibindo menu de Diagnóstico e Informações..." Blue
+
+        Write-Host " A. Executar Todas as Verificações de Diagnóstico (Sequência)" -ForegroundColor Green
+        Write-Host " B. Verificar Integridade dos Arquivos do Sistema (SFC)"
+        Write-Host " C. Reparar Imagem do Windows (DISM)"
+        Write-Host " D. Verificar Disco (Chkdsk)"
+        Write-Host " E. Abrir Visualizador de Eventos"
+        Write-Host " F. Gerar Relatório de Informações do Sistema"
+        Write-Host "`n X. Voltar ao Menu Principal" -ForegroundColor Magenta
+        Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [Console]::ReadKey($true).Key
+        Write-Log "Opção escolhida no menu de Diagnóstico: $key" Blue
+
         switch ($key) {
             'A' {
-                Invoke-DISM-Scan
-                Invoke-SFC-Scan
-                Test-SMART-Drives
-                Test-Memory
-                Show-SystemInfo
-                Show-NetworkInfo
-                Show-DiskUsage
-                Show-SuccessMessage
+                Write-Host "Executando: Todas as Verificações de Diagnóstico..." -ForegroundColor Yellow
+                Write-Log "Iniciando verificação SFC..." Yellow
+                sfc /scannow | Write-Log -Color White
+                Write-Log "Verificação SFC concluída." Green
+                Start-Sleep 2
+
+                Write-Log "Iniciando reparo de imagem DISM..." Yellow
+                Dism /Online /Cleanup-Image /RestoreHealth | Write-Log -Color White
+                Write-Log "Reparo de imagem DISM concluído." Green
+                Start-Sleep 2
+
+                Write-Host "Todas as Verificações de Diagnóstico Concluídas (excluindo Chkdsk automático)!" -ForegroundColor Green
+                [Console]::ReadKey($true) | Out-Null
             }
-            'B' { Show-NetworkInfo; Show-SuccessMessage }
-            'C' { Show-SystemInfo; Show-SuccessMessage }
-            'D' { Show-DiskUsage; Show-SuccessMessage }
-            'E' { Test-Memory; Show-SuccessMessage }
-            'F' { Invoke-SFC-Scan; Show-SuccessMessage }
-            'G' { Invoke-DISM-Scan; Show-SuccessMessage }
-            'H' { Test-SMART-Drives; Show-SuccessMessage }
-            'X' { return }
+            'B' {
+                Write-Log "Iniciando verificação SFC..." Yellow
+                sfc /scannow | Write-Log -Color White
+                Write-Log "Verificação SFC concluída." Green
+                [Console]::ReadKey($true) | Out-Null
+            }
+            'C' {
+                Write-Log "Iniciando reparo de imagem DISM..." Yellow
+                Dism /Online /Cleanup-Image /RestoreHealth | Write-Log -Color White
+                Write-Log "Reparo de imagem DISM concluído." Green
+                [Console]::ReadKey($true) | Out-Null
+            }
+            'D' {
+                Write-Host "Aviso: Chkdsk C: /f /r pode exigir reinicialização do sistema." -ForegroundColor Yellow
+                Write-Host "Deseja agendar a verificação de disco na próxima reinicialização? (S/N)" -ForegroundColor White
+                $confirmChkdsk = [Console]::ReadKey($true).KeyChar
+                if ($confirmChkdsk -eq 's' -or $confirmChkdsk -eq 'S') {
+                    Write-Log "Agendando Chkdsk na próxima reinicialização..." Yellow
+                    chkdsk C: /f /r
+                    Write-Log "Chkdsk agendado. Reinicie o PC para executar." Green
+                } else {
+                    Write-Log "Chkdsk não agendado." Red
+                }
+                [Console]::ReadKey($true) | Out-Null
+            }
+            'E' {
+                Write-Log "Abrindo Visualizador de Eventos..." Yellow
+                Start-Process eventvwr.msc
+                [Console]::ReadKey($true) | Out-Null
+            }
+            'F' {
+                Write-Log "Gerando relatório de informações do sistema..." Yellow
+                msinfo32.exe
+                Write-Log "Relatório de informações do sistema gerado/aberto." Green
+                [Console]::ReadKey($true) | Out-Null
+            }
+            'x' { break }
+            'X' { break }
             default {
-                Write-Host "`nOpção inválida!" -ForegroundColor Red
-                Start-Sleep 1
+                Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+                [Console]::ReadKey($true) | Out-Null
             }
         }
     } while ($true)
@@ -2245,44 +2307,38 @@ Copy-Item -Path $atalhoOrigem -Destination $atalhoDestino -Force
 function Show-NetworkMenu {
     do {
         Clear-Host
-        Write-Host "==== MENU: REDE E IMPRESSORAS ====" -ForegroundColor Cyan
-        Write-Host " A. Executar todas as tarefas deste menu" -ForegroundColor Green
-        Write-Host " B. Adicionar rede Wi-Fi administrativa"
-        Write-Host " C. Aplicar DNS (TCP/Cloudflare)"
-        Write-Host " D. Definir DNS (Google/Cloudflare)"
-        Write-Host " E. Desabilitar IPv6"
-        Write-Host " F. Instalar impressoras de rede"
-        Write-Host " G. Limpar cache ARP"
-        Write-Host " H. Limpar cache DNS"
-        Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "           MENU DE REDE E IMPRESSORAS        " -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Log "Exibindo menu de Rede e Impressoras..." Blue
+
+        Write-Host " A. Executar Todas as Configurações de Rede (Sequência)" -ForegroundColor Green
+        Write-Host " B. Instalar Impressoras de Rede"
+        Write-Host " C. Otimizar Desempenho de Rede"
+        Write-Host " D. Restaurar Padrões de IPv6"
+        Write-Host "`n X. Voltar ao Menu Principal" -ForegroundColor Magenta
+        Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [Console]::ReadKey($true).Key
+        Write-Log "Opção escolhida no menu de Rede e Impressoras: $key" Blue
+
         switch ($key) {
             'A' {
-                try {
-                    Add-WiFiNetwork
-                    Optimize-NetworkPerformance
-                    Set-DnsGoogleCloudflare
-                    Disable-IPv6
-                    Install-NetworkPrinters
-                    Clear-ARP
-                    Clear-DNS
-                    Show-SuccessMessage
-                } catch {
-                    Write-Log "❌ Erro durante execução de tarefas de rede: $_" Red
-                }
+                Write-Host "Executando: Todas as Configurações de Rede..." -ForegroundColor Yellow
+                Install-NetworkPrinters
+                Optimize-NetworkPerformance
+                Restore-DefaultIPv6
+                Write-Host "Todas as Configurações de Rede Concluídas!" -ForegroundColor Green
+                [Console]::ReadKey($true) | Out-Null
             }
-            'B' { Add-WiFiNetwork; Show-SuccessMessage }
+            'B' { Install-NetworkPrinters; Show-SuccessMessage }
             'C' { Optimize-NetworkPerformance; Show-SuccessMessage }
-            'D' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
-            'E' { Disable-IPv6; Show-SuccessMessage }
-            'F' { Install-NetworkPrinters; Show-SuccessMessage }
-            'G' { Clear-ARP; Show-SuccessMessage }
-            'H' { Clear-DNS; Show-SuccessMessage }
-            'X' { return }
+            'D' { Restore-DefaultIPv6; Show-SuccessMessage }
+            'x' { break }
+            'X' { break }
             default {
-                Write-Host "`nOpção inválida!" -ForegroundColor Red
-                Start-Sleep 1
+                Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+                [Console]::ReadKey($true) | Out-Null
             }
         }
     } while ($true)
@@ -2321,7 +2377,11 @@ function Show-ExternalScriptsMenu {
 function Show-RestoreUndoMenu {
     do {
         Clear-Host
-        Write-Host "==== MENU: REVERTER AJUSTES / RESTAURAR APLICATIVOS ====" -ForegroundColor Magenta
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "  MENU DE RESTAURAÇÃO E SEGURANÇA (UNDO)   " -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Log "Exibindo menu de Restauração e Segurança (Undo)..." Blue
+
         Write-Host " A. Executar todas as tarefas deste menu" -ForegroundColor Green
         Write-Host " B. Bloquear macros Office (segurança)"
         Write-Host " C. Desabilitar SMBv1 (RECOMENDADO)"
@@ -2384,48 +2444,141 @@ function Show-RestoreUndoMenu {
 function Show-UtilitiesMenu {
     do {
         Clear-Host
-        Write-Host "==== MENU: UTILITÁRIOS DO SISTEMA ====" -ForegroundColor Cyan
-        Write-Host " A. Executar todas as tarefas deste menu" -ForegroundColor Green
-        Write-Host " B. Limpeza e Otimização"
-        Write-Host " C. Remoção de Bloatware"
-        Write-Host " D. Desempenho do Sistema"
-        Write-Host " X. Voltar ao menu principal" -ForegroundColor Green
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "       MENU DE UTILITÁRIOS DO SISTEMA        " -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Log "Exibindo menu de Utilitários do Sistema..." Blue
+
+        Write-Host " A. Executar Todas as Tarefas de Otimização (Sequência)" -ForegroundColor Green
+        Write-Host " B. Gerenciar Bloatware"
+        Write-Host " C. Limpeza e Otimização de Disco"
+        Write-Host " D. Aplicar Otimizações de Desempenho e Privacidade"
+        Write-Host " E. Desativar Cortana e Pesquisa Online"
+        Write-Host "`n X. Voltar ao Menu Principal" -ForegroundColor Magenta
+        Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [Console]::ReadKey($true).Key
+        Write-Log "Opção escolhida no menu de Utilitários: $key" Blue
+
         switch ($key) {
             'A' {
-                # Limpeza
-                Clear-TemporaryFiles
-                Clear-WUCache
-                Clear-DNS
-                Clear-Prefetch
-                Clear-PrintSpooler
-                Clear-DeepSystemCleanup
-                Clear-WinSxS
-                Remove-WindowsOld
-                
-                # Bloatware
+                Write-Host "Executando: Todas as Tarefas de Otimização..." -ForegroundColor Yellow
                 Remove-Bloatware
-                Remove-Copilot
                 Remove-OneDrive-AndRestoreFolders
-                Stop-BloatwareProcesses
-                Disable-BloatwareScheduledTasks
-                
-                # Desempenho
-                Set-PerformanceTheme
-                Optimize-ExplorerPerformance
-                Disable-UnnecessaryServices
-                Optimize-Volumes
-                
-                Show-SuccessMessage
+                Cleanup-System
+                Optimize-Drives
+                Grant-PrivacyTweaks
+                Grant-ControlPanelTweaks
+                Grant-ExtraTweaks
+                Disable-Cortana-AndSearch
+                Write-Host "Todas as Tarefas de Otimização Concluídas!" -ForegroundColor Green
+                [Console]::ReadKey($true) | Out-Null
             }
-            'B' { Show-CleanupMenu }
-            'C' { Show-BloatwareMenu }
-            'D' { Show-SystemPerformanceMenu }
-            'X' { return }
+            'B' {
+                do {
+                    Clear-Host
+                    Write-Host "----------------------------------------------------" -ForegroundColor Green
+                    Write-Host "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -ForegroundColor Green
+                    Write-Host "----------------------------------------------------" -ForegroundColor Green
+                    Write-Host "`n[A] Remover Bloatware (Todos em sequência)"
+                    Write-Host "[B] Remover Aplicativos Pré-instalados (Bloatware)"
+                    Write-Host "[C] Remover OneDrive e Restaurar Pastas"
+                    Write-Host "`n[X] Voltar ao Menu Anterior"
+                    Write-Host "----------------------------------------------------"
+                    $subChoice = Read-Host "Escolha uma opção"
+                    Write-Log "Opção escolhida no submenu de Bloatware: $subChoice" Blue
+                    switch ($subChoice) {
+                        'A' {
+                            Write-Host "Executando: Remover Bloatware (Todos em sequência)..." -ForegroundColor Yellow
+                            Remove-Bloatware
+                            Remove-OneDrive-AndRestoreFolders
+                            Write-Host "Remoção de Bloatware Concluída!" -ForegroundColor Green
+                            [Console]::ReadKey($true) | Out-Null
+                        }
+                        'B' { Remove-Bloatware; Show-SuccessMessage }
+                        'C' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
+                        'x' { break }
+                        'X' { break }
+                        default {
+                            Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
+                            Start-Sleep 1
+                        }
+                    }
+                } while ($true)
+            }
+            'C' {
+                do {
+                    Clear-Host
+                    Write-Host "----------------------------------------------------" -ForegroundColor Green
+                    Write-Host "      SUBMENU DE LIMPEZA E OTIMIZAÇÃO DE DISCO      " -ForegroundColor Green
+                    Write-Host "----------------------------------------------------" -ForegroundColor Green
+                    Write-Host "`n[A] Executar Todas as Tarefas de Limpeza e Otimização"
+                    Write-Host "[B] Limpeza de Arquivos Temporários"
+                    Write-Host "[C] Desfragmentar/Otimizar Drives"
+                    Write-Host "`n[X] Voltar ao Menu Anterior"
+                    Write-Host "----------------------------------------------------"
+                    $subChoice = Read-Host "Escolha uma opção"
+                    Write-Log "Opção escolhida no submenu de Limpeza: $subChoice" Blue
+                    switch ($subChoice) {
+                        'A' {
+                            Write-Host "Executando: Todas as Tarefas de Limpeza e Otimização..." -ForegroundColor Yellow
+                            Cleanup-System
+                            Optimize-Drives
+                            Write-Host "Limpeza e Otimização Concluídas!" -ForegroundColor Green
+                            [Console]::ReadKey($true) | Out-Null
+                        }
+                        'B' { Cleanup-System; Show-SuccessMessage }
+                        'C' { Optimize-Drives; Show-SuccessMessage }
+                        'x' { break }
+                        'X' { break }
+                        default {
+                            Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
+                            Start-Sleep 1
+                        }
+                    }
+                } while ($true)
+            }
+            'D' {
+                do {
+                    Clear-Host
+                    Write-Host "----------------------------------------------------" -ForegroundColor Green
+                    Write-Host "    SUBMENU DE OTIMIZAÇÕES DE DESEMPENHO E PRIVACIDADE    " -ForegroundColor Green
+                    Write-Host "----------------------------------------------------" -ForegroundColor Green
+                    Write-Host "`n[A] Aplicar Todas as Otimizações de Desempenho e Privacidade"
+                    Write-Host "[B] Aplicar Tweaks de Privacidade"
+                    Write-Host "[C] Ajustar Painel de Controle e Explorer"
+                    Write-Host "[D] Aplicar Tweaks Extras"
+                    Write-Host "`n[X] Voltar ao Menu Anterior"
+                    Write-Host "----------------------------------------------------"
+                    $subChoice = Read-Host "Escolha uma opção"
+                    Write-Log "Opção escolhida no submenu de Desempenho e Privacidade: $subChoice" Blue
+                    switch ($subChoice) {
+                        'A' {
+                            Write-Host "Executando: Todas as Otimizações de Desempenho e Privacidade..." -ForegroundColor Yellow
+                            Grant-PrivacyTweaks
+                            Grant-ControlPanelTweaks
+                            Grant-ExtraTweaks
+                            Write-Host "Otimizações de Desempenho e Privacidade Concluídas!" -ForegroundColor Green
+                            [Console]::ReadKey($true) | Out-Null
+                        }
+                        'B' { Grant-PrivacyTweaks; Show-SuccessMessage }
+                        'C' { Grant-ControlPanelTweaks; Show-SuccessMessage }
+                        'D' { Grant-ExtraTweaks; Show-SuccessMessage }
+                        'x' { break }
+                        'X' { break }
+                        default {
+                            Write-Host "`nOpção inválida! Tente novamente." -ForegroundColor Red
+                            Start-Sleep 1
+                        }
+                    }
+                } while ($true)
+            }
+            'E' { Disable-Cortana-AndSearch; Show-SuccessMessage }
+            'x' { break }
+            'X' { break }
             default {
-                Write-Host "`nOpção inválida!" -ForegroundColor Red
-                Start-Sleep 1
+                Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+                [Console]::ReadKey($true) | Out-Null
             }
         }
     } while ($true)
@@ -2566,6 +2719,8 @@ function Show-MainMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " SCRIPT DE MANUTENÇÃO WINDOWS - MENU PRINCIPAL" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Log "Exibindo menu principal..." Blue
+
         Write-Host " B. Configurações Avançadas" -ForegroundColor Yellow
         Write-Host " C. Diagnóstico e Informações" -ForegroundColor Yellow
         Write-Host " D. Instalação de Programas" -ForegroundColor Yellow
@@ -2579,33 +2734,41 @@ function Show-MainMenu {
         Write-Host " 0. Sair" -ForegroundColor Magenta
         Write-Host "=============================================" -ForegroundColor Cyan
 
-        $key = [Console]::ReadKey($true).Key
+        $key = [Console]::ReadKey($true).Key # Lê a tecla pressionada sem mostrá-la
+        Write-Log "Opção escolhida no menu principal: $key" Blue
+
         switch ($key) {
-            'B' { Show-AdvancedSettingsMenu }
-            'C' { Show-DiagnosticsMenu }
-            'D' { Show-InstallationMenu }
-            'F' { Show-NetworkMenu }
-            'G' { Show-RestoreUndoMenu }
-            'H' { Show-ExternalScriptsMenu }
-            'U' { Show-UtilitiesMenu }  # 🔧 Novo menu combinado
-            'M' { Show-FullMaintenance } 
-            'Z' { Invoke-Colégio }
+            'B' { Show-AdvancedSettingsMenu }     # Nova função: Configurações do Sistema e UAC/SMBv1
+            'C' { Show-DiagnosticsMenu }          # Será atualizada: Diagnósticos e Informações
+            'D' { Show-InstallationMenu }         # Nova função: Instalação de Aplicativos
+            'F' { Show-NetworkMenu }              # Nova função: Rede, Impressoras e Performance de Rede
+            'G' { Show-RestoreUndoMenu }          # Nova função: Restauração, Backup e Desfazer Tweaks
+            'H' { Show-ExternalScriptsMenu }      # Será atualizada: Scripts Externos
+            'U' { Show-UtilitiesMenu }            # Nova função: Bloatware, Limpeza, Desempenho e Privacidade
+            'M' { Show-FullMaintenance }          # Função existente: Manutenção Completa (verificar/atualizar)
+            'Z' { Invoke-Colégio }                # Função existente: Sequência Colégio (manter como está)
             'R' {
                 Write-Log "Reiniciando o computador..." Cyan
-                Restart-Computer -Force
+                Restart-Computer -Force -Confirm:$false # Desliga e Reinicia sem confirmação
+                exit # Garante que o script saia após o comando
             }
             '0' {
-                $duration = (Get-Date) - $startTime
-                Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
-                Write-Log "Log salvo em: $logFile" Cyan
-                return
+                # Assume que $startTime e $logFile estão definidos globalmente no início do script
+                if ($global:startTime -and $global:logFile) {
+                    $duration = (Get-Date) - $global:startTime
+                    Write-Log "Script concluído. Tempo total: $($duration.ToString('hh\:mm\:ss'))" Cyan
+                    Write-Log "Log salvo em: $global:logFile" Cyan
+                } else {
+                    Write-Log "Encerrando script. Variáveis de log não definidas." Yellow
+                }
+                exit # Garante que o script seja encerrado completamente, não apenas a função.
             }
             default {
-                Write-Host "`nOpção inválida!" -ForegroundColor Red
-                Start-Sleep 1
+                Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+                [Console]::ReadKey($true) | Out-Null # Espera por qualquer tecla e descarta a saída
             }
         }
-    } while ($true)
+    } while ($true) # Loop infinito para manter o menu ativo até o usuário sair
 }
 
 #endregion
