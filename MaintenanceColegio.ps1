@@ -808,7 +808,7 @@ function Grant-PrivacyTweaks {
 
         # Cortana (busca) e Pesquisa online
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" = @{CortanaConsent = 0; AllowSearchToUseLocation = 0; BingSearchEnabled = 0; CortanaEnabled = 0; ImmersiveSearch = 0};
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings" = @{"Is-CortanaConsent" = 0}; # Chave corrigida: entre aspas
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings" = @{"Is-CortanaConsent" = 0};
 
         # Conteúdo em destaque do Windows (lock screen, etc.) e Sugestões de Terceiros (HKCU) - Consolidado
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{
@@ -1371,126 +1371,119 @@ function Grant-ControlPanelTweaks {
 }
 
 function Grant-ExtraTweaks {
-    Write-Log "Aplicando tweaks extras de sistema..." Yellow
+    Write-Log "Aplicando tweaks extras para otimização e segurança..." Yellow
 
+    # Dicionário de alterações de registro para tweaks extras
     $registryChanges = @{
-        # Desabilitar o serviço de impressão (se não usar impressora)
-        "HKLM:\SYSTEM\CurrentControlSet\Services\Spooler" = @{Start = 4}; # 4 = Desabilitado
-        # Desabilitar a hibernação (economiza espaço em disco)
-        # Nota: powercfg é um executável, mantido aqui, pois não há cmdlet direto para isso.
-        "HKLM:\SYSTEM\CurrentControlSet\Control\Power" = @{HibernateEnabled = 0};
-        # Desabilitar 'Last Access Timestamp' em arquivos (melhora performance de disco)
-        "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" = @{NtfsDisableLastAccessUpdate = 1};
-        # Aumentar a cache de I/O de disco
-        "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" = @{LargeSystemCache = 1};
-        # Desativar o Superfetch/SysMain (pode ser útil para SSDs antigos ou pouca RAM)
-        "HKLM:\SYSTEM\CurrentControlSet\Services\SysMain" = @{Start = 4}; # 4 = Desabilitado
-        # Desativar a otimização de entrega (Delivery Optimization)
-        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" = @{DODownloadMode = 0; DORestrictPeerSelectionBy = 1; DODisplayCacheSizeBytes = 0};
-        # Desativar feedback de animação de inicialização do Windows
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" = @{DisableBootAnimation = 1};
-        # Desativar o log de erros do Windows
-        "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting" = @{Disabled = 1};
-        # Desativar o Windows Defender (se você tem um AV de terceiros)
-        # ATENÇÃO: Desativar o Defender sem outro AV é um risco de segurança!
-        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" = @{DisableAntiSpyware = 1};
-        # "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" = @{DisableRealtimeMonitoring = 1};
-        # Desativar acesso a USB (CUIDADO! Bloqueia pendrives, etc.)
-        # "HKLM:\SYSTEM\CurrentControlSet\Services\UsbStor" = @{Start = 4};
+        # Desativar Telemetria para Microsoft Edge (se houver)
+        "HKLM:\SOFTWARE\Policies\Microsoft\Edge" = @{TelemetryEnabled = 0};
 
-        # Desabilitar o Serviço de Fax (se não usar)
+        # Desabilitar coleta de telemetria do Office (se houver)
+        "HKCU:\SOFTWARE\Microsoft\Office\Common\ClientTelemetry" = @{EnableTelemetry = 0};
+        "HKCU:\SOFTWARE\Microsoft\Office\16.0\Common\ClientTelemetry" = @{EnableTelemetry = 0};
+        "HKCU:\SOFTWARE\Microsoft\Office\15.0\Common\ClientTelemetry" = @{EnableTelemetry = 0};
+
+        # Desativar o Superfetch/SysMain para SSDs (melhora o desempenho)
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" = @{
+            EnableSuperfetch = 0;
+            EnablePrefetcher = 0;
+        };
+        "HKLM:\SYSTEM\CurrentControlSet\Services\SysMain" = @{Start = 4}; # Desabilita o serviço
+
+        # Desativar o "Windows Defender SmartScreen" (somente para fins de teste, segurança reduzida)
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{SmartScreenEnabled = "Off"};
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{SmartScreenEnabled = "Off"};
+
+        # Desativar "Game DVR" e "Game Bar" (já foi em Privacy, mas reforço aqui)
+        "HKCU:\System\GameConfigStore" = @{GameDVR_Enabled = 0};
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" = @{AllowGameDVR = 0};
+
+        # Desativar Compartilhamento de Diagnósticos
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack\Settings" = @{AllowDiagnosticDataToFlow = 0};
+
+        # Desativar Limpeza Automática do Disco (Storage Sense)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" = @{01 = 0};
+
+        # Ajustes de Inicialização e Desligamento
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" = @{HiberbootEnabled = 0}; # Desabilitar Fast Startup
+        "HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl" = @{AutoReboot = 0}; # Desabilitar reinicialização automática em caso de BSOD
+
+        # Desativar o Serviço de Fax (se não for usado)
         "HKLM:\SYSTEM\CurrentControlSet\Services\Fax" = @{Start = 4};
-        # Desabilitar o Serviço de Desktop Remoto (se não usar)
-        "HKLM:\SYSTEM\CurrentControlSet\Services\TermService" = @{Start = 4};
 
-        # Ajustes para o Explorador de Arquivos
-        # Desabilitar auto-rearranjar ícones no desktop (se não feito no Grant-ControlPanelTweaks)
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{AutoArrange = 0};
-        # Remover a seta de atalhos
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons" = @{29 = "%windir%\System32\shell32.dll,-50"};
-        # Remover 'Atalho para' do nome de novos atalhos
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{Link = 0};
+        # Desativar o Serviço de Acesso Remoto (se não for usado)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\RasAuto" = @{Start = 4};
+        "HKLM:\SYSTEM\CurrentControlSet\Services\RemoteAccess" = @{Start = 4};
 
-        # Ajustes de performance da CPU
-        "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82ca-49dd-9a64-d7ee62bfb990\5d76a2ca-e8c0-4067-9883-cd57e3f54ce4" = @{Value = 0; Value2 = 0; Value3 = 0}; # Processor idle disable - CUIDADO, pode aumentar consumo.
-        "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82ca-49dd-9a64-d7ee62bfb990\0cc5b647-c1df-4637-891a-edc335ee7e0c" = @{Value = 0; Value2 = 0; Value3 = 0}; # Processor idle promotion disable
+        # Desativar o Serviço de Política de Diagnóstico (Diagnostic Policy Service)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\DPS" = @{Start = 4};
 
-        # Desabilitar a limitação da largura de banda reservada (QoS)
-        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched" = @{NonBestEffortLimit = 0};
+        # Desabilitar o UAC Remote Restrictions (para acesso remoto admin)
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" = @{LocalAccountTokenFilterPolicy = 1};
 
-        # Remover botão do Teams da barra de tarefas
-        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{TaskbarMn = 0}; # Valor 0 remove o ícone do Meet Now / Teams da barra de tarefas
+        # Desativar Programas ao Abrir (se houver)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" = @{}; # Limpa tudo nesta chave
 
-        # Desabilitar o Meet Now na barra de tarefas (Windows 10)
-        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" = @{ShellFeedsTaskbarViewMode = 2};
-        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" = @{EnableFeeds = 0};
+        # Desativar o Serviço de Windows Search (melhora uso de disco/CPU para alguns)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\WSearch" = @{Start = 4};
 
-        # Desabilitar OneDrive Shell Extension (apenas o ícone na barra lateral do Explorer, se não foi feito em privacidade)
-        "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
-        "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
+        # Desativar Relatório de Erros do Windows
+        "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting" = @{Disabled = 1};
+
+        # Ajustes para SSD (desabilitar Last Access Time)
+        "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" = @{NtfsDisableLastAccessUpdate = 1};
+
+        # Otimização de Menu Iniciar (reduz atraso)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{
+            "Start_ShowControlPanel" = 0; # Oculta Painel de Controle do Menu Iniciar
+            "Start_ShowDownloads" = 0;   # Oculta Pasta Downloads do Menu Iniciar
+        };
+
+        # Desativar o serviço Biometric (se não usa leitor de digital/facial)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\WbioSrvc" = @{Start = 4};
+
+        # Desabilitar tarefas agendadas de telemetria e manutenção agressiva - Consolidado
+        # Essas entradas modificam o estado de tarefas agendadas no Registro, não criam chaves duplicadas.
+        # Os valores 'SD' são descritores de segurança em formato binário.
+        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator" = @{
+            SD = [byte[]](0x01,0x00,0x04,0x80,0x7C,0x00,0x00,0x00,0x8C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x02,0x00,0x1C,0x00,0x01,0x00,0x00,0x00,0x0F,0x00,0x04,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00);
+        };
+        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\Maintenance" = @{
+            SD = [byte[]](0x01,0x00,0x04,0x80,0x7C,0x00,0x00,0x00,0x8C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x02,0x00,0x1C,0x00,0x01,0x00,0x00,0x00,0x0F,0x00,0x04,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00);
+        };
+
+        # Desabilitar o recurso "Conectividade de Rede" do Sistema (Network Connectivity Assistant)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\NlaSvc" = @{Start = 4};
+
+        # Desabilitar o recurso "Experiência de Aplicativos" (Application Experience Service)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\AeLookupSvc" = @{Start = 4};
+
+        # Desabilitar o serviço de "Download de Mapas" (MapsBroker)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\MapsBroker" = @{Start = 4};
+
+        # Desabilitar a função "Serviços de Usuário Conectado e Telemetria" (Connected User Experiences and Telemetry)
+        "HKLM:\SYSTEM\CurrentControlSet\Services\DiagTrack" = @{Start = 4};
+
+        # Desabilitar o "Serviço de Coleta de Telemetria de Compatibilidade da Microsoft"
+        "HKLM:\SYSTEM\CurrentControlSet\Services\dmwappushservice" = @{Start = 4};
     }
 
     try {
         foreach ($path in $registryChanges.Keys) {
+            if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
+                New-Item -Path $path -Force -ErrorAction SilentlyContinue | Out-Null
+                Write-Log "Caminho de registro criado: $path" Cyan
+            }
+
             foreach ($name in $registryChanges.$path.Keys) {
                 $value = $registryChanges.$path.$name
                 Write-Log "Configurando registro: $path - $name = $value" Cyan
                 Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
             }
         }
-        Write-Log "Tweaks extras de sistema aplicados com sucesso." Green
-
-        # Cmdlets para serviços
-        Write-Log "Ajustando serviços..." Cyan
-        # Desabilitar Spooler
-        try {
-            Get-Service -Name "Spooler" -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled -ErrorAction Stop | Out-Null
-            Write-Log "Serviço Spooler desabilitado." Green
-        } catch {
-            Write-Log "Não foi possível desabilitar o serviço Spooler: $_" Yellow
-        }
-        # Desabilitar SysMain (Superfetch)
-        try {
-            Get-Service -Name "SysMain" -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled -ErrorAction Stop | Out-Null
-            Write-Log "Serviço SysMain (Superfetch) desabilitado." Green
-        } catch {
-            Write-Log "Não foi possível desabilitar o serviço SysMain: $_" Yellow
-        }
-        # Desabilitar Fax
-        try {
-            Get-Service -Name "Fax" -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled -ErrorAction Stop | Out-Null
-            Write-Log "Serviço Fax desabilitado." Green
-        } catch {
-            Write-Log "Não foi possível desabilitar o serviço Fax: $_" Yellow
-        }
-        # Desabilitar Serviço de Área de Trabalho Remota
-        try {
-            Get-Service -Name "TermService" -ErrorAction SilentlyContinue | Set-Service -StartupType Disabled -ErrorAction Stop | Out-Null
-            Write-Log "Serviço de Área de Trabalho Remota desabilitado." Green
-        } catch {
-            Write-Log "Não foi possível desabilitar o serviço de Área de Trabalho Remota: $_" Yellow
-        }
-
-        # Comandos que ainda precisam de executáveis externos (sem cmdlet PowerShell direto equivalente simples)
-        Write-Log "Executando comandos externos (powercfg, gpupdate)..." Cyan
-        # Desabilitar Hibernação
-        try {
-            powercfg.exe /hibernate off | Out-Null
-            Write-Log "Hibernação desabilitada." Green
-        } catch {
-            Write-Log "Não foi possível desabilitar a hibernação: $_" Yellow
-        }
-
-        # Atualizar políticas de grupo (útil após algumas mudanças de registro em HKLM)
-        try {
-            gpupdate.exe /force | Out-Null
-            Write-Log "Políticas de grupo atualizadas." Green
-        } catch {
-            Write-Log "Não foi possível atualizar as políticas de grupo: $_" Yellow
-        }
-
+        Write-Log "Tweaks extras aplicados com sucesso." Green
     } catch {
-        Write-Log "Erro geral ao aplicar tweaks extras: $_" Red
+        Write-Log "Erro ao aplicar tweaks extras: $_" Red
     }
 }
 
@@ -1879,53 +1872,128 @@ function Restore-BloatwareSafe {
 }
 
 function Restore-ControlPanelTweaks {
-    Write-Log "Restaurando configurações padrão do Painel de Controle e Explorer..." Yellow
+    Write-Log "Restaurando configurações do Painel de Controle e comportamento do sistema para o padrão..." Yellow
 
+    # Dicionário de alterações de registro para restaurar padrões
     $registryChanges = @{
-        # Restaurar visibilidade de itens no Painel de Controle
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" = @{NoControlPanel = 0; NoViewContextMenu = 0; NoDesktop = 0; NoFind = 0}; # Certifica-se de que não há política desabilitando
-        # Restaurar atalhos na barra de tarefas (Jump Lists)
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{Start_JumpListsItems = 10}; # Valor padrão é 10
-        # Restaurar pré-visualização de miniaturas (Thumbnails)
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{IconsOnly = 0}; # Valor padrão para mostrar miniaturas
-        # Restaurar 'Verificar programas ao iniciar'
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{ScanNetDrives = 1};
-        # Ocultar extensões de arquivos (padrão)
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{HideFileExt = 1}; # Padrão é ocultar extensões
-        # Ocultar arquivos do sistema (padrão)
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{ShowSuperHidden = 0}; # Padrão é ocultar arquivos de sistema
-        # Desabilitar o 'shake to minimize'
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{DisableShake = 0}; # Valor padrão é 0 (habilitado)
-        # Restaurar notificações de novos programas instalados
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{DontShowNewInstall = 0};
-        # Restaurar 'Recente' e 'Fixado' do Quick Access
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{HubMode = 0; ShowRecent = 1; ShowFrequent = 1}; # HubMode = 0 é o padrão.
-        # Restaurar o recurso "Quick Access" completamente
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Ribbon" = @{QatExclude = 0}; # Habilita Quick Access no ribbon
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{LaunchTo = 1}; # Abre Quick Access por padrão
-        # Restaurar o auto-organizar ícones
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{AutoArrange = 1}; # Valor para ativar o auto-organizar
-        # Restaurar o snap para janelas
-        "HKCU:\Control Panel\Desktop" = @{WindowArrangementActive = 1};
-        # Restaurar a rolagem de janelas inativas
-        "HKCU:\Control Panel\Desktop" = @{MouseWheelRouting = 1};
-        # Restaurar o FadeEffect no menu iniciar e tooltips (valor padrão)
-        "HKCU:\Control Panel\Desktop" = @{UserPreferencesMask = 0x9E3E0380}; # Valor padrão para UserPreferencesMask
-        # Restaurar Animações do Windows (Minimize/Maximize)
-        "HKCU:\Control Panel\Desktop\WindowMetrics" = @{MinAnimate = 1}; # Restaurar animação de minimizar/maximizar
+        # Pasta do Usuário (Explorador de Arquivos) - Consolidado
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{
+            Hidden = 1; # Mostrar arquivos e pastas ocultos (pode ser 2 para não mostrar)
+            ShowSuperHidden = 1; # Mostrar arquivos de sistema protegidos
+            HideFileExt = 0; # Mostrar extensões de arquivos
+        };
+
+        # Visual FX (Desempenho Visual)
+        "HKCU:\Control Panel\Desktop" = @{
+            UserPreferencesMask = "90,12,02,80,10,00,00,00"; # Padrão do Windows
+            DragFullWindows = "2"; # Arrastar janelas mostrando o conteúdo (Padrão: 1 - contorno)
+            FontSmoothing = "2"; # ClearType
+        };
+
+        # Windows Defender Security Center - Consolidado
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" = @{DisableAntiSpyware = 0}; # Reabilitar se desabilitado
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" = @{
+            DisableRealtimeMonitoring = 0; # Reabilitar monitoramento em tempo real
+            DisableBehaviorMonitoring = 0;
+            DisableScanOnRealtimeEnable = 0;
+            DisableIOAVProtection = 0;
+        };
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet" = @{
+            SpyNetReporting = 1; # Basic (1) ou Advanced (2)
+            SubmitSamplesConsent = 1; # Enviar amostras (1:Enviar automaticamente, 2:Sempre perguntar, 3:Nunca enviar, 4:Enviar amostras seguras automaticamente)
+        };
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Policy Manager" = @{
+            DisableAntiSpyware = 0;
+            AllowUserUIRestrictions = 0;
+            AllowFastStart = 1;
+            AllowPrimaryMonitorScan = 1;
+            AllowCloudProtection = 1;
+        };
+
+        # Ajustes de Desempenho Visual (Restore-VisualPerformanceDefault)
+        "HKCU:\Control Panel\Desktop\WindowMetrics" = @{
+            MinAnimate = "1"; # Habilita animação de minimizar/maximizar
+        };
+
+        # Desabilitar Telemetria de Compatibilidade (se ativada por algum tweak)
+        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Telemetry" = @{DisableTelemetry = 0};
+
+        # Reabilitar Windows Update (se desativado por algum tweak)
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" = @{ExcludeWUDriversInQualityUpdate = 0};
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" = @{
+            NoAutoUpdate = 0;
+            AUOptions = 4; # Auto download e agendar instalação
+            ScheduledInstallDay = 0; # Todo dia
+            ScheduledInstallTime = 3; # 3 AM
+        };
+
+        # Restaura o WinRE (Windows Recovery Environment) para padrão
+        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Recovery" = @{RecoveryEnvironment = 1};
+
+        # Reabilitar Cortana/Pesquisa
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" = @{CortanaConsent = 1; BingSearchEnabled = 1};
+
+        # Reabilitar Notificações do Action Center
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings" = @{NOC_Global_Enabled = 1};
+
+        # Reabilitar Experiências Compartilhadas (Continuar no PC)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Workloads\SharedExperience" = @{EnableSharedExperience = 1};
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Workloads\SharedExperience" = @{EnableSharedExperience = 1};
+
+        # Reabilitar Conteúdo em Destaque do Windows
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{
+            OemPreInstalledAppsEnabled = 1;
+            PreInstalledAppsEnabled = 1;
+            SilentInstalledAppsEnabled = 1;
+            SoftLandingEnabled = 1;
+            "SubscribedContent-338387Enabled" = 1;
+            "SubscribedContent-338388Enabled" = 1;
+            "SubscribedContent-338389Enabled" = 1;
+            "SubscribedContent-338393Enabled" = 1;
+            "SubscribedContent-353693Enabled" = 1;
+            ContentDeliveryAllowed = 1
+        };
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" = @{ContentDeliveryAllowed = 1};
+
+        # Reabilitar Telemetria e Coleta de Dados (HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection)
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" = @{
+            AllowTelemetry = 1;
+            DoNotShowFeedbackNotifications = 0;
+            MaxTelemetryAllowed = 3; # Default value
+        };
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" = @{
+            AllowTelemetry = 1;
+            CommercialDataOptIn = 1; # Default
+            DoNotShowFeedbackNotifications = 0;
+            MaxTelemetryAllowed = 3; # Default
+            UploadUserActivities = 1; # Default
+        };
+
+        # Reabilitar OneDrive na barra lateral do Explorador de Arquivos (Consolidado)
+        "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 1};
+        "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 1};
+
+        # Reabilitar Game Bar
+        "HKCU:\SOFTWARE\Microsoft\GameBar" = @{AllowGameBar = 1; UseNexusForGameBar = 1; ShowStartupPanel = 1};
     }
 
     try {
         foreach ($path in $registryChanges.Keys) {
+            # Certifica-se de que o caminho existe antes de tentar definir as propriedades
+            if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
+                New-Item -Path $path -Force -ErrorAction SilentlyContinue | Out-Null
+                Write-Log "Caminho de registro criado: $path" Cyan
+            }
+
             foreach ($name in $registryChanges.$path.Keys) {
                 $value = $registryChanges.$path.$name
-                Write-Log "Restaurando registro: $path - $name = $value" Cyan
+                Write-Log "Configurando registro: $path - $name = $value" Cyan
                 Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
             }
         }
-        Write-Log "Configurações padrão do Painel de Controle e Explorer restauradas com sucesso." Green
+        Write-Log "Configurações do Painel de Controle e comportamento do sistema restauradas com sucesso." Green
     } catch {
-        Write-Log "Erro ao restaurar configurações do Painel de Controle e Explorer: $_" Red
+        Write-Log "Erro ao restaurar configurações do Painel de Controle: $_" Red
     }
 }
 
