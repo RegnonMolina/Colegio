@@ -2096,7 +2096,6 @@ function Show-FullMaintenance {
     # Chamando as funções que estão dentro de Show-NetworkMenu opção 1
     Install-NetworkPrinters
     Optimize-NetworkPerformance
-    Restore-DefaultIPv6
     Start-Sleep 2
 
     Write-Host "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as Configurações)..." -ForegroundColor Green
@@ -2139,6 +2138,61 @@ function Show-FullMaintenance {
     Write-Log "Manutenção Completa Concluída." Green
     Show-SuccessMessage
     [Console]::ReadKey($true) | Out-Null
+}
+
+function Show-PersonalizationTweaksMenu {
+    do {
+        Clear-Host
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "   MENU DE PERSONALIZAÇÃO E NOVOS RECURSOS   " -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Log "Exibindo menu de Personalização e Novos Recursos..." Blue
+
+        Write-Host " A. Executar Todos os Ajustes de Personalização (Sequência)" -ForegroundColor Green
+        Write-Host " B. Ativar 'Finalizar tarefa' na barra de tarefas"
+        Write-Host " C. Ativar atualizações antecipadas do Windows Update"
+        Write-Host " D. Ativar modo escuro"
+        Write-Host " E. Ativar histórico da área de transferência"
+        Write-Host " F. Restauração de apps após reinício"
+        Write-Host " G. Mostrar segundos no relógio"
+        Write-Host " H. Updates para outros produtos Microsoft"
+        Write-Host " I. Habilitar sudo embutido (Windows 11 24H2+)"
+        Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta
+        Write-Host "=============================================" -ForegroundColor Cyan
+
+        $key = [Console]::ReadKey($true).Key
+        Write-Log "Opção escolhida no menu de Personalização: $key" Blue
+
+        switch ($key) {
+            'A' {
+                Write-Host "Executando: Todos os Ajustes de Personalização..." -ForegroundColor Yellow
+                Enable-TaskbarEndTask
+                Enable-WindowsUpdateFast
+                Enable-DarkTheme
+                Enable-ClipboardHistory
+                Enable-RestartAppsAfterReboot
+                Enable-TaskbarSeconds
+                Enable-OtherMicrosoftUpdates
+                Enable-Sudo
+                Write-Host "Todos os Ajustes de Personalização Concluídos!" -ForegroundColor Green
+                [Console]::ReadKey($true) | Out-Null
+            }
+            'B' { Enable-TaskbarEndTask; Show-SuccessMessage }
+            'C' { Enable-WindowsUpdateFast; Show-SuccessMessage }
+            'D' { Enable-DarkTheme; Show-SuccessMessage }
+            'E' { Enable-ClipboardHistory; Show-SuccessMessage }
+            'F' { Enable-RestartAppsAfterReboot; Show-SuccessMessage }
+            'G' { Enable-TaskbarSeconds; Show-SuccessMessage }
+            'H' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
+            'I' { Enable-Sudo; Show-SuccessMessage }
+            'x' { return }
+            'X' { return }
+            default {
+                Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+                [Console]::ReadKey($true) | Out-Null
+            }
+        }
+    } while ($true)
 }
 
 function Show-AdvancedSettingsMenu {
@@ -2471,24 +2525,25 @@ function Show-UtilitiesMenu {
                 Grant-ControlPanelTweaks
                 Grant-ExtraTweaks
                 Disable-Cortana-AndSearch
+                Show-PersonalizationTweaksMenu # NOVO: CHAMA O MENU DE PERSONALIZAÇÃO COMPLETO
                 Write-Host "Todas as Tarefas de Otimização Concluídas!" -ForegroundColor Green
                 [Console]::ReadKey($true) | Out-Null
             }
             'B' {
                 do {
                     Clear-Host
-                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
-                    Write-Host "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -ForegroundColor Cyan # PADRONIZADO
-                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host "=============================================" -ForegroundColor Cyan
+                    Write-Host "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -ForegroundColor Cyan
+                    Write-Host "=============================================" -ForegroundColor Cyan
                     Write-Log "Exibindo submenu de Bloatware..." Blue
 
-                    Write-Host " A. Remover Bloatware (Todos em sequência)" # PADRONIZADO
-                    Write-Host " B. Remover Aplicativos Pré-instalados (Bloatware)" # PADRONIZADO
-                    Write-Host " C. Remover OneDrive e Restaurar Pastas" # PADRONIZADO
-                    Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta # PADRONIZADO
-                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host " A. Remover Bloatware (Todos em sequência)"
+                    Write-Host " B. Remover Aplicativos Pré-instalados (Bloatware)"
+                    Write-Host " C. Remover OneDrive e Restaurar Pastas"
+                    Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta
+                    Write-Host "=============================================" -ForegroundColor Cyan
 
-                    $subChoice = [Console]::ReadKey($true).Key # PADRONIZADO: Não precisa de Enter
+                    $subChoice = [Console]::ReadKey($true).Key
                     Write-Log "Opção escolhida no submenu de Bloatware: $subChoice" Blue
 
                     switch ($subChoice) {
@@ -2504,8 +2559,8 @@ function Show-UtilitiesMenu {
                         'x' { return }
                         'X' { return }
                         default {
-                            Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red # PADRONIZADO
-                            [Console]::ReadKey($true) | Out-Null # PADRONIZADO
+                            Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+                            [Console]::ReadKey($true) | Out-Null
                         }
                     }
                 } while ($true)
@@ -2513,18 +2568,18 @@ function Show-UtilitiesMenu {
             'C' {
                 do {
                     Clear-Host
-                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
-                    Write-Host "      SUBMENU DE LIMPEZA E OTIMIZAÇÃO DE DISCO      " -ForegroundColor Cyan # PADRONIZADO
-                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host "=============================================" -ForegroundColor Cyan
+                    Write-Host "      SUBMENU DE LIMPEZA E OTIMIZAÇÃO DE DISCO      " -ForegroundColor Cyan
+                    Write-Host "=============================================" -ForegroundColor Cyan
                     Write-Log "Exibindo submenu de Limpeza e Otimização..." Blue
 
-                    Write-Host " A. Executar Todas as Tarefas de Limpeza e Otimização" # PADRONIZADO
-                    Write-Host " B. Limpeza de Arquivos Temporários" # PADRONIZADO
-                    Write-Host " C. Desfragmentar/Otimizar Drives" # PADRONIZADO
-                    Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta # PADRONIZADO
-                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host " A. Executar Todas as Tarefas de Limpeza e Otimização"
+                    Write-Host " B. Limpeza de Arquivos Temporários"
+                    Write-Host " C. Desfragmentar/Otimizar Drives"
+                    Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta
+                    Write-Host "=============================================" -ForegroundColor Cyan
 
-                    $subChoice = [Console]::ReadKey($true).Key # PADRONIZADO: Não precisa de Enter
+                    $subChoice = [Console]::ReadKey($true).Key
                     Write-Log "Opção escolhida no submenu de Limpeza: $subChoice" Blue
 
                     switch ($subChoice) {
@@ -2540,28 +2595,29 @@ function Show-UtilitiesMenu {
                         'x' { return }
                         'X' { return }
                         default {
-                            Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red # PADRONIZADO
-                            [Console]::ReadKey($true) | Out-Null # PADRONIZADO
+                            Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+                            [Console]::ReadKey($true) | Out-Null
                         }
                     }
                 } while ($true)
             }
-            'D' {
+            'D' { # Otimizações de Desempenho e Privacidade
                 do {
                     Clear-Host
-                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
-                    Write-Host "    SUBMENU DE OTIMIZAÇÕES DE DESEMPENHO E PRIVACIDADE    " -ForegroundColor Cyan # PADRONIZADO
-                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host "=============================================" -ForegroundColor Cyan
+                    Write-Host "    SUBMENU DE OTIMIZAÇÕES DE DESEMPENHO E PRIVACIDADE    " -ForegroundColor Cyan
+                    Write-Host "=============================================" -ForegroundColor Cyan
                     Write-Log "Exibindo submenu de Otimizações de Desempenho e Privacidade..." Blue
 
-                    Write-Host " A. Aplicar Todas as Otimizações de Desempenho e Privacidade" # PADRONIZADO
-                    Write-Host " B. Aplicar Tweaks de Privacidade" # PADRONIZADO
-                    Write-Host " C. Ajustar Painel de Controle e Explorer" # PADRONIZADO
-                    Write-Host " D. Aplicar Tweaks Extras" # PADRONIZADO
-                    Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta # PADRONIZADO
-                    Write-Host "=============================================" -ForegroundColor Cyan # PADRONIZADO
+                    Write-Host " A. Aplicar Todas as Otimizações de Desempenho e Privacidade"
+                    Write-Host " B. Aplicar Tweaks de Privacidade"
+                    Write-Host " C. Ajustar Painel de Controle e Explorer"
+                    Write-Host " D. Aplicar Tweaks Extras"
+                    Write-Host " E. Outros Ajustes e Personalização" -ForegroundColor Green
+                    Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Magenta
+                    Write-Host "=============================================" -ForegroundColor Cyan
 
-                    $subChoice = [Console]::ReadKey($true).Key # PADRONIZADO: Não precisa de Enter
+                    $subChoice = [Console]::ReadKey($true).Key
                     Write-Log "Opção escolhida no submenu de Desempenho e Privacidade: $subChoice" Blue
 
                     switch ($subChoice) {
@@ -2570,17 +2626,19 @@ function Show-UtilitiesMenu {
                             Grant-PrivacyTweaks
                             Grant-ControlPanelTweaks
                             Grant-ExtraTweaks
+                            Show-PersonalizationTweaksMenu # NOVO: CHAMA O MENU DE PERSONALIZAÇÃO COMPLETO
                             Write-Host "Otimizações de Desempenho e Privacidade Concluídas!" -ForegroundColor Green
                             [Console]::ReadKey($true) | Out-Null
                         }
                         'B' { Grant-PrivacyTweaks; Show-SuccessMessage }
                         'C' { Grant-ControlPanelTweaks; Show-SuccessMessage }
                         'D' { Grant-ExtraTweaks; Show-SuccessMessage }
+                        'E' { Show-PersonalizationTweaksMenu }
                         'x' { return }
                         'X' { return }
                         default {
-                            Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red # PADRONIZADO
-                            [Console]::ReadKey($true) | Out-Null # PADRONIZADO
+                            Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+                            [Console]::ReadKey($true) | Out-Null
                         }
                     }
                 } while ($true)
@@ -2805,13 +2863,22 @@ $FuncoesCriticas = @(
     'Restore-Registry-FromBackup',
     'Restore-VisualPerformanceDefault',
     'Show-AutoLoginMenu',
-    'Show-BloatwareMenu',
-    'Show-CleanupMenu',
     'Show-DiagnosticsMenu',
     'Show-ExternalScriptsMenu',
     'Show-SuccessMessage',
-    'Show-SystemPerformanceMenu',
+    'Show-PersonalizationTweaksMenu', # NOVO: O menu que acabamos de criar
+    'Enable-TaskbarEndTask', # NOVO
+    'Enable-WindowsUpdateFast', # NOVO
+    'Enable-DarkTheme', # NOVO
+    'Enable-ClipboardHistory', # NOVO
+    'Enable-RestartAppsAfterReboot', # NOVO
+    'Enable-TaskbarSeconds', # NOVO
+    'Enable-OtherMicrosoftUpdates', # NOVO
+    'Enable-Sudo', # NOVO
     'Undo-PrivacyHardening'
+    # 'Show-BloatwareMenu', # Removido anteriormente
+    # 'Show-CleanupMenu', # Removido anteriormente
+    # 'Show-SystemPerformanceMenu' # Removido anteriormente
 )
 
 Test-RequiredFunctions -FunctionList $FuncoesCriticas
