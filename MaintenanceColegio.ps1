@@ -1,11 +1,12 @@
 # ====================================================================================
-# BOOTSTRAPPER PARA SCRIPT SUPREMO DE MANUTENÇÃO
+# BOOTSTRAPPER PARA SCRIPT SUPREMO DE MANUTENÇÃO (v2.0 - ERRO DE TIPO CORRIGIDO)
 # Este script é otimizado para execução via IRM | IEX
 # Ele baixa o script principal e o executa localmente para evitar problemas de parsing.
 # ====================================================================================
 
 # Certifique-se de que estamos rodando como Administrador
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+# ERRO CORRIGIDO AQUI: Removido 'Security.' duplicado
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Este script precisa ser executado como Administrador. Por favor, feche e execute o PowerShell como Administrador." -ForegroundColor Red
     Start-Sleep 5
     exit
@@ -26,7 +27,7 @@ if (-not (Test-Path $ScriptDownloadDir)) {
     } catch {
         Write-Host "ERRO: Não foi possível criar a pasta '$ScriptDownloadDir'. Verifique suas permissões." -ForegroundColor Red
         Write-Host "Detalhes do Erro: $($_.Exception.Message)" -ForegroundColor Red
-        Pause
+        exit 1
     }
 } else {
     Write-Host "A pasta '$ScriptDownloadDir' já existe." -ForegroundColor DarkYellow
@@ -48,7 +49,7 @@ try {
     Write-Host "ERRO: Não foi possível baixar o script principal da URL '$MainScriptUrl'." -ForegroundColor Red
     Write-Host "Verifique a URL ou sua conexão com a internet." -ForegroundColor Red
     Write-Host "Detalhes do Erro: $($_.Exception.Message)" -ForegroundColor Red
-Pause
+    exit 1
 }
 
 Write-Host "Preparando para executar o script principal..." -ForegroundColor DarkCyan
@@ -64,7 +65,7 @@ try {
 } catch {
     Write-Host "ERRO: Não foi possível executar o script '$OutputFileName'." -ForegroundColor Red
     Write-Host "Detalhes do Erro: $($_.Exception.Message)" -ForegroundColor Red
-pause
+    exit 1
 }
 
 Write-Host "Processo de inicialização do Bootstrapper concluído." -ForegroundColor Green
