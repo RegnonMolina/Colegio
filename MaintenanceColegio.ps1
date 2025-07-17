@@ -2069,6 +2069,9 @@ function New-FolderForced {
     }
 }
 
+#endregion
+
+#region → MENUS
 
 # === FUNÇÕES DE MENU ===
 
