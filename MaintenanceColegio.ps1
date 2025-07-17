@@ -1080,7 +1080,7 @@ function Disable-UnnecessaryServices {
         #"WSearch",                                 # Windows Search
         "XblAuthManager",                           # Xbox Live Auth Manager
         "XblGameSave",                              # Xbox Live Game Save Service
-        "XboxNetApiSvc",                            # Xbox Live Networking Service
+        "XboxNetApiSvc"                             # Xbox Live Networking Service
         # Services which cannot be disabled
         #"WdNisSvc"
     )
