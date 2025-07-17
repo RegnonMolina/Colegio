@@ -1,58 +1,18 @@
 # ===============================
-# SCRIPT SUPREMO DE MANUTENÇÃO 🛠️
+# TESTE DE SCRIPT SUPREMO MINIMALISTA
 # ===============================
-# Iniciado em: $(Get-Date)
-# Desenvolvido com sangue, café e PowerShell 💪
-
-# clear-host
-Write-Host "-------------------------------------------------------------------------"
-Write-Host "| Script pra ajustes de notebooks do ambiente do Colégio Mundo do Saber |"
-Write-Host "-------------------------------------------------------------------------"
 
 [CmdletBinding()]
 param (
-    [Parameter(HelpMessage="Executa todas as rotinas de limpeza.")]
-    [bool]$RunAllCleanup = $false,
-
-    [Parameter(HelpMessage="Executa a remoção de Bloatware.")]
-    [bool]$RunBloatwareRemoval = $false,
-
-    [Parameter(HelpMessage="Aplica os ajustes de privacidade e registro.")]
-    [bool]$RunPrivacyTweaks = $false,
-
-    [Parameter(HelpMessage="Otimiza o desempenho de rede.")]
-    [bool]$RunNetworkOptimization = $false,
-
-    [Parameter(HelpMessage="Instala os aplicativos definidos.")]
-    [bool]$RunAppInstallation = $false,
-
-    [Parameter(HelpMessage="Executa diagnósticos do sistema.")]
-    [bool]$RunDiagnostics = $false,
-
-    [Parameter(HelpMessage="Cria um ponto de restauração do sistema antes de iniciar.")]
-    [bool]$CreateRestorePoint = $false,
-
-    [Parameter(HelpMessage="Força a remoção completa do OneDrive.")]
-    [bool]$ForceOneDriveRemoval = $false,
-
-    [Parameter(HelpMessage="Remove e desativa o Windows Copilot.")]
-    [bool]$RemoveCopilot = $false,
-
-    [Parameter(HelpMessage="Aplica as configurações de GPO/Registro.")]
-    [bool]$ApplyGPOSettings = $false,
-
-    [Parameter(HelpMessage="Define o plano de energia para Alto Desempenho.")]
-    [bool]$SetHighPerformancePowerPlan = $false,
-
-    [Parameter(HelpMessage="Aplica ajustes de interface do usuário.")]
-    [bool]$ApplyUITweaks = $false,
-
-    [Parameter(HelpMessage="Exibe o menu principal após a execução.")]
-    [bool]$ShowMainMenu = $true,
-
-    [Parameter(HelpMessage="Solicita confirmação antes de ações destrutivas.")]
-    [bool]$ConfirmationRequired = $true
+    [Parameter(HelpMessage="Apenas um parametro de teste.")]
+    [bool]$TesteParam = $false
 )
+
+Write-Host "O Script Supremo de Teste rodou com sucesso!" -ForegroundColor Green
+Write-Host "Valor de TesteParam: $($TesteParam)" -ForegroundColor Cyan
+
+# Se esta linha aparecer, o CmdletBinding funcionou!
+Start-Sleep -Seconds 5 # Mantém a janela aberta por um tempo para você ver a mensagem
 #endregion
 
 # ===============================
