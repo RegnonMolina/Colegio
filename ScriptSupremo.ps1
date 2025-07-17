@@ -9,7 +9,6 @@ Write-Host "--------------------------------------------------------------------
 Write-Host "| Script pra ajustes de notebooks do ambiente do Colégio Mundo do Saber |"
 Write-Host "-------------------------------------------------------------------------"
 
-#region → PARÂMETROS DE EXECUÇÃO (Adicionado)
 [CmdletBinding()]
 param (
     [Parameter(HelpMessage="Executa todas as rotinas de limpeza.")]
