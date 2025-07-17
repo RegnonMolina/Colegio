@@ -5,7 +5,7 @@
 # ====================================================================================
 
 # Certifique-se de que estamos rodando como Administrador
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Este script precisa ser executado como Administrador. Por favor, feche e execute o PowerShell como Administrador." -ForegroundColor Red
     Start-Sleep 5
     exit
@@ -33,10 +33,8 @@ if (-not (Test-Path $ScriptDownloadDir)) {
 }
 
 # 3. Define a URL do SEU SCRIPT PRINCIPAL ScriptSupremo.ps1 no GitHub
-# ATENÇÃO: VOCÊ PRECISA ALTERAR ESTA URL PARA A URL RAW DO SEU ARQUIVO ScriptSupremo.ps1 NO GITHUB!
-# Para obter a URL RAW: No GitHub, navegue até seu ScriptSupremo.ps1, clique nele, depois clique no botão "Raw".
-# Copie a URL da página que abrirá. Exemplo: https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/ScriptSupremo.ps1
-$MainScriptUrl = "https://raw.githubusercontent.com/COLEGIO_MUNDO_DO_SABER/REPOSITORIO/main/ScriptSupremo.ps1" # <--- SUBSTITUA ESTA LINHA!
+# Esta URL foi fornecida por você:
+$MainScriptUrl = "https://raw.githubusercontent.com/RegnonMolina/Colegio/refs/heads/main/ScriptSupremo.ps1"
 $OutputFileName = "ScriptSupremo.ps1"
 $OutputFilePath = Join-Path $ScriptDownloadDir $OutputFileName
 
