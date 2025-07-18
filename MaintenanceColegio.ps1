@@ -627,35 +627,35 @@ function Force-RemoveOneDrive {
     Start-Sleep -Seconds 2
 }
 
-    # Função auxiliar para verificar se um pacote deve ser removido
     function Test-ShouldRemovePackage {
-        param (
-            [Parameter(Mandatory=$true)]
-            [string]$PackageName
-        )
-        if ($whitelist -contains $PackageName) {
-            return $false
-        }
-        foreach ($item in $bloatwareToRemove) {
-            if ($PackageName -like $item) {
-                return $true
-            }
-        }
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName
+    )
+    if ($global:whitelist -contains $PackageName) {
         return $false
     }
+    foreach ($item in $global:bloatwareToRemove) {
+        if ($PackageName -like $item) {
+            return $true
+        }
+    }
+    return $false
+}
 
+function Remove-Bloatware {
     try {
-        # Passo 1: Remover pacotes provisionados (para novos usuários)
         Write-Log "Removendo pacotes provisionados para novos usuários..." Cyan
-        Get-AppxProvisionedPackage -ErrorAction SilentlyContinue | ForEach-Object {
+
+        Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | ForEach-Object {
             if (Test-ShouldRemovePackage -PackageName $_.PackageName) {
                 Write-Log "Removendo provisionamento de $($_.PackageName)..." Cyan
-                Remove-AppxProvisionedPackage -PackageName $_.PackageName -ErrorAction SilentlyContinue
+                Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue
             }
         }
 
-        # Passo 2: Remover do usuário atual
         Write-Log "Removendo pacotes do usuário atual..." Cyan
+
         Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue | ForEach-Object {
             if (Test-ShouldRemovePackage -PackageName $_.Name) {
                 Write-Log "Removendo $($_.Name) para o usuário $($_.User.Name)..." Cyan
@@ -667,6 +667,7 @@ function Force-RemoveOneDrive {
     } catch {
         Write-Log "Erro durante a remoção de Bloatware: $_" Red
     }
+}
 
 
 function Disable-BloatwareScheduledTasks {
@@ -4105,46 +4106,6 @@ function Show-MainMenu {
     }
 }
 #endregion
-
-# === VERIFICAÇÃO DE FUNÇÕES CRÍTICAS ===
-$FuncoesCriticas = @(
-    'Disable-Cortana-AndSearch',
-    'Disable-SMBv1',
-    'Disable-UAC',
-    'Enable-PrivacyHardening',
-    'Enable-SMBv1',
-    'Grant-ActionCenter-Notifications',
-    'Grant-ControlPanelTweaks',
-    'Grant-ExtraTweaks',
-    'Grant-HardenOfficeMacros',
-    'Optimize-NetworkPerformance',
-    'Remove-Bloatware',
-    'Remove-OneDrive-AndRestoreFolders',
-    'Restore-ControlPanelTweaks',
-    'Restore-DefaultIPv6',
-    'Restore-DefaultUAC',
-    'Restore-Registry-FromBackup',
-    'Restore-VisualPerformanceDefault',
-    'Show-AutoLoginMenu',
-    'Show-DiagnosticsMenu',
-    'Show-ExternalScriptsMenu',
-    'Show-SuccessMessage',
-    'Show-PersonalizationTweaksMenu', # NOVO: O menu que acabamos de criar
-    'Enable-TaskbarEndTask', # NOVO
-    'Enable-WindowsUpdateFast', # NOVO
-    'Enable-DarkTheme', # NOVO
-    'Enable-ClipboardHistory', # NOVO
-    'Enable-RestartAppsAfterReboot', # NOVO
-    'Enable-TaskbarSeconds', # NOVO
-    'Enable-OtherMicrosoftUpdates', # NOVO
-    'Enable-Sudo', # NOVO
-    'Undo-PrivacyHardening'
-    # 'Show-BloatwareMenu', # Removido anteriormente
-    # 'Show-CleanupMenu', # Removido anteriormente
-    # 'Show-SystemPerformanceMenu' # Removido anteriormente
-)
-
-Test-RequiredFunctions -FunctionList $FuncoesCriticas
 
 # === EXECUÇÃO PRINCIPAL ===
 
