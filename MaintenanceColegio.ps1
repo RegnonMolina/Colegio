@@ -1827,7 +1827,7 @@ function Show-PersonalizationMenu {
         Write-Host " C) Aplicar visual de performance"
         Write-Host " D) Restaurar menu de contexto clássico"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Enable-DarkTheme }
             'B' { Enable-TaskbarSeconds }
@@ -3335,7 +3335,7 @@ function Show-AdvancedSettingsMenu {
         Write-Host " C) Desabilitar SMBv1"
         Write-Host " D) Configurar Macros Office (segurança)"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Enable-WindowsHardening }
             'B' { Disable-UAC }
@@ -3357,7 +3357,7 @@ function Show-DiagnosticsMenu {
         Write-Host " D) Teste de Memória"
         Write-Host " E) Informações do Sistema"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-SFC-Scan }
             'B' { Invoke-DISM-Scan }
@@ -3379,7 +3379,7 @@ function Show-AppsMenu {
         Write-Host " C) Ativar Sudo (Win11 24H2+)"
         Write-Host " D) Ativar atualizações estendidas do Windows Update"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Install-Applications }
             'B' { Update-PowerShell }
@@ -3401,7 +3401,7 @@ function Show-NetworkMenu {
         Write-Host " D) Testar velocidade da internet"
         Write-Host " E) Otimizar desempenho de rede"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Add-WiFiNetwork }
             'B' { Set-DnsGoogleCloudflare }
@@ -3423,7 +3423,7 @@ function Show-ExternalScriptsMenu {
         Write-Host " C) Rodar WinUtil, SpeedyFox, etc."
         Write-Host " D) Atualizar Script Supremo pela URL"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-WindowsActivator }
             'B' { Invoke-ChrisTitusToolbox }
@@ -3451,7 +3451,7 @@ function Show-RestoreMenu {
         Write-Host " J) Restaurar IPv6"
         Write-Host " K) Reabilitar notificações Action Center"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { New-SystemRestorePoint }
             'B' { Backup-Registry }
@@ -3639,7 +3639,7 @@ function Show-CleanupMenu {
         Write-Host " D) Remover Windows.old"
         Write-Host " E) Limpar cache DNS"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Clear-TemporaryFiles }
             'B' { Clear-DeepSystemCleanup }
@@ -3664,7 +3664,7 @@ function Show-BloatwareMenu {
         Write-Host " F) Remover Copilot (Win11)"
         Write-Host " G) Remover Widgets e sugestões"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Remove-Bloatware }
             'B' { Disable-BloatwareScheduledTasks }
@@ -3726,7 +3726,7 @@ function Show-WindowsFeaturesMenu {
         Write-Host " B) Desativar Recall"
         Write-Host " C) Aplicar plano de energia otimizado"
         Write-Host " X) Voltar"
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Remove-WindowsCopilot }
             'B' { Disable-WindowsRecall }
@@ -3756,7 +3756,7 @@ function Show-MainMenu {
         Write-Host " 0) Sair"
         Write-Host "==============================================="
 
-        $key = ($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToString()).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Show-AdvancedSettingsMenu }
             'B' { Show-AppsMenu }
