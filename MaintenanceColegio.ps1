@@ -146,8 +146,8 @@ $ScriptConfig = @{
 # Variáveis globais para controle de preferências
 $global:ConfirmPreference = 'None'
 $global:ProgressPreference = 'SilentlyContinue'
-$global:ErrorActionPreference = 'Continue'
-$global:WarningPreference = 'Continue'
+$global:ErrorActionPreference = 'SilentlyContinue'
+$global:WarningPreference = 'SilentlyContinue'
 $global:VerbosePreference = 'SilentlyContinue'
 $global:DebugPreference = 'SilentlyContinue'
 
