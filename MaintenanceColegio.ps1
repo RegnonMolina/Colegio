@@ -3898,6 +3898,8 @@ Write-Log "`nOpção inválida!" -Type Error
 
 # === MENU PRINCIPAL ===
 
+# -------------------------------------------------------------------------
+# 🏠 Função do Menu Principal (Versão CORRIGIDA - Substituir esta!)
 function Show-MainMenu {
     Write-Log "Iniciando o menu principal..." -Type Info
 
@@ -3914,7 +3916,7 @@ function Show-MainMenu {
         "Remover/Desativar Windows Copilot",
         "Desativar Windows Recall",
         "Aplicar Plano de Energia Otimizado",
-        "Ajustes de Interface do Usuário" # Novo menu para ajustes de UI
+        "Ajustes de Interface do Usuário"
     )
 
     do {
@@ -3922,83 +3924,96 @@ function Show-MainMenu {
         Write-Log "Opção selecionada no menu principal: $choice" -Type Info
 
         switch ([int]$choice) {
-            1 { 
-                Write-Log "Executando rotinas de limpeza via menu..." -Type Info
-                # Chamaria a função de limpeza aqui
-				Show-SuccessMessage
-                return
+            1 {
+                Write-Log "Executando rotinas de limpeza do sistema..." -Type Info
+                Perform-Cleanup # CHAMA A FUNÇÃO REAL: Limpeza do Sistema
+                Show-SuccessMessage # Chamada da função de mensagem de sucesso
+                Write-Log "Rotina de Limpeza do Sistema concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
             2 {
-                Write-Log "Executando remoção de Bloatware via menu..." -Type Info
-                # Chamaria a função de remoção de bloatware aqui
-Show-SuccessMessage
-                return
+                Write-Log "Iniciando remoção de Bloatware..." -Type Info
+                Remove-Bloatware # CHAMA A FUNÇÃO REAL: Remoção de Bloatware
+                Show-SuccessMessage
+                Write-Log "Rotina de Remoção de Bloatware concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
             3 {
-                Write-Log "Aplicando ajustes de privacidade e registro via menu..." -Type Info
-                # Chamaria a função de ajustes de privacidade aqui
-Show-SuccessMessage
-                return
+                Write-Log "Aplicando ajustes de privacidade e registro..." -Type Info
+                Apply-PrivacyAndRegistryTweaks # CHAMA A FUNÇÃO REAL: Ajustes de Privacidade e Registro
+                Show-SuccessMessage
+                Write-Log "Ajustes de Privacidade e Registro concluídos. Pressione Enter para continuar." -Type Success
+                pause
             }
             4 {
-                Write-Log "Otimizando rede via menu..." -Type Info
-                # Chamaria a função de otimização de rede aqui
-Show-SuccessMessage
-                return
+                Write-Log "Otimizando desempenho de rede..." -Type Info
+                Optimize-NetworkPerformance # CHAMA A FUNÇÃO REAL: Otimização de Rede
+                Show-SuccessMessage
+                Write-Log "Otimização de Rede concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
             5 {
-                Write-Log "Iniciando instalação de aplicativos via menu..." -Type Info
-                # Chamaria a função de instalação de aplicativos aqui
-Show-SuccessMessage
-                return
+                Write-Log "Iniciando instalação de aplicativos predefinidos..." -Type Info
+                Install-PredefinedApps # CHAMA A FUNÇÃO REAL: Instalação de Aplicativos
+                Show-SuccessMessage
+                Write-Log "Instalação de Aplicativos concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
             6 {
-                Write-Log "Executando diagnósticos do sistema via menu..." -Type Info
-                # Chamaria a função de diagnósticos aqui
-Show-SuccessMessage
-                return
+                Write-Log "Executando diagnósticos do sistema..." -Type Info
+                Perform-Diagnostics # CHAMA A FUNÇÃO REAL: Diagnósticos do Sistema
+                Show-SuccessMessage
+                Write-Log "Diagnósticos do Sistema concluídos. Pressione Enter para continuar." -Type Success
+                pause
             }
             7 {
-                Write-Log "Verificando e instalando atualizações do Windows via menu..." -Type Info
-                # Chamaria a função de Windows Update aqui
-Show-SuccessMessage
-                return
+                Write-Log "Verificando e instalando atualizações do Windows..." -Type Info
+                Update-Windows # CHAMA A FUNÇÃO REAL: Atualização do Windows
+                Show-SuccessMessage
+                Write-Log "Atualização do Windows concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
             8 {
-                Write-Log "Criando ponto de restauração via menu..." -Type Info
-                # Chamaria a função de criação de ponto de restauração aqui
-Show-SuccessMessage
-                return
+                Write-Log "Criando ponto de restauração do sistema..." -Type Info
+                New-RestorePoint # CHAMA A FUNÇÃO REAL: Criação de Ponto de Restauração
+                Show-SuccessMessage
+                Write-Log "Criação de Ponto de Restauração concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
             9 {
-                Write-Log "Iniciando remoção completa do OneDrive via menu..." -Type Info
-                # Chamaria a função de remoção do OneDrive aqui
-Show-SuccessMessage
-                return
+                Write-Log "Iniciando remoção completa do OneDrive..." -Type Info
+                Remove-OneDrive-AndRestoreFolders # CHAMA A FUNÇÃO REAL: Remoção Completa do OneDrive
+                Show-SuccessMessage
+                Write-Log "Remoção Completa do OneDrive concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
             10 {
-                Write-Log "Removendo/Desativando Windows Copilot via menu..." -Type Info
-                # Chamaria a função de remoção/desativação do Copilot aqui
-Show-SuccessMessage
-                return
+                Write-Log "Removendo/Desativando Windows Copilot..." -Type Info
+                Remove-Copilot # CHAMA A FUNÇÃO REAL: Remover/Desativar Windows Copilot
+                Show-SuccessMessage
+                Write-Log "Remoção/Desativação do Windows Copilot concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
             11 {
-                Write-Log "Desativando Windows Recall via menu..." -Type Info
-                # Chamaria a função de desativação do Recall aqui
-Show-SuccessMessage
-                return
+                Write-Log "Desativando Windows Recall..." -Type Info
+                Disable-Recall # CHAMA A FUNÇÃO REAL: Desativar Windows Recall
+                Show-SuccessMessage
+                Write-Log "Desativação do Windows Recall concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
             12 {
-                Write-Log "Aplicando plano de energia otimizado via menu..." -Type Info
-                # Chamaria a função de plano de energia aqui
-Show-SuccessMessage
-                return
+                Write-Log "Aplicando plano de energia otimizado..." -Type Info
+                Apply-OptimizedPowerPlan # CHAMA A FUNÇÃO REAL: Aplicar Plano de Energia Otimizado
+                Show-SuccessMessage
+                Write-Log "Aplicação de Plano de Energia Otimizado concluída. Pressione Enter para continuar." -Type Success
+                pause
             }
-            13 { # Novo case para Ajustes de UI
-                Write-Log "Aplicando Ajustes de Interface do Usuário via menu..." -Type Info
-                # Chamaria a função de ajustes de UI aqui
-Show-SuccessMessage
-                return
+            13 {
+                Write-Log "Aplicando Ajustes de Interface do Usuário..." -Type Info
+                Apply-UITweaks # CHAMA A FUNÇÃO REAL: Ajustes de Interface do Usuário
+                Show-SuccessMessage
+                Write-Log "Ajustes de Interface do Usuário aplicados. Pressione Enter para continuar." -Type Success
+                pause
             }
             0 { # Sair
                 Write-Log "Saindo do script. Até mais!" -Type Info
@@ -4009,7 +4024,7 @@ Show-SuccessMessage
                 Start-Sleep -Seconds 1
             }
         }
-    } while ($choice -ne "0")
+    } while ([int]$choice -ne 0)
 }
 
 # -------------------------------------------------------------------------
