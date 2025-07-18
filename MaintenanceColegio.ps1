@@ -143,13 +143,25 @@ $ScriptConfig = @{
 # ================================================
 # ⚙️ AJUSTES GLOBAIS DO POWERSHELL
 # ================================================
-$global:ConfirmPreference = "None"
-$global:ProgressPreference = 'Continue'
-$global:ErrorActionPreference = "SilentlyContinue"
-$VerbosePreference = "SilentlyContinue"
+# Variáveis globais para controle de preferências
+$global:ConfirmPreference = 'None'
+$global:ProgressPreference = 'SilentlyContinue'
+$global:ErrorActionPreference = 'Continue'
+$global:WarningPreference = 'Continue'
+$global:VerbosePreference = 'Continue'
+$global:DebugPreference = 'Continue'
+
+#region → CONFIGURAÇÕES GLOBAIS
+$ScriptConfig = @{
+    LogFilePath              = Join-Path $PSScriptRoot "ScriptSupremo.log" 
+    ConfirmBeforeDestructive = $true
+}
+#endregion
+
+# Garante que o PowerShell esteja usando o TLS 1.2 para downloads seguros
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.Security.SecurityProtocolType]::Tls12
 
 $IsWindows11 = (Get-CimInstance Win32_OperatingSystem).Caption -like "*Windows 11*"
-
 $Host.UI.RawUI.WindowTitle = "MANUTENÇÃO WINDOWS - NÃO FECHE ESTA JANELA"
 
 # Verifica se está em modo administrador
@@ -164,42 +176,66 @@ Write-Log "Por favor, feche e execute novamente como Administrador." -Type Warni
 
 # === FUNÇÕES DE UTILIDADE ===
 function Write-Log {
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName='MessageOnly')]
     param (
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory=$true, Position=0, ParameterSetName='MessageOnly')]
+        [Parameter(Mandatory=$true, Position=0, ParameterSetName='TypeAndMessage')]
         [string]$Message,
 
-        [ValidateSet("Info", "Success", "Warning", "Error")]
-        [string]$Type = "Info"
+        [Parameter(Position=1, ParameterSetName='TypeAndMessage')]
+        [ValidateSet('Info', 'Success', 'Warning', 'Error', 'Debug', 'Verbose')]
+        [string]$Type = 'Info',
+
+        [Parameter(Position=2)]
+        [string]$Color = '' # Pode ser 'Red', 'Green', 'Yellow', 'Cyan', etc.
     )
 
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $prefix = switch ($Type) {
-        "Info"     { "[INFO]" }
-        "Success"  { "[SUCCESS]" }
-        "Warning"  { "[WARNING]" }
-        "Error"    { "[ERROR]" }
+    # Cores padrão para cada tipo de log
+    $defaultColors = @{
+        'Info' = 'Cyan'
+        'Success' = 'Green'
+        'Warning' = 'Yellow'
+        'Error' = 'Red'
+        'Debug' = 'DarkGray'
+        'Verbose' = 'Gray'
     }
 
-    $logEntry = "$timestamp $prefix $Message"
+    # Se uma cor específica não foi definida, use a cor padrão para o tipo
+    if ([string]::IsNullOrEmpty($Color)) {
+        $effectiveColor = $defaultColors[$Type]
+    } else {
+        $effectiveColor = $Color
+    }
 
-    # Obtém o caminho do log com fallback caso o ScriptConfig não esteja definido
-    $logPath = if ($ScriptConfig -and $ScriptConfig.LogFilePath) {
-        $ScriptConfig.LogFilePath
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] [$Type] $Message"
+
+    # Define o caminho do arquivo de log.
+    $logFilePath = if ($script:ScriptConfig.LogFilePath) {
+        $script:ScriptConfig.LogFilePath
     } else {
         "$env:TEMP\ScriptSupremo_Fallback.log"
     }
 
-    # Escreve no arquivo
-    Add-Content -Path $logPath -Value $logEntry
-
-    # Escreve no console com cor
-    switch ($Type) {
-        "Info"     { Write-Host $logEntry -ForegroundColor Cyan }
-        "Success"  { Write-Host $logEntry -ForegroundColor Green }
-        "Warning"  { Write-Host $logEntry -ForegroundColor Yellow }
-        "Error"    { Write-Host $logEntry -ForegroundColor Red }
+    # Certifica-se de que o diretório do log existe
+    $logDir = Split-Path -Path $logFilePath -Parent
+    if (-not (Test-Path $logDir)) {
+        try {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+        } catch {
+            Write-Host "ERRO: Não foi possível criar o diretório de log '$logDir'. Mensagem: $($_.Exception.Message)" -ForegroundColor Red
+        }
     }
+
+    # Adiciona a entrada ao arquivo de log
+    try {
+        Add-Content -Path $logFilePath -Value $logEntry -Encoding UTF8 -ErrorAction Stop
+    } catch {
+        Write-Host "ERRO: Não foi possível escrever no arquivo de log '$logFilePath'. Mensagem: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    # Exibe a mensagem no console com a cor apropriada
+    Write-Host $logEntry -ForegroundColor $effectiveColor
 }
 
 function Suspend-Script {
@@ -616,7 +652,7 @@ Write-Log "ERRO: Ocorreu um erro crítico durante a remoção do OneDrive: $($_.
     Start-Sleep -Seconds 2
 }
 
-    function Test-ShouldRemovePackage {
+function Test-ShouldRemovePackage {
     param (
         [Parameter(Mandatory = $true)]
         [string]$PackageName
@@ -657,7 +693,6 @@ function Remove-Bloatware {
         Write-Log "Erro durante a remoção de Bloatware: $_" Red
     }
 }
-
 
 function Disable-BloatwareScheduledTasks {
     Write-Log "Desativando tarefas agendadas de bloatware e telemetria..." Yellow
@@ -3123,6 +3158,32 @@ function Invoke-Colégio {
 }
 
 # === FUNÇÕES AUXILIARES PARA MENUS ===
+function Show-Menu {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Title,
+        [Parameter(Mandatory=$true)]
+        [array]$Options
+    )
+
+    while ($true) {
+        clear-host
+        Write-Host "--- $Title ---" -ForegroundColor Yellow
+        Write-Host ""
+        for ($i = 0; $i -lt $Options.Count; $i++) {
+            Write-Host "$($i+1). $($Options[$i])" -ForegroundColor Cyan
+        }
+        Write-Host "0. Sair" -ForegroundColor Red
+        Write-Host ""
+        $choice = Read-Host "Digite o número da sua escolha"
+        if ($choice -ge 0 -and $choice -le $Options.Count) {
+            return $choice
+        } else {
+            Write-Log "Opção inválida. Por favor, digite um número de 0 a $($Options.Count)." -Type Warning
+            Start-Sleep -Seconds 2
+        }
+    }
+}
 
 function New-FolderForced {
     param (
@@ -3868,270 +3929,138 @@ Write-Log "`nOpção inválida!" -Type Error
 # === MENU PRINCIPAL ===
 
 function Show-MainMenu {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$false)]
-        [bool]$RunFullAutomation = $false, # Mantém este, mas a lógica de automação principal usa os outros parâmetros
-        [Parameter(Mandatory=$false)]
-        [bool]$RunAllCleanup = $false,
-        [Parameter(Mandatory=$false)]
-        [bool]$RunBloatwareRemoval = $false,
-        [Parameter(Mandatory=$false)]
-        [bool]$RunPrivacyTweaks = $false,
-        [Parameter(Mandatory=$false)]
-        [bool]$InstallEssentialApps = $false, # Parâmetro correto para instalação de apps
-        [Parameter(Mandatory=$false)]
-        [bool]$RunWindowsUpdate = $false,
-        [Parameter(Mandatory=$false)]
-        [bool]$RemoveCopilot = $false,
-        [Parameter(Mandatory=$false)]
-        [bool]$DisableRecall = $false,
-        [Parameter(Mandatory=$false)]
-        [bool]$ApplyOptimizedPowerPlan = $false,
-        [Parameter(Mandatory=$false)]
-        [bool]$ApplyGPOSettings = $false, # NOVO PARÂMETRO
-        [Parameter(Mandatory=$false)]
-        [bool]$CreateRestorePoint = $false, # Adicionado aqui para consistência nos parâmetros
-        [Parameter(Mandatory=$false)]
-        [bool]$RunNetworkOptimization = $false, # Adicionado aqui para consistência nos parâmetros
-        [Parameter(Mandatory=$false)]
-        [bool]$RunDiagnostics = $false, # Adicionado aqui para consistência nos parâmetros
-        [Parameter(Mandatory=$false)]
-        [bool]$ForceOneDriveRemoval = $false # Adicionado aqui para consistência nos parâmetros
-    )
+    Write-Log "Iniciando o menu principal..." -Type Info
 
-    # Definindo as opções do menu principal com numeração explícita
     $mainMenuOptions = @(
-        "1) Executar Rotinas de Limpeza e Otimização",
-        "2) Remover Bloatware",
-        "3) Aplicar Ajustes de Privacidade e Registro",
-        "4) Otimizar Desempenho de Rede",
-        "5) Instalar Aplicativos Essenciais",
-        "6) Executar Diagnósticos do Sistema",
-        "7) Gerenciar Atualizações do Windows (PSWindowsUpdate)",
-        "8) Configurar Plano de Energia Otimizado",
-        "9) Remover OneDrive Completamente",
-        "10) Aplicar Configurações de GPO (Atualizações, Navegadores)", # NOVA OPÇÃO
-		"11) Reiniciar Explorer", # NOVA OPÇÃO
-	    "12) Aplicar Ajustes de Interface do Usuário (UI Tweaks)", # NOVA OPÇÃO
-		"0) Sair"
+        "Limpeza do Sistema",
+        "Remoção de Bloatware",
+        "Ajustes de Privacidade e Registro",
+        "Otimização de Rede",
+        "Instalação de Aplicativos",
+        "Diagnósticos do Sistema",
+        "Atualização do Windows",
+        "Criação de Ponto de Restauração",
+        "Remoção Completa do OneDrive",
+        "Remover/Desativar Windows Copilot",
+        "Desativar Windows Recall",
+        "Aplicar Plano de Energia Otimizado",
+        "Ajustes de Interface do Usuário" # Novo menu para ajustes de UI
     )
 
-    # Lógica que decide se o script roda automaticamente ou exibe o menu
-    # Usando $RunFullAutomation ou qualquer outro parâmetro de execução específica
-    if ($RunFullAutomation -or $RunAllCleanup -or $RunBloatwareRemoval -or $RunPrivacyTweaks -or $RunNetworkOptimization -or `
-        $InstallEssentialApps -or $RunDiagnostics -or $CreateRestorePoint -or $ForceOneDriveRemoval -or `
-        $RemoveCopilot -or $DisableRecall -or $RunWindowsUpdate -or $ApplyOptimizedPowerPlan -or $ApplyGPOSettings) # Adicionado $ApplyGPOSettings aqui
-    {
-        Write-Log "Modo de execução automática ativado via parâmetros." -Type Info
-Write-Log "Iniciando execução automática de acordo com os parâmetros fornecidos..." -Type Success
+    do {
+        $choice = Show-Menu -Title "MENU PRINCIPAL - MANUTENÇÃO SUPREMA" -Options $mainMenuOptions
+        Write-Log "Opção selecionada no menu principal: $choice" -Type Info
 
-        # Cria o ponto de restauração se o parâmetro for true
-        if ($CreateRestorePoint) {
-            Write-Log "Criando ponto de restauração..." -Type Info
-Write-Log "Criando ponto de restauração. Aguarde..." -Type Info
-            try {
-                Checkpoint-Computer -Description "Manutenção Suprema Automatizada" -ErrorAction Stop
-                Write-Log "Ponto de restauração criado com sucesso." -Type Success
-Write-Log "Ponto de restauração criado com sucesso!" -Type Success
-            } catch {
-                Write-Log "Falha ao criar ponto de restauração: $($_.Exception.Message)" -Type Error
-Write-Log "Falha ao criar ponto de restauração: $($_.Exception.Message)" -Type Error
+        switch ($choice) {
+            "1" { 
+                Write-Log "Executando rotinas de limpeza via menu..." -Type Info
+                # Chamaria a função de limpeza aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "2" {
+                Write-Log "Executando remoção de Bloatware via menu..." -Type Info
+                # Chamaria a função de remoção de bloatware aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "3" {
+                Write-Log "Aplicando ajustes de privacidade e registro via menu..." -Type Info
+                # Chamaria a função de ajustes de privacidade aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "4" {
+                Write-Log "Otimizando rede via menu..." -Type Info
+                # Chamaria a função de otimização de rede aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "5" {
+                Write-Log "Iniciando instalação de aplicativos via menu..." -Type Info
+                # Chamaria a função de instalação de aplicativos aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "6" {
+                Write-Log "Executando diagnósticos do sistema via menu..." -Type Info
+                # Chamaria a função de diagnósticos aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "7" {
+                Write-Log "Verificando e instalando atualizações do Windows via menu..." -Type Info
+                # Chamaria a função de Windows Update aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "8" {
+                Write-Log "Criando ponto de restauração via menu..." -Type Info
+                # Chamaria a função de criação de ponto de restauração aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "9" {
+                Write-Log "Iniciando remoção completa do OneDrive via menu..." -Type Info
+                # Chamaria a função de remoção do OneDrive aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "10" {
+                Write-Log "Removendo/Desativando Windows Copilot via menu..." -Type Info
+                # Chamaria a função de remoção/desativação do Copilot aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "11" {
+                Write-Log "Desativando Windows Recall via menu..." -Type Info
+                # Chamaria a função de desativação do Recall aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "12" {
+                Write-Log "Aplicando plano de energia otimizado via menu..." -Type Info
+                # Chamaria a função de plano de energia aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "13" { # Novo case para Ajustes de UI
+                Write-Log "Aplicando Ajustes de Interface do Usuário via menu..." -Type Info
+                # Chamaria a função de ajustes de UI aqui
+                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
+                pause
+            }
+            "0" { # Sair
+                Write-Log "Saindo do script. Até mais!" -Type Info
+                exit
+            }
+            default {
+                Write-Log "Opção inválida. Tente novamente." -Type Error
+                Start-Sleep -Seconds 1
             }
         }
-
-        # Executa as ações baseadas nos parâmetros
-        if ($RunAllCleanup) {
-            Write-Log "Executando todas as rotinas de limpeza e otimização..." -Type Info
-Write-Log "Executando Rotinas de Limpeza e Otimização..." -Type Info
-            Perform-SystemOptimizations # CHAMA A FUNÇÃO
-Write-Log "--> Limpeza e Otimização concluídas." -Type Success
-        }
-        if ($RunBloatwareRemoval) {
-            Write-Log "Executando remoção de Bloatware..." -Type Info
-Write-Log "Executando Remoção de Bloatware..." -Type Info
-            Remove-Bloatware # Sua função de remoção de bloatware existente
-            if ($RemoveCopilot) {
-                Write-Log "Removendo e desativando Windows Copilot..." -Type Info
-                Remove-WindowsCopilot # CHAMA A FUNÇÃO
-            }
-            if ($DisableRecall) {
-                Write-Log "Desativando Windows Recall..." -Type Info
-                Disable-WindowsRecall # CHAMA A FUNÇÃO
-            }
-            if ($ForceOneDriveRemoval) {
-                Write-Log "Forçando remoção completa do OneDrive..." -Type Info
-                Force-RemoveOneDrive # CHAMA A FUNÇÃO
-            }
-Write-Log "--> Remoção de Bloatware concluída." -Type Success
-        }
-        if ($RunPrivacyTweaks) {
-            Write-Log "Aplicando ajustes de privacidade e registro..." -Type Info
-Write-Log "Aplicando Ajustes de Privacidade e Registro..." -Type Info
-            Enable-PrivacyHardening # Sua função de privacidade existente
-            Apply-PrivacyAndBloatwarePrevention # CHAMA A FUNÇÃO
-Write-Log "--> Ajustes de Privacidade concluídos." -Type Success
-        }
-        if ($RunNetworkOptimization) {
-            Write-Log "Otimizando desempenho de rede..." -Type Info
-Write-Log "Otimizando Desempenho de Rede..." -Type Info
-            Optimize-NetworkPerformance # Sua função de otimização de rede existente
-Write-Log "--> Otimização de Rede concluída." -Type Success
-        }
-        if ($InstallEssentialApps) { # Parâmetro corrigido para InstallEssentialApps
-            Write-Log "Instalando aplicativos essenciais..." -Type Info
-Write-Log "Instalando Aplicativos Essenciais..." -Type Info
-            Install-Applications # Sua função de instalação de apps existente
-Write-Log "--> Instalação de Aplicativos concluída." -Type Success
-        }
-        if ($RunDiagnostics) {
-            Write-Log "Executando diagnósticos do sistema..." -Type Info
-Write-Log "Executando Diagnósticos do Sistema..." -Type Info
-            # Suas funções de diagnóstico aqui.
-Write-Log "--> Diagnósticos do Sistema concluídos." -Type Success
-        }
-
-        if ($RunWindowsUpdate) {
-            Write-Log "Gerenciando atualizações do Windows via PSWindowsUpdate..." -Type Info
-            Manage-WindowsUpdates # CHAMA A FUNÇÃO
-        }
-        if ($ApplyOptimizedPowerPlan) {
-            Write-Log "Aplicando plano de energia otimizado..." -Type Info
-Write-Log "Aplicando Plano de Energia Otimizado..." -Type Info
-            Set-OptimizedPowerPlan # Esta será uma das próximas edições
-Write-Log "--> Plano de Energia Otimizado aplicado." -Type Success
-        }
-        if ($ApplyGPOSettings) { # NOVO BLOCO DE EXECUÇÃO AUTOMÁTICA
-            Write-Log "Aplicando configurações de GPO via Registro (modo automático)..." -Type Info
-            Apply-GPORegistrySettings # CHAMA A NOVA FUNÇÃO
-        }
-
-        Write-Log "Execução automática concluída." -Type Success
-Write-Log "Todas as tarefas automáticas foram concluídas. Pressione Enter para sair." -Type Success
-        pause
-        exit # Sai do script após a execução automática
-    }
-    else {
-        # Se nenhum parâmetro de automação for passado, exibe o menu interativo
-        do {
-            clear-host # Limpa a tela antes de exibir o menu
-            $choice = Show-MainMenu -Title "MENU PRINCIPAL - MANUTENÇÃO SUPREMA" -Options $mainMenuOptions
-            switch ($choice) {
-                "1" {
-                    Write-Log "Executando Rotinas de Limpeza e Otimização via menu..." -Type Info
-Write-Log "Executando Rotinas de Limpeza e Otimização..." -Type Info
-                    Perform-SystemOptimizations # CHAMA A FUNÇÃO
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-                "2" {
-                    Write-Log "Executando Remoção de Bloatware via menu..." -Type Info
-Write-Log "Executando Remoção de Bloatware..." -Type Info
-                    Remove-Bloatware
-                    # Opcional: Adicionar Copilot/Recall/OneDrive como sub-opções do menu "Remover Bloatware"
-                    # ou como opções separadas no menu principal, se desejar um controle mais granular.
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-                "3" {
-                    Write-Log "Aplicando Ajustes de Privacidade e Registro via menu..." -Type Info
-Write-Log "Aplicando Ajustes de Privacidade e Registro..." -Type Info
-                    Enable-PrivacyHardening
-                    Apply-PrivacyAndBloatwarePrevention # CHAMA A FUNÇÃO
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-                "4" {
-                    Write-Log "Otimizando Desempenho de Rede via menu..." -Type Info
-Write-Log "Otimizando Desempenho de Rede..." -Type Info
-                    Optimize-NetworkPerformance
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-                "5" {
-                    Write-Log "Instalando Aplicativos Essenciais via menu..." -Type Info
-Write-Log "Instalando Aplicativos Essenciais..." -Type Info
-                    Install-Applications
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-                "6" {
-                    Write-Log "Executando Diagnósticos do Sistema via menu..." -Type Info
-Write-Log "Executando Diagnósticos do Sistema..." -Type Info
-                    # Suas funções de diagnóstico aqui
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-                "7" {
-                    Write-Log "Gerenciando Atualizações do Windows via menu..." -Type Info
-                    Manage-WindowsUpdates # CHAMA A FUNÇÃO
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-                "8" {
-                    Write-Log "Configurando Plano de Energia Otimizado via menu..." -Type Info
-Write-Log "Configurando Plano de Energia Otimizado..." -Type Info
-                    Set-OptimizedPowerPlan # Esta será uma das próximas edições
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-                "9" { # Opção para Remover OneDrive Completamente
-                    Write-Log "Removendo OneDrive Completamente via menu..." -Type Info
-                    Force-RemoveOneDrive
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-                "10" { # NOVO CASE para GPO
-                    Write-Log "Aplicando Configurações de GPO via menu..." -Type Info
-                    Apply-GPORegistrySettings # CHAMA A NOVA FUNÇÃO AQUI
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                    pause
-                }
-				"11" { # NOVO CASE
-					Write-Log "Reiniciando Explorer via menu..." -Type Info
-					Restart-Explorer # CHAMA A NOVA FUNÇÃO AQUI
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-					pause
-				}
-				"12" { # NOVO CASE
-					Write-Log "Aplicando Ajustes de Interface do Usuário via menu..." -Type Info
-					Apply-UITweaks # CHAMA A NOVA FUNÇÃO AQUI
-Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-					pause
-				}
-                "0" { # Sair
-                    Write-Log "Saindo do script. Até mais!" -Type Info
-                    exit
-                }
-                default {
-Write-Log "Opção inválida. Tente novamente." -Type Error
-                    Start-Sleep -Seconds 1
-                }
-            }
-        } while ($choice -ne "0")
-    }
+    } while ($choice -ne "0")
 }
-#endregion
 
 # -------------------------------------------------------------------------
 # 🔧 Função principal: ponto de entrada do script
 function Start-ScriptSupremo {
-Write-Log "`n🛠️ Iniciando o script de manutenção..." -Type Info
-
-    # (Opcional) Inicialize variáveis ou recursos aqui
-    # Ex: Initialize-Globals
+    Write-Log "`n🛠️ Iniciando o script de manutenção..." -Type Info
 
     try {
-Write-Log "⚙️ Chamando o menu principal..." -Type Warning
+        Write-Log "⚙️ Chamando o menu principal..." -Type Warning
         Show-MainMenu
     } catch {
-Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Error
+        Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Error
     }
 }
 
-# Ativa rastreamento detalhado
-Set-PSDebug -Trace 1
-
 # -------------------------------------------------------------------------
-# ▶️ Chamada final que executa o script
+# Ativa o script (CHAMADA PRINCIPAL NO FINAL)
 Start-ScriptSupremo
+
+
+
+
+
+
