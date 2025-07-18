@@ -472,9 +472,30 @@ Write-Log "ERRO durante o gerenciamento de atualizações: $($_.Exception.Messag
     Start-Sleep -Seconds 2
 }
 
+function Perform-Cleanup {
+    Write-Log "Executando rotinas de limpeza do sistema (agrupadas)..." -Type Info
+
+    # Chamada das funções menores
+    Clear-ARP
+Clear-DeepSystemCleanup
+Clear-DNS
+Clear-Prefetch
+Clear-PrintSpooler
+Clear-TemporaryFiles
+Clear-WinSxS
+Clear-WUCache
+Manage-WindowsUpdates
+New-ChkDsk
+Optimize-Volumes
+Remove-WindowsOld
+
+
+    Write-Log "Todas as rotinas de limpeza foram concluídas." -Type Success
+}
+
 # === FUNÇÕES DE REMOÇÃO DE BLOATWARE ===
 
-function Remove-Bloatware {
+function Remove-Bloatwares {
     Write-Log "Iniciando a remoção de Bloatware..." Yellow
 
     # Lista de pacotes para remover (nomes parciais ou exatos)
@@ -515,7 +536,6 @@ function Remove-Bloatware {
         "Microsoft.ScreenCapture" # Ferramenta de Captura
     )
 }
-
 
 function Force-RemoveOneDrive {
     <#
@@ -877,6 +897,22 @@ Write-Log "Erro durante a desativação do Windows Recall: $($_.Exception.Messag
     Start-Sleep -Seconds 2
 }
 
+function Remove-Bloatwares {
+    Write-Log "Iniciando a remoção de Bloatware..." Yellow
+
+Disable-BloatwareScheduledTasks
+Disable-WindowsRecall 
+Enable-ClassicContextMenu
+Force-RemoveOneDrive
+Remove-Bloatwares
+Remove-Copilot
+Remove-ScheduledTasksAggressive
+Remove-StartAndTaskbarPins
+Remove-WindowsCopilot
+Stop-BloatwareProcesses
+Test-ShouldRemovePackage
+Write-Log "Todas as rotinas de limpeza foram concluídas." -Type Success
+}
 
 # === FUNÇÕES DE INSTALAÇÃO DE APLICATIVOS ===
 
@@ -3898,134 +3934,205 @@ Write-Log "`nOpção inválida!" -Type Error
 
 # === MENU PRINCIPAL ===
 
-# -------------------------------------------------------------------------
-# 🏠 Função do Menu Principal (Versão CORRIGIDA - Substituir esta!)
+#region → MENU PRINCIPAL E SUBMENUS
+
 function Show-MainMenu {
-    Write-Log "Iniciando o menu principal..." -Type Info
-
-    $mainMenuOptions = @(
-        "Limpeza do Sistema",
-        "Remoção de Bloatware",
-        "Ajustes de Privacidade e Registro",
-        "Otimização de Rede",
-        "Instalação de Aplicativos",
-        "Diagnósticos do Sistema",
-        "Atualização do Windows",
-        "Criação de Ponto de Restauração",
-        "Remoção Completa do OneDrive",
-        "Remover/Desativar Windows Copilot",
-        "Desativar Windows Recall",
-        "Aplicar Plano de Energia Otimizado",
-        "Ajustes de Interface do Usuário"
-    )
-
-    do {
-        $choice = Show-Menu -Title "MENU PRINCIPAL - MANUTENÇÃO SUPREMA" -Options $mainMenuOptions
-        Write-Log "Opção selecionada no menu principal: $choice" -Type Info
-
-        switch ([int]$choice) {
-            1 {
-                Write-Log "Executando rotinas de limpeza do sistema..." -Type Info
-                Perform-Cleanup # CHAMA A FUNÇÃO REAL: Limpeza do Sistema
-                Show-SuccessMessage # Chamada da função de mensagem de sucesso
-                Write-Log "Rotina de Limpeza do Sistema concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            2 {
-                Write-Log "Iniciando remoção de Bloatware..." -Type Info
-                Remove-Bloatware # CHAMA A FUNÇÃO REAL: Remoção de Bloatware
-                Show-SuccessMessage
-                Write-Log "Rotina de Remoção de Bloatware concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            3 {
-                Write-Log "Aplicando ajustes de privacidade e registro..." -Type Info
-                Apply-PrivacyAndRegistryTweaks # CHAMA A FUNÇÃO REAL: Ajustes de Privacidade e Registro
-                Show-SuccessMessage
-                Write-Log "Ajustes de Privacidade e Registro concluídos. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            4 {
-                Write-Log "Otimizando desempenho de rede..." -Type Info
-                Optimize-NetworkPerformance # CHAMA A FUNÇÃO REAL: Otimização de Rede
-                Show-SuccessMessage
-                Write-Log "Otimização de Rede concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            5 {
-                Write-Log "Iniciando instalação de aplicativos predefinidos..." -Type Info
-                Install-PredefinedApps # CHAMA A FUNÇÃO REAL: Instalação de Aplicativos
-                Show-SuccessMessage
-                Write-Log "Instalação de Aplicativos concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            6 {
-                Write-Log "Executando diagnósticos do sistema..." -Type Info
-                Perform-Diagnostics # CHAMA A FUNÇÃO REAL: Diagnósticos do Sistema
-                Show-SuccessMessage
-                Write-Log "Diagnósticos do Sistema concluídos. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            7 {
-                Write-Log "Verificando e instalando atualizações do Windows..." -Type Info
-                Update-Windows # CHAMA A FUNÇÃO REAL: Atualização do Windows
-                Show-SuccessMessage
-                Write-Log "Atualização do Windows concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            8 {
-                Write-Log "Criando ponto de restauração do sistema..." -Type Info
-                New-RestorePoint # CHAMA A FUNÇÃO REAL: Criação de Ponto de Restauração
-                Show-SuccessMessage
-                Write-Log "Criação de Ponto de Restauração concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            9 {
-                Write-Log "Iniciando remoção completa do OneDrive..." -Type Info
-                Remove-OneDrive-AndRestoreFolders # CHAMA A FUNÇÃO REAL: Remoção Completa do OneDrive
-                Show-SuccessMessage
-                Write-Log "Remoção Completa do OneDrive concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            10 {
-                Write-Log "Removendo/Desativando Windows Copilot..." -Type Info
-                Remove-Copilot # CHAMA A FUNÇÃO REAL: Remover/Desativar Windows Copilot
-                Show-SuccessMessage
-                Write-Log "Remoção/Desativação do Windows Copilot concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            11 {
-                Write-Log "Desativando Windows Recall..." -Type Info
-                Disable-Recall # CHAMA A FUNÇÃO REAL: Desativar Windows Recall
-                Show-SuccessMessage
-                Write-Log "Desativação do Windows Recall concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            12 {
-                Write-Log "Aplicando plano de energia otimizado..." -Type Info
-                Apply-OptimizedPowerPlan # CHAMA A FUNÇÃO REAL: Aplicar Plano de Energia Otimizado
-                Show-SuccessMessage
-                Write-Log "Aplicação de Plano de Energia Otimizado concluída. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            13 {
-                Write-Log "Aplicando Ajustes de Interface do Usuário..." -Type Info
-                Apply-UITweaks # CHAMA A FUNÇÃO REAL: Ajustes de Interface do Usuário
-                Show-SuccessMessage
-                Write-Log "Ajustes de Interface do Usuário aplicados. Pressione Enter para continuar." -Type Success
-                pause
-            }
-            0 { # Sair
-                Write-Log "Saindo do script. Até mais!" -Type Info
-                exit
-            }
-            default {
-                Write-Log "Opção inválida. Tente novamente." -Type Error
-                Start-Sleep -Seconds 1
-            }
-        }
-    } while ([int]$choice -ne 0)
+    Clear-Host
+    Write-Host "===========================================" -ForegroundColor Cyan
+    Write-Host "      SCRIPT SUPREMO DE MANUTENÇÃO 🛠️       " -ForegroundColor Cyan
+    Write-Host "===========================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "A) Aplicações"
+    Write-Host "B) Bloatware"
+    Write-Host "C) Diagnóstico"
+    Write-Host "E) Energia"
+    Write-Host "L) Limpeza"
+    Write-Host "P) Privacidade"
+    Write-Host "R) Rede"
+    Write-Host "S) Sistema"
+    Write-Host "T) Ponto de Restauração"
+    Write-Host "U) Windows Update"
+    Write-Host "X) Reiniciar Explorer"
+    Write-Host "Q) Sair"
+    Write-Host ""
 }
+
+function Show-SubMenu {
+    param($Title, $Options)
+    Clear-Host
+    Write-Host "---- $Title ----" -ForegroundColor Yellow
+    foreach ($opt in $Options.Keys | Sort-Object) {
+        Write-Host "$($opt)) $($Options[$opt].Label)"
+    }
+    Write-Host "0) Voltar"
+}
+
+# *** SUBMENUS ***
+
+function Invoke-AplicacoesMenu {
+    $opts = @{
+        "1" = @{Label="Instalar Aplicações (winget)"     ; Action={ Install-Applications }}
+        "2" = @{Label="Atualizar PowerShell"            ; Action={ Update-PowerShell }}
+    }
+    do {
+        Show-SubMenu -Title "Aplicações" -Options $opts
+        $c = Read-Host "Escolha"
+        if ($opts.ContainsKey($c)) { & $opts[$c].Action }
+    } while ($c -ne '0')
+}
+
+function Invoke-BloatwareMenu {
+    $opts = @{
+        "1" = @{Label="Desativar Tarefas Agendadas"     ; Action={ Disable-BloatwareScheduledTasks }}
+        "2" = @{Label="Encerrar Processos Dispensáveis" ; Action={ Stop-BloatwareProcesses }}
+        "3" = @{Label="Forçar Remoção do OneDrive"      ; Action={ Force-RemoveOneDrive }}
+        "4" = @{Label="Remover Appx Bloatware"          ; Action={ Remove-Bloatware }}
+        "5" = @{Label="Remover Copilot (UI)"            ; Action={ Remove-Copilot }}
+        "6" = @{Label="Remover Windows Copilot"         ; Action={ Remove-WindowsCopilot }}
+        "7" = @{Label="Remover Tarefas Agressivas"      ; Action={ Remove-ScheduledTasksAggressive }}
+        "8" = @{Label="Remover Pins Início e Taskbar"   ; Action={ Remove-StartAndTaskbarPins }}
+    }
+    do {
+        Show-SubMenu -Title "Bloatware" -Options $opts
+        $c = Read-Host "Escolha"
+        if ($opts.ContainsKey($c)) { & $opts[$c].Action }
+    } while ($c -ne '0')
+}
+
+function Invoke-DiagnosticoMenu {
+    $opts = @{
+        "1" = @{Label="DISM Scan"            ; Action={ Invoke-DISM-Scan }}
+        "2" = @{Label="MEMORY Test"          ; Action={ Test-Memory }}
+        "3" = @{Label="SFC Scan"             ; Action={ Invoke-SFC-Scan }}
+        "4" = @{Label="SMART Drives"         ; Action={ Test-SMART-Drives }}
+        "5" = @{Label="Show Disk Usage"      ; Action={ Show-DiskUsage }}
+        "6" = @{Label="Show Network Info"    ; Action={ Show-NetworkInfo }}
+        "7" = @{Label="Show System Info"     ; Action={ Show-SystemInfo }}
+    }
+    do {
+        Show-SubMenu -Title "Diagnóstico" -Options $opts
+        $c = Read-Host "Escolha"
+        if ($opts.ContainsKey($c)) { & $opts[$c].Action }
+    } while ($c -ne '0')
+}
+
+function Invoke-EnergiaMenu {
+    $opts = @{
+        "1" = @{Label="Aplicar Plano Otimizado" ; Action={ Apply-OptimizedPowerPlan }}
+    }
+    do {
+        Show-SubMenu -Title "Energia" -Options $opts
+        $c = Read-Host "Escolha"
+        if ($opts.ContainsKey($c)) { & $opts[$c].Action }
+    } while ($c -ne '0')
+}
+
+function Invoke-LimpezaMenu {
+    $opts = @{
+        "1" = @{Label="Agendar ChkDsk"               ; Action={ New-ChkDsk }}
+        "2" = @{Label="Cleanup Profundo"             ; Action={ Clear-DeepSystemCleanup }}
+        "3" = @{Label="Limpar ARP Cache"             ; Action={ Clear-ARP }}
+        "4" = @{Label="Limpar DNS Cache"             ; Action={ Clear-DNS }}
+        "5" = @{Label="Limpar Prefetch"              ; Action={ Clear-Prefetch }}
+        "6" = @{Label="Limpar Print Spooler"         ; Action={ Clear-PrintSpooler }}
+        "7" = @{Label="Limpar Temporários"           ; Action={ Clear-TemporaryFiles }}
+        "8" = @{Label="Limpar WinSxS"                ; Action={ Clear-WinSxS }}
+        "9" = @{Label="Limpar WU Cache"              ; Action={ Clear-WUCache }}
+        "A" = @{Label="Otimizar Volumes"             ; Action={ Optimize-Volumes }}
+        "B" = @{Label="Rotina Completa de Limpeza"   ; Action={ Perform-Cleanup }}
+    }
+    do {
+        Show-SubMenu -Title "Limpeza" -Options $opts
+        $c = Read-Host "Escolha"
+        if ($opts.ContainsKey($c)) { & $opts[$c].Action }
+    } while ($c -ne '0')
+}
+
+function Invoke-PrivacidadeMenu {
+    $opts = @{
+        "1" = @{Label="Agressiva"      ; Action={ Enable-PrivacyHardening }}
+        "2" = @{Label="Padrão"         ; Action={ Grant-PrivacyTweaks }}
+        "3" = @{Label="Cortana & Search"; Action={ Disable-Cortana-AndSearch }}
+    }
+    do {
+        Show-SubMenu -Title "Privacidade" -Options $opts
+        $c = Read-Host "Escolha"
+        if ($opts.ContainsKey($c)) { & $opts[$c].Action }
+    } while ($c -ne '0')
+}
+
+function Invoke-RedeMenu {
+    $opts = @{
+        "1" = @{Label="Add Wi-Fi Profile"            ; Action={ Add-WiFiNetwork }}
+        "2" = @{Label="Install Network Printers"     ; Action={ Install-NetworkPrinters }}
+        "3" = @{Label="Otimizar Desempenho de Rede"  ; Action={ Optimize-NetworkPerformance }}
+        "4" = @{Label="Set DNS Google/Cloudflare"    ; Action={ Set-DnsGoogleCloudflare }}
+        "5" = @{Label="Testar Velocidade de Internet"; Action={ Test-InternetSpeed }}
+        "6" = @{Label="Rotina de Rede Avançada"       ; Action={ Invoke-All-NetworkAdvanced }}
+    }
+    do {
+        Show-SubMenu -Title "Rede" -Options $opts
+        $c = Read-Host "Escolha"
+        if ($opts.ContainsKey($c)) { & $opts[$c].Action }
+    } while ($c -ne '0')
+}
+
+function Invoke-SistemaMenu {
+    $opts = @{
+        "1" = @{Label="Mostrar Disco"     ; Action={ Show-DiskUsage }}
+        "2" = @{Label="Mostrar Rede"      ; Action={ Show-NetworkInfo }}
+        "3" = @{Label="Mostrar Sistema"   ; Action={ Show-SystemInfo }}
+    }
+    do {
+        Show-SubMenu -Title "Sistema" -Options $opts
+        $c = Read-Host "Escolha"
+        if ($opts.ContainsKey($c)) { & $opts[$c].Action }
+    } while ($c -ne '0')
+}
+
+function Invoke-RestorePoint {
+    <#
+    .SYNOPSIS
+        Cria um ponto de restauração do sistema.
+    #>
+    [CmdletBinding()]
+    param()
+    Write-Log "Criando ponto de restauração..." Info
+    Checkpoint-Computer -Description "ScriptSupremo_RestorePoint_$(Get-Date -Format 'yyyyMMdd_HHmm')" -RestorePointType "MODIFY_SETTINGS"
+    Show-SuccessMessage
+}
+
+function Invoke-WindowsUpdateMenu {
+    Manage-WindowsUpdates
+}
+
+function Invoke-ReiniciarExplorer {
+    Restart-Explorer
+}
+
+# *** LOOP PRINCIPAL ***
+
+do {
+    Show-MainMenu
+    $choice = Read-Host "Escolha uma opção"
+    switch ($choice.ToUpper()) {
+        'A' { Invoke-AplicacoesMenu }
+        'B' { Invoke-BloatwareMenu }
+        'C' { Invoke-DiagnosticoMenu }
+        'E' { Invoke-EnergiaMenu }
+        'L' { Invoke-LimpezaMenu }
+        'P' { Invoke-PrivacidadeMenu }
+        'R' { Invoke-RedeMenu }
+        'S' { Invoke-SistemaMenu }
+        'T' { Invoke-RestorePoint }
+        'U' { Invoke-WindowsUpdateMenu }
+        'X' { Invoke-ReiniciarExplorer }
+        'Q' { Write-Host "Saindo... Até logo!" -ForegroundColor Cyan }
+        Default { Write-Host "Opção inválida! Tente novamente." -ForegroundColor Red; Start-Sleep 1 }
+    }
+} while ($choice.ToUpper() -ne 'Q')
+
+#endregion
 
 # -------------------------------------------------------------------------
 # 🔧 Função principal: ponto de entrada do script
