@@ -3413,14 +3413,20 @@ Write-Log " X. Voltar ao menu principal" -Type Success
             'H' { winget install --id Microsoft.PowerToys -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
             'I' { winget install --id Notepad++.Notepad++ -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
             'J' { winget install --id VideoLAN.VLC -e --accept-package-agreements --accept-source-agreements; Show-SuccessMessage }
-            'K' { Update-PowerShell; Show-SuccessMessage 
-            # ✅ Após a última instalação, copia o atalho pro Startup
-$atalhoOrigem = "G:\Drives compartilhados\MundoCOC\Tecnologia\AutoHotKey\Colegio - Atalho.lnk"
-$atalhoDestino = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\" + "\Colegio - Atalho.lnk"
-Copy-Item -Path $atalhoOrigem -Destination $atalhoDestino -Force
-            }
+            'K' {
+        Update-PowerShell
+        Show-SuccessMessage
+
+        # ✅ Após a última instalação, copia o atalho pro Startup
+        $atalhoOrigem = "G:\Drives compartilhados\MundoCOC\Tecnologia\AutoHotKey\Colegio - Atalho.lnk"
+        $atalhoDestino = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Colegio - Atalho.lnk"
+        Copy-Item -Path $atalhoOrigem -Destination $atalhoDestino -Force
+    }
             'X' { return }
-Write-Log "`nOpção inválida!" -Type Error
+            default {
+                Write-Log "`nOpção inválida!" -Type Error
+                [Console]::ReadKey($true) | Out-Null
+            }
         }
     } while ($true)
 }
@@ -3428,37 +3434,48 @@ Write-Log "`nOpção inválida!" -Type Error
 function Show-NetworkMenu {
     do {
         Clear-Host
-Write-Log "=============================================" -Type Info
-Write-Log "           MENU DE REDE E IMPRESSORAS        " -Type Info
-Write-Log "=============================================" -Type Info
-        Write-Log "Exibindo menu de Rede e Impressoras..." Blue
 
-Write-Log " A. Executar Todas as Configurações de Rede (Sequência)" -Type Success
-Write-Log " B. Instalar Impressoras de Rede"
-Write-Log " C. Otimizar Desempenho de Rede"
-Write-Log " D. Restaurar Padrões de IPv6"
-Write-Log "`n X. Voltar ao Menu Principal"
-Write-Log "=============================================" -Type Info
+        Write-Log "=============================================" -Type Info
+        Write-Log "           MENU DE REDE E IMPRESSORAS        " -Type Info
+        Write-Log "=============================================" -Type Info
+        Write-Log "Exibindo menu de Rede e Impressoras..." -Type Blue
+
+        Write-Log " A. Executar Todas as Configurações de Rede (Sequência)" -Type Success
+        Write-Log " B. Instalar Impressoras de Rede"
+        Write-Log " C. Otimizar Desempenho de Rede"
+        Write-Log " D. Restaurar Padrões de IPv6"
+        Write-Log ""
+        Write-Log " X. Voltar ao Menu Principal"
+        Write-Log "=============================================" -Type Info
 
         $key = [Console]::ReadKey($true).Key
-        Write-Log "Opção escolhida no menu de Rede e Impressoras: $key" Blue
+        Write-Log "Opção escolhida no menu de Rede e Impressoras: $key" -Type Blue
 
         switch ($key) {
             'A' {
-Write-Log "Executando: Todas as Configurações de Rede..." -Type Warning
+                Write-Log "Executando: Todas as Configurações de Rede..." -Type Warning
                 Install-NetworkPrinters
                 Optimize-NetworkPerformance
                 Restore-DefaultIPv6
-Write-Log "Todas as Configurações de Rede Concluídas!" -Type Success
+                Write-Log "Todas as Configurações de Rede Concluídas!" -Type Success
                 [Console]::ReadKey($true) | Out-Null
             }
-            'B' { Install-NetworkPrinters; Show-SuccessMessage }
-            'C' { Optimize-NetworkPerformance; Show-SuccessMessage }
-            'D' { Restore-DefaultIPv6; Show-SuccessMessage }
-            'x' { return }
+            'B' {
+                Install-NetworkPrinters
+                Show-SuccessMessage
+            }
+            'C' {
+                Optimize-NetworkPerformance
+                Show-SuccessMessage
+            }
+            'D' {
+                Restore-DefaultIPv6
+                Show-SuccessMessage
+            }
             'X' { return }
+            'x' { return }
             default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
+                Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
                 [Console]::ReadKey($true) | Out-Null
             }
         }
