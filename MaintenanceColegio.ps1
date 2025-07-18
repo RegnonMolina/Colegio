@@ -3741,34 +3741,265 @@ function Show-WindowsFeaturesMenu {
 
 function Show-MainMenu {
     do {
-        Clear-Host
-        Write-Host "`n================ MENU PRINCIPAL ================" -ForegroundColor Yellow
-        Write-Host " A) Ajustes Avançados"
-        Write-Host " B) Aplicativos"
-        Write-Host " C) Aparência e Personalização"
-        Write-Host " D) Diagnósticos"
-        Write-Host " E) Limpeza e Otimização"
-        Write-Host " F) Rede e Impressoras"
-        Write-Host " G) Recursos do Windows"
-        Write-Host " H) Remoção de Bloatware"
-        Write-Host " I) Restaurar / Backup"
-        Write-Host " J) Scripts Externos"
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Script Supremo de Manutenção"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " A) Avançado e Diagnósticos"
+        Write-Host " B) Aplicativos e Bloatware"
+        Write-Host " C) Limpeza do Sistema"
+        Write-Host " D) Rede e Conectividade"
+        Write-Host " E) Privacidade e Otimização"
+        Write-Host " F) Restauração e Backup"
+        Write-Host " G) Scripts Externos (Ainda não implementado)"
+        Write-Host " H) Windows Update"
         Write-Host " 0) Sair"
-        Write-Host "==============================================="
+        Write-Host "==================================================="
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Show-AdvancedSettingsMenu }
-            'B' { Show-AppsMenu }
-            'C' { Show-PersonalizationMenu }
-            'D' { Show-DiagnosticsMenu }
-            'E' { Show-CleanupMenu }
-            'F' { Show-NetworkPrinterMenu }
-            'G' { Show-WindowsFeaturesMenu }
-            'H' { Show-BloatwareMenu }
-            'I' { Show-RestoreMenu }
-            'J' { Show-ExternalScriptsMenu }
+            'A' { Show-AdvancedDiagnosticsMenu }
+            'B' { Show-AppsBloatwareMenu }
+            'C' { Show-SystemCleanupMenu }
+            'D' { Show-NetworkConnectivityMenu }
+            'E' { Show-PrivacyOptimizationMenu }
+            'F' { Show-RestoreBackupMenu }
+            'G' { Show-ExternalScriptsMenu } # Placeholder
+            'H' { Show-WindowsUpdateMenu }
             '0' { break }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-AdvancedDiagnosticsMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Avançado e Diagnósticos"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " A.1) Desativar UAC (Controle de Conta de Usuário)"
+        Write-Host " A.2) Gerenciar Plano de Energia Otimizado"
+        Write-Host " A.3) Reiniciar Windows Explorer"
+        Write-Host " A.4) Testar Integridade de Disco (SMART)"
+        Write-Host " A.5) Testar Memória (Agendar)"
+        Write-Host " A.6) Tweaks Adicionais e de Registro"
+        Write-Host " 0) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            '1' { Disable-UAC; Show-SuccessMessage; Suspend-Script }
+            '2' { Manage-OptimizedPowerPlan; Show-SuccessMessage; Suspend-Script }
+            '3' { Restart-Explorer; Show-SuccessMessage; Suspend-Script }
+            '4' { Test-DiskIntegrity; Show-SuccessMessage; Suspend-Script }
+            '5' { Test-Memory; Show-SuccessMessage; Suspend-Script }
+            '6' { Apply-ExtraTweaks; Show-SuccessMessage; Suspend-Script } # Assuming this function handles the tweaks
+            '0' { break }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-AppsBloatwareMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Aplicativos e Bloatware"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B.1) Desabilitar Tarefas Agendadas de Bloatware"
+        Write-Host " B.2) Desativar Processos de Bloatware"
+        Write-Host " B.3) Forçar Remoção Completa do OneDrive"
+        Write-Host " B.4) Remover Bloatware e Aplicativos Pré-instalados"
+        Write-Host " B.5) Remover Pins do Menu Iniciar e Barra de Tarefas"
+        Write-Host " B.6) Remover Tarefas Agendadas Agressivamente"
+        Write-Host " 0) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            '1' { Disable-BloatwareScheduledTasks; Show-SuccessMessage; Suspend-Script }
+            '2' { Disable-BloatwareProcesses; Show-SuccessMessage; Suspend-Script }
+            '3' { Force-RemoveOneDrive; Show-SuccessMessage; Suspend-Script }
+            '4' { Remove-Bloatware; Show-SuccessMessage; Suspend-Script }
+            '5' { Remove-StartTaskbarPins; Show-SuccessMessage; Suspend-Script }
+            '6' { Aggressive-RemoveScheduledTasks; Show-SuccessMessage; Suspend-Script }
+            '0' { break }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-SystemCleanupMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Limpeza do Sistema"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " C.1) Limpeza de Cache ARP"
+        Write-Host " C.2) Limpeza de Cache DNS"
+        Write-Host " C.3) Limpeza de Cache do Windows Update"
+        Write-Host " C.4) Limpeza de Prefetch"
+        Write-Host " C.5) Limpeza de Spooler de Impressão"
+        Write-Host " C.6) Limpeza de WinSxS (Component Store)"
+        Write-Host " C.7) Limpeza Profunda do Sistema"
+        Write-Host " C.8) Limpeza de Arquivos Temporários"
+        Write-Host " C.9) Otimização de Volumes (Desfragmentação/Trim)"
+        Write-Host " C.10) Remover Windows.old"
+        Write-Host " C.11) Agendar Verificação de Disco (ChkDsk)"
+        Write-Host " 0) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            '1' { Clear-ARP; Show-SuccessMessage; Suspend-Script }
+            '2' { Clear-DNS; Show-SuccessMessage; Suspend-Script }
+            '3' { Clear-WUCache; Show-SuccessMessage; Suspend-Script }
+            '4' { Clear-Prefetch; Show-SuccessMessage; Suspend-Script }
+            '5' { Clear-PrintSpooler; Show-SuccessMessage; Suspend-Script }
+            '6' { Clear-WinSxS; Show-SuccessMessage; Suspend-Script }
+            '7' { Clear-DeepSystemCleanup; Show-SuccessMessage; Suspend-Script }
+            '8' { Clear-TemporaryFiles; Show-SuccessMessage; Suspend-Script }
+            '9' { Optimize-Volumes; Show-SuccessMessage; Suspend-Script }
+            '10' { Remove-WindowsOld; Show-SuccessMessage; Suspend-Script }
+            '11' { New-ChkDsk; Show-SuccessMessage; Suspend-Script }
+            '0' { break }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-NetworkConnectivityMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Rede e Conectividade"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " D.1) Limpar Cache ARP"
+        Write-Host " D.2) Limpar Cache DNS"
+        Write-Host " D.3) Configurar DNS (Google/Cloudflare)"
+        Write-Host " D.4) Testar Velocidade da Internet"
+        Write-Host " D.5) Otimizar Desempenho de Rede"
+        Write-Host " 0) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            '1' { Clear-ARP; Show-SuccessMessage; Suspend-Script }
+            '2' { Clear-DNS; Show-SuccessMessage; Suspend-Script }
+            '3' { Configure-DNS; Show-SuccessMessage; Suspend-Script }
+            '4' { Test-InternetSpeed; Show-SuccessMessage; Suspend-Script }
+            '5' { Optimize-NetworkPerformance; Show-SuccessMessage; Suspend-Script } # Assuming this function exists or will be created
+            '0' { break }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-PrivacyOptimizationMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Privacidade e Otimização"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " E.1) Ajustar Visual para Performance"
+        Write-Host " E.2) Aplicar Tweaks de Privacidade e Desativação de Bloatware (Geral)"
+        Write-Host " E.3) Desativar Action Center e Notificações"
+        Write-Host " E.4) Desativar Cortana e Pesquisa na Nuvem"
+        Write-Host " E.5) Desabilitar Macros Perigosas do Office"
+        Write-Host " E.6) Restaurar Menu de Contexto Clássico (Win11)"
+        Write-Host " 0) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            '1' { Adjust-VisualPerformance; Show-SuccessMessage; Suspend-Script }
+            '2' { Grant-PrivacyTweaks; Show-SuccessMessage; Suspend-Script }
+            '3' { Disable-ActionCenterNotifications; Show-SuccessMessage; Suspend-Script }
+            '4' { Disable-CortanaSearch; Show-SuccessMessage; Suspend-Script }
+            '5' { Disable-OfficeMacros; Show-SuccessMessage; Suspend-Script } # Assuming this function exists or will be created
+            '6' { Restore-ClassicContextMenu; Show-SuccessMessage; Suspend-Script } # Assuming this function exists or will be created
+            '0' { break }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-RestoreBackupMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Restauração e Backup"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " F.1) Criar Ponto de Restauração do Sistema"
+        Write-Host " F.2) Fazer Backup do Registro"
+        Write-Host " 0) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            '1' { Create-SystemRestorePoint; Show-SuccessMessage; Suspend-Script }
+            '2' { Backup-Registry; Show-SuccessMessage; Suspend-Script }
+            '0' { break }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-ExternalScriptsMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Scripts Externos"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " G.1) Executar Script Personalizado 1 (Placeholder)"
+        Write-Host " G.2) Executar Script Personalizado 2 (Placeholder)"
+        Write-Host " 0) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            '1' { Write-Log "Função ainda não implementada." -Type Warning; Suspend-Script }
+            '2' { Write-Log "Função ainda não implementada." -Type Warning; Suspend-Script }
+            '0' { break }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-WindowsUpdateMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Windows Update"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " H.1) Gerenciar Atualizações do Windows (com opções)"
+        Write-Host " 0) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            '1' { Manage-WindowsUpdates; Show-SuccessMessage; Suspend-Script }
+            '0' { break }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
         }
     } while ($true)
 }
