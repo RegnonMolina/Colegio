@@ -146,8 +146,8 @@ $ScriptConfig = @{
 # Variáveis globais para controle de preferências
 $global:ConfirmPreference = 'None'
 $global:ProgressPreference = 'SilentlyContinue'
-$global:ErrorActionPreference = 'SilentlyContinue'
-$global:WarningPreference = 'SilentlyContinue'
+$global:ErrorActionPreference = 'Continue'
+$global:WarningPreference = 'Continue'
 $global:VerbosePreference = 'SilentlyContinue'
 $global:DebugPreference = 'SilentlyContinue'
 
@@ -3951,86 +3951,86 @@ function Show-MainMenu {
         $choice = Show-Menu -Title "MENU PRINCIPAL - MANUTENÇÃO SUPREMA" -Options $mainMenuOptions
         Write-Log "Opção selecionada no menu principal: $choice" -Type Info
 
-        switch ($choice) {
-            "1" { 
+        switch ([int]$choice) {
+            1 { 
                 Write-Log "Executando rotinas de limpeza via menu..." -Type Info
                 # Chamaria a função de limpeza aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "2" {
+            2 {
                 Write-Log "Executando remoção de Bloatware via menu..." -Type Info
                 # Chamaria a função de remoção de bloatware aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "3" {
+            3 {
                 Write-Log "Aplicando ajustes de privacidade e registro via menu..." -Type Info
                 # Chamaria a função de ajustes de privacidade aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "4" {
+            4 {
                 Write-Log "Otimizando rede via menu..." -Type Info
                 # Chamaria a função de otimização de rede aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "5" {
+            5 {
                 Write-Log "Iniciando instalação de aplicativos via menu..." -Type Info
                 # Chamaria a função de instalação de aplicativos aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "6" {
+            6 {
                 Write-Log "Executando diagnósticos do sistema via menu..." -Type Info
                 # Chamaria a função de diagnósticos aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "7" {
+            7 {
                 Write-Log "Verificando e instalando atualizações do Windows via menu..." -Type Info
                 # Chamaria a função de Windows Update aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "8" {
+            8 {
                 Write-Log "Criando ponto de restauração via menu..." -Type Info
                 # Chamaria a função de criação de ponto de restauração aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "9" {
+            9 {
                 Write-Log "Iniciando remoção completa do OneDrive via menu..." -Type Info
                 # Chamaria a função de remoção do OneDrive aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "10" {
+            10 {
                 Write-Log "Removendo/Desativando Windows Copilot via menu..." -Type Info
                 # Chamaria a função de remoção/desativação do Copilot aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "11" {
+            11 {
                 Write-Log "Desativando Windows Recall via menu..." -Type Info
                 # Chamaria a função de desativação do Recall aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "12" {
+            12 {
                 Write-Log "Aplicando plano de energia otimizado via menu..." -Type Info
                 # Chamaria a função de plano de energia aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "13" { # Novo case para Ajustes de UI
+            13 { # Novo case para Ajustes de UI
                 Write-Log "Aplicando Ajustes de Interface do Usuário via menu..." -Type Info
                 # Chamaria a função de ajustes de UI aqui
                 Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
                 pause
             }
-            "0" { # Sair
+            0 { # Sair
                 Write-Log "Saindo do script. Até mais!" -Type Info
                 exit
             }
