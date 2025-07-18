@@ -4148,6 +4148,8 @@ Test-RequiredFunctions -FunctionList $FuncoesCriticas
 
 # === EXECUÇÃO PRINCIPAL ===
 
+function Main {
+
 try {
     Show-MainMenu
 }
@@ -4157,4 +4159,5 @@ catch {
 }
 finally {
     # Cleanup se necessário
+}
 }
