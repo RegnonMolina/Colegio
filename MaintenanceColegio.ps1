@@ -4015,7 +4015,7 @@ Write-Log "Todas as tarefas automáticas foram concluídas. Pressione Enter para
         # Se nenhum parâmetro de automação for passado, exibe o menu interativo
         do {
             clear-host # Limpa a tela antes de exibir o menu
-            $choice = Show-Menu -Title "MENU PRINCIPAL - MANUTENÇÃO SUPREMA" -Options $mainMenuOptions
+            $choice = Show-MainMenu -Title "MENU PRINCIPAL - MANUTENÇÃO SUPREMA" -Options $mainMenuOptions
             switch ($choice) {
                 "1" {
                     Write-Log "Executando Rotinas de Limpeza e Otimização via menu..." -Type Info
