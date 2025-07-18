@@ -4107,18 +4107,25 @@ function Show-MainMenu {
 }
 #endregion
 
-# === EXECUÇÃO PRINCIPAL ===
+# -------------------------------------------------------------------------
+# 🔧 Função principal: ponto de entrada do script
+function Start-ScriptSupremo {
+    Write-Host "`n🛠️ Iniciando o script de manutenção..." -ForegroundColor Cyan
 
-function Main {
+    # (Opcional) Inicialize variáveis ou recursos aqui
+    # Ex: Initialize-Globals
 
-try {
-    Show-MainMenu
+    try {
+        Write-Host "⚙️ Chamando o menu principal..." -ForegroundColor Yellow
+        Show-MainMenu
+    } catch {
+        Write-Host "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
-catch {
-    Write-Host "❌ Erro fatal: $_" -ForegroundColor Red
-    Write-Host "Consulte o log em: `"$logFile`"" -ForegroundColor Yellow
-}
-finally {
-    # Cleanup se necessário
-}
-}
+
+# Ativa rastreamento detalhado
+Set-PSDebug -Trace 1
+
+# -------------------------------------------------------------------------
+# ▶️ Chamada final que executa o script
+Start-ScriptSupremo
