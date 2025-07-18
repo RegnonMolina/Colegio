@@ -667,7 +667,7 @@ function Force-RemoveOneDrive {
     } catch {
         Write-Log "Erro durante a remoção de Bloatware: $_" Red
     }
-}
+
 
 function Disable-BloatwareScheduledTasks {
     Write-Log "Desativando tarefas agendadas de bloatware e telemetria..." Yellow
