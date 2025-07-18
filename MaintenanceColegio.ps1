@@ -4148,7 +4148,13 @@ Test-RequiredFunctions -FunctionList $FuncoesCriticas
 
 # === EXECUÇÃO PRINCIPAL ===
 
-# Inicia a função principal.
-# Ela agora decide se roda automaticamente (se parâmetros forem passados)
-# ou exibe o menu interativo.
-Show-MainMenu
+try {
+    Show-MainMenu
+}
+catch {
+    Write-Host "❌ Erro fatal: $_" -ForegroundColor Red
+    Write-Host "Consulte o log em: `"$logFile`"" -ForegroundColor Yellow
+}
+finally {
+    # Cleanup se necessário
+}
