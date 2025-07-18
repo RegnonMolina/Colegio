@@ -148,8 +148,8 @@ $global:ConfirmPreference = 'None'
 $global:ProgressPreference = 'SilentlyContinue'
 $global:ErrorActionPreference = 'Continue'
 $global:WarningPreference = 'Continue'
-$global:VerbosePreference = 'Continue'
-$global:DebugPreference = 'Continue'
+$global:VerbosePreference = 'SilentlyContinue'
+$global:DebugPreference = 'SilentlyContinue'
 
 #region → CONFIGURAÇÕES GLOBAIS
 $ScriptConfig = @{
