@@ -3417,97 +3417,56 @@ function Show-NetworkMenu {
 function Show-ExternalScriptsMenu {
     do {
         Clear-Host
-Write-Log "==== MENU: SCRIPTS EXTERNOS E ATIVADORES ====" -Type Info
-Write-Log " A. Executar todos os scripts deste menu" -Type Success
-Write-Log " B. Ativar Windows (get.activated.win)"
-Write-Log " C. Toolbox Chris Titus (christitus.com)"
-Write-Log " D. Atualizar Script Supremo"
-Write-Log " X. Voltar ao menu principal" -Type Success
-
-        $key = [Console]::ReadKey($true).Key
+        Write-Host "`n[SCRIPTS EXTERNOS]" -ForegroundColor Cyan
+        Write-Host " A) Rodar Ativador get.activated.win"
+        Write-Host " B) Executar Chris Titus Toolbox"
+        Write-Host " C) Rodar WinUtil, SpeedyFox, etc."
+        Write-Host " D) Atualizar Script Supremo pela URL"
+        Write-Host " X) Voltar"
+        $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToUpper()
         switch ($key) {
-            'A' {
-                Invoke-WindowsActivator
-                Invoke-ChrisTitusToolbox
-                Update-ScriptFromCloud
-                Show-SuccessMessage
-            }
-            'B' { Invoke-WindowsActivator; Show-SuccessMessage }
-            'C' { Invoke-ChrisTitusToolbox; Show-SuccessMessage }
-            'D' { Update-ScriptFromCloud; Show-SuccessMessage }
+            'A' { Invoke-WindowsActivator }
+            'B' { Invoke-ChrisTitusToolbox }
+            'C' { Invoke-ExternalDebloaters }
+            'D' { Update-ScriptFromCloud }
             'X' { return }
-            default {
-Write-Log "`nOpção inválida!" -Type Error
-                Start-Sleep -Seconds 1
-            }
         }
+        Show-SuccessMessage
     } while ($true)
 }
 
-function Show-RestoreUndoMenu {
+function Show-RestoreMenu {
     do {
         Clear-Host
-Write-Log "=============================================" -Type Info
-Write-Log "  MENU DE RESTAURAÇÃO E SEGURANÇA (UNDO)   " -Type Info
-Write-Log "=============================================" -Type Info
-        Write-Log "Exibindo menu de Restauração e Segurança (Undo)..." Blue
-
-Write-Log " A. Executar todas as tarefas deste menu" -Type Success
-Write-Log " B. Bloquear macros Office (segurança)"
-Write-Log " C. Desabilitar SMBv1 (RECOMENDADO)"
-Write-Log " D. Desfazer privacidade agressiva"
-Write-Log " E. Habilitar SMBv1 (NÃO RECOMENDADO)"
-Write-Log " F. Reabilitar Action Center/Notificações"
-Write-Log " G. Reabilitar IPv6"
-Write-Log " H. Reinstalar aplicativos essenciais"
-Write-Log " I. Reinstalar o OneDrive"
-Write-Log " J. Restaurar backup do registro"
-Write-Log " K. Restaurar backup do registro (alternativo)"
-Write-Log " L. Restaurar macros Office (padrão)"
-Write-Log " M. Restaurar menu de contexto clássico"
-Write-Log " N. Restaurar UAC para padrão"
-Write-Log " O. Restaurar visual padrão"
-Write-Log " X. Voltar ao menu principal" -Type Success
-
-        $key = [Console]::ReadKey($true).Key
+        Write-Host "`n[RESTAURAR / BACKUP]" -ForegroundColor Cyan
+        Write-Host " A) Criar ponto de restauração"
+        Write-Host " B) Backup do Registro"
+        Write-Host " C) Restaurar Registro (pasta)"
+        Write-Host " D) Restaurar configurações visuais"
+        Write-Host " E) Restaurar UAC padrão"
+        Write-Host " F) Reinstalar OneDrive"
+        Write-Host " G) Reinstalar Apps essenciais"
+        Write-Host " H) Restaurar menu de contexto clássico"
+        Write-Host " I) Restaurar macros Office"
+        Write-Host " J) Restaurar IPv6"
+        Write-Host " K) Reabilitar notificações Action Center"
+        Write-Host " X) Voltar"
+        $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToUpper()
         switch ($key) {
-            'A' {
-                Grant-HardenOfficeMacros
-                Disable-SMBv1
-                Undo-PrivacyHardening
-                Enable-SMBv1
-                Grant-ActionCenter-Notifications
-                Restore-DefaultIPv6
-                Restore-BloatwareSafe
-                Restore-OneDrive
-                Restore-Registry-FromBackup
-                Restore-Registry
-                Restore-OfficeMacros
-                Enable-ClassicContextMenu
-                Restore-DefaultUAC
-                Restore-VisualPerformanceDefault
-                Show-SuccessMessage
-            }
-            'B' { Grant-HardenOfficeMacros; Show-SuccessMessage }
-            'C' { Disable-SMBv1; Show-SuccessMessage }
-            'D' { Undo-PrivacyHardening; Show-SuccessMessage }
-            'E' { Enable-SMBv1; Show-SuccessMessage }
-            'F' { Grant-ActionCenter-Notifications; Show-SuccessMessage }
-            'G' { Restore-DefaultIPv6; Show-SuccessMessage }
-            'H' { Restore-BloatwareSafe; Show-SuccessMessage }
-            'I' { Restore-OneDrive; Show-SuccessMessage }
-            'J' { Restore-Registry-FromBackup; Show-SuccessMessage }
-            'K' { Restore-Registry; Show-SuccessMessage }
-            'L' { Restore-OfficeMacros; Show-SuccessMessage }
-            'M' { Enable-ClassicContextMenu; Show-SuccessMessage }
-            'N' { Restore-DefaultUAC; Show-SuccessMessage }
-            'O' { Restore-VisualPerformanceDefault; Show-SuccessMessage }
+            'A' { New-SystemRestorePoint }
+            'B' { Backup-Registry }
+            'C' { Restore-Registry }
+            'D' { Restore-VisualPerformanceDefault }
+            'E' { Restore-DefaultUAC }
+            'F' { Restore-OneDrive }
+            'G' { Restore-BloatwareSafe }
+            'H' { Enable-ClassicContextMenu }
+            'I' { Restore-OfficeMacros }
+            'J' { Restore-DefaultIPv6 }
+            'K' { Grant-ActionCenter-Notifications }
             'X' { return }
-            default {
-Write-Log "`nOpção inválida!" -Type Error
-                Start-Sleep 1
-            }
         }
+        Show-SuccessMessage
     } while ($true)
 }
 
@@ -3696,39 +3655,27 @@ function Show-CleanupMenu {
 function Show-BloatwareMenu {
     do {
         Clear-Host
-Write-Log "==== MENU: REMOÇÃO DE BLOATWARE ====" -Type Info
-Write-Log " A. Executar todas as remoções" -Type Success
-Write-Log " B. Remover bloatware (LinkedIn, Xbox, etc.)"
-Write-Log " C. Remover Copilot"
-Write-Log " D. Remover OneDrive"
-Write-Log " E. Encerrar processos dispensáveis"
-Write-Log " F. Desativar tarefas agendadas de bloatware"
-Write-Log " G. Remover pins do Menu Iniciar"
-Write-Log " X. Voltar ao menu anterior" -Type Success
-
-        $key = [Console]::ReadKey($true).Key
+        Write-Host "`n[REMOÇÃO DE BLOATWARE]" -ForegroundColor Cyan
+        Write-Host " A) Remover aplicativos pré-instalados"
+        Write-Host " B) Desativar tarefas agendadas Xbox/OneDrive"
+        Write-Host " C) Encerrar processos dispensáveis"
+        Write-Host " D) Remover pins do Menu Iniciar e Taskbar"
+        Write-Host " E) Remover OneDrive completamente"
+        Write-Host " F) Remover Copilot (Win11)"
+        Write-Host " G) Remover Widgets e sugestões"
+        Write-Host " X) Voltar"
+        $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character.ToUpper()
         switch ($key) {
-            'A' {
-                Remove-Bloatware
-                Remove-Copilot
-                Remove-OneDrive-AndRestoreFolders
-                Stop-BloatwareProcesses
-                Disable-BloatwareScheduledTasks
-                Remove-StartAndTaskbarPins
-                Show-SuccessMessage
-            }
-            'B' { Remove-Bloatware; Show-SuccessMessage }
-            'C' { Remove-Copilot; Show-SuccessMessage }
-            'D' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
-            'E' { Stop-BloatwareProcesses; Show-SuccessMessage }
-            'F' { Disable-BloatwareScheduledTasks; Show-SuccessMessage }
-            'G' { Remove-StartAndTaskbarPins; Show-SuccessMessage }
+            'A' { Remove-Bloatware }
+            'B' { Disable-BloatwareScheduledTasks }
+            'C' { Stop-BloatwareProcesses }
+            'D' { Remove-StartAndTaskbarPins }
+            'E' { Force-RemoveOneDrive }
+            'F' { Remove-WindowsCopilot }
+            'G' { Grant-PrivacyTweaks }
             'X' { return }
-            default {
-Write-Log "`nOpção inválida!" -Type Error
-                Start-Sleep 1
-            }
         }
+        Show-SuccessMessage
     } while ($true)
 }
 
