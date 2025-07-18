@@ -1,4 +1,4 @@
-#region → PARÂMETROS DE EXECUÇÃO (Adicionado)
+#region → PARÂMETROS DE EXECUÇÃO
 [CmdletBinding()]
 param (
     [Parameter(HelpMessage="Executa todas as rotinas de limpeza.")]
@@ -45,111 +45,22 @@ param (
 # Iniciado em: $(Get-Date)
 # Desenvolvido com sangue, café e PowerShell 💪
 
-# clear-host
-Write-Log "-------------------------------------------------------------------------"
-Write-Log "| Script pra ajustes de notebooks do ambiente do Colégio Mundo do Saber |"
-Write-Log "-------------------------------------------------------------------------"
+clear-host
+Write-Host "-------------------------------------------------------------------------"
+Write-Host "| Script pra ajustes de notebooks do ambiente do Colégio Mundo do Saber |"
+Write-Host "-------------------------------------------------------------------------"
 
+# =========================================================================
+# ⚙️ CONFIGURAÇÕES GLOBAIS E VARIÁVEIS INICIAIS
+# =========================================================================
 
-# ===============================
-# CONFIGURAÇÕES GLOBAIS DO SCRIPT
-# ===============================
-
-# ================================================
-# ⚙️ CONFIGURAÇÕES DO SCRIPT
-# ================================================
-
-# Hashtable de configurações
-$ScriptConfig = @{
-    LogFilePath = $logFile
-    CreateRestorePoint = $false
-    ConfirmationRequired = $true
-
-    Cleanup = @{
-        CleanTemporaryFiles = $true
-        CleanWUCache = $true
-        OptimizeVolumes = $true
-        PerformDeepSystemCleanup = $true
-        ClearDNSCache = $true
-        DisableMemoryDumps = $true
-    }
-
-    BloatwareRemoval = @{
-        RemovePreinstalledApps = $true
-        RemoveCopilot = $false
-        DisableRecall = $false
-        ForceOneDriveRemoval = $false
-    }
-
-    PrivacyTweaks = @{
-        DisableTelemetry = $true
-        DisableDiagnosticData = $true
-        BlockTelemetryHosts = $true
-        DisableLocationServices = $true
-        DisableActivityHistory = $true
-        DisableAdvertisingID = $true
-        DisableCortana = $true
-        DisableBiometrics = $false
-        DisableFeedbackRequests = $true
-        DisableSuggestedContent = $true
-        DisableAutoUpdatesStoreApps = $true
-        DisableWidgets = $true
-        DisableNewsAndInterests = $true
-    }
-
-    NetworkOptimization = @{
-        DisableNetworkThrottling = $true
-        OptimizeDNSSettings = $true
-        DisableLargeSendOffload = $true
-    }
-
-    AppInstallation = @{
-        InstallApps = $true
-    }
-
-    GPORegistrySettings = @{
-        EnableUpdateManagement = $true
-        DisableAutoReboot = $true
-        SetScheduledUpdateTime = $true
-        DisableDriverUpdates = $false
-        ConfigureEdge = $true
-        ConfigureChrome = $true
-        DisableWindowsTips = $true
-    }
-
-    PowerPlan = @{
-        ApplyOptimizedPlan = $true
-        PlanName = "Plano de Energia Supremacy"
-        GUID = ""
-    }
-
-    UITweaks = @{
-        EnableDarkMode = $true
-        DisableTransparency = $true
-        DisableAnimations = $true
-        TaskbarAlignLeft = $false
-        HideSearchBox = $true
-        ShowDesktopIcons = $true
-        HideDupliDrive = $true
-        Hide3dObjects = $true
-        HideOneDriveFolder = $false
-    }
-
-    EnableDeveloperMode = $false
-    HideSearchBox = $true
-    ShowDesktopIcons = $true
-}
-
-# ================================================
-# ⚙️ AJUSTES GLOBAIS DO POWERSHELL
-# ================================================
 # Variáveis globais para controle de preferências
 $global:ConfirmPreference = 'None'
 $global:ProgressPreference = 'SilentlyContinue'
 $global:ErrorActionPreference = 'Continue'
 $global:WarningPreference = 'Continue'
-$global:VerbosePreference = 'SilentlyContinue'
-$global:DebugPreference = 'SilentlyContinue'
+$global:VerbosePreference = 'SilentlyContinue' # Alterado para SilentlyContinue
+$global:DebugPreference = 'SilentlyContinue'   # Alterado para SilentlyContinue
 
 #region → CONFIGURAÇÕES GLOBAIS
 $ScriptConfig = @{
@@ -161,15 +72,74 @@ $ScriptConfig = @{
 # Garante que o PowerShell esteja usando o TLS 1.2 para downloads seguros
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.Security.SecurityProtocolType]::Tls12
 
-$IsWindows11 = (Get-CimInstance Win32_OperatingSystem).Caption -like "*Windows 11*"
-$Host.UI.RawUI.WindowTitle = "MANUTENÇÃO WINDOWS - NÃO FECHE ESTA JANELA"
-
-# Verifica se está em modo administrador
+# =========================================================================
+# ✅ VERIFICAÇÃO INICIAL: Administrador
+# =========================================================================
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-Write-Log "Este script precisa ser executado como Administrador." -Type Error
-Write-Log "Por favor, feche e execute novamente como Administrador." -Type Warning
-    pause
+    Write-Host "Este script precisa ser executado como Administrador. Por favor, feche e execute o PowerShell como Administrador." -ForegroundColor Red
+    Start-Sleep 5
     exit
+}
+
+# =========================================================================
+# 📦 FUNÇÕES DE UTILIDADE E AUXILIARES (FUNDAMENTAL: Write-Log)
+# =========================================================================
+# 📝 Função de Log Personalizada (MANTENHA ESTA AQUI!)
+function Write-Log {
+    [CmdletBinding(DefaultParameterSetName='MessageOnly')]
+    param (
+        [Parameter(Mandatory=$true, Position=0, ParameterSetName='MessageOnly')]
+        [Parameter(Mandatory=$true, Position=0, ParameterSetName='TypeAndMessage')]
+        [string]$Message,
+
+        [Parameter(Position=1, ParameterSetName='TypeAndMessage')]
+        [ValidateSet('Info', 'Success', 'Warning', 'Error', 'Debug', 'Verbose')]
+        [string]$Type = 'Info',
+
+        [Parameter(Position=2)]
+        [string]$Color = ''
+    )
+
+    $defaultColors = @{
+        'Info' = 'Cyan'
+        'Success' = 'Green'
+        'Warning' = 'Yellow'
+        'Error' = 'Red'
+        'Debug' = 'DarkGray'
+        'Verbose' = 'Gray'
+    }
+
+    if ([string]::IsNullOrEmpty($Color)) {
+        $effectiveColor = $defaultColors[$Type]
+    } else {
+        $effectiveColor = $Color
+    }
+
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] [$Type] $Message"
+
+    $logFilePath = if ($script:ScriptConfig.LogFilePath) {
+        $script:ScriptConfig.LogFilePath
+    } else {
+        "$env:TEMP\ScriptSupremo_Fallback.log"
+    }
+
+    $logDir = Split-Path -Path $logFilePath -Parent
+    if (-not (Test-Path $logDir)) {
+        try {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+        } catch {
+            Write-Host "ERRO: Não foi possível criar o diretório de log '$logDir'. Mensagem: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+
+    try {
+        Add-Content -Path $logFilePath -Value $logEntry -Encoding UTF8 -ErrorAction Stop
+    } catch {
+        Write-Host "ERRO: Não foi possível escrever no arquivo de log '$logFilePath'. Mensagem: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    Write-Host $logEntry -ForegroundColor $effectiveColor
 }
 
 #region → FUNÇÕES
@@ -3955,80 +3925,80 @@ function Show-MainMenu {
             1 { 
                 Write-Log "Executando rotinas de limpeza via menu..." -Type Info
                 # Chamaria a função de limpeza aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+				Show-SuccessMessage
+                return
             }
             2 {
                 Write-Log "Executando remoção de Bloatware via menu..." -Type Info
                 # Chamaria a função de remoção de bloatware aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             3 {
                 Write-Log "Aplicando ajustes de privacidade e registro via menu..." -Type Info
                 # Chamaria a função de ajustes de privacidade aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             4 {
                 Write-Log "Otimizando rede via menu..." -Type Info
                 # Chamaria a função de otimização de rede aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             5 {
                 Write-Log "Iniciando instalação de aplicativos via menu..." -Type Info
                 # Chamaria a função de instalação de aplicativos aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             6 {
                 Write-Log "Executando diagnósticos do sistema via menu..." -Type Info
                 # Chamaria a função de diagnósticos aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             7 {
                 Write-Log "Verificando e instalando atualizações do Windows via menu..." -Type Info
                 # Chamaria a função de Windows Update aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             8 {
                 Write-Log "Criando ponto de restauração via menu..." -Type Info
                 # Chamaria a função de criação de ponto de restauração aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             9 {
                 Write-Log "Iniciando remoção completa do OneDrive via menu..." -Type Info
                 # Chamaria a função de remoção do OneDrive aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             10 {
                 Write-Log "Removendo/Desativando Windows Copilot via menu..." -Type Info
                 # Chamaria a função de remoção/desativação do Copilot aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             11 {
                 Write-Log "Desativando Windows Recall via menu..." -Type Info
                 # Chamaria a função de desativação do Recall aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             12 {
                 Write-Log "Aplicando plano de energia otimizado via menu..." -Type Info
                 # Chamaria a função de plano de energia aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             13 { # Novo case para Ajustes de UI
                 Write-Log "Aplicando Ajustes de Interface do Usuário via menu..." -Type Info
                 # Chamaria a função de ajustes de UI aqui
-                Write-Log "--> Concluído. Pressione Enter para continuar." -Type Success
-                pause
+Show-SuccessMessage
+                return
             }
             0 { # Sair
                 Write-Log "Saindo do script. Até mais!" -Type Info
@@ -4058,9 +4028,3 @@ function Start-ScriptSupremo {
 # -------------------------------------------------------------------------
 # Ativa o script (CHAMADA PRINCIPAL NO FINAL)
 Start-ScriptSupremo
-
-
-
-
-
-
