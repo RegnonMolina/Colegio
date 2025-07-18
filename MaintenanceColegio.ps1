@@ -254,10 +254,7 @@ function Restart-Explorer {
         o que pode ser útil para aplicar certas alterações no sistema
         ou resolver problemas de interface sem a necessidade de reiniciar o computador.
     #>
-    [CmdletBinding()]
-    param()
-
-    Write-Log "Iniciando reinício do Windows Explorer..." -Type Info
+       Write-Log "Iniciando reinício do Windows Explorer..." -Type Info
 Write-Log "Reiniciando o Windows Explorer..."
 
     try {
@@ -395,10 +392,7 @@ function Manage-WindowsUpdates {
         tenta instalá-lo. Em seguida, pode ser usada para buscar e instalar atualizações,
         incluindo opções para atualização de drivers.
     #>
-    [CmdletBinding()]
-    param()
-
-    Write-Log "Iniciando o gerenciamento de atualizações do Windows." -Type Info
+       Write-Log "Iniciando o gerenciamento de atualizações do Windows." -Type Info
 Write-Log "Iniciando o gerenciamento de atualizações do Windows..."
 
     try {
@@ -546,9 +540,7 @@ function Force-RemoveOneDrive {
         Esta função desinstala completamente o OneDrive, desabilitando seus serviços
         e removendo seus arquivos do sistema.
     #>
-    [CmdletBinding()]
-    param()
-
+    
     if (-not (Test-Path Variable:ScriptConfig)) {
         Write-Log "ERRO: \$ScriptConfig não encontrada. Certifique-se de que foi definida no topo do script." -Type Error
 Write-Log "ERRO: Configurações globais (\$ScriptConfig) não encontradas. Abortando remoção do OneDrive." -Type Error
@@ -816,9 +808,7 @@ function Remove-WindowsCopilot {
         Esta função tenta remover o pacote do Windows Copilot (se presente)
         e aplica ajustes de registro para desabilitar sua interface e funcionalidade.
     #>
-    [CmdletBinding()]
-    param()
-
+    
     Write-Log "Iniciando remoção e desativação do Windows Copilot." -Type Info
 Write-Log "Iniciando remoção e desativação do Windows Copilot..."
 
@@ -868,10 +858,7 @@ function Disable-WindowsRecall {
         Esta função aplica ajustes de registro para desabilitar o Windows Recall,
         uma funcionalidade de gravação de tela e atividades.
     #>
-    [CmdletBinding()]
-    param()
-
-    Write-Log "Iniciando desativação do Windows Recall." -Type Info
+        Write-Log "Iniciando desativação do Windows Recall." -Type Info
 Write-Log "Iniciando desativação do Windows Recall..."
 
     try {
@@ -1485,10 +1472,7 @@ function Perform-SystemOptimizations {
         como limpeza de arquivos temporários, cache do Windows Update, otimização de volumes,
         e mais, todas controladas pela hashtable global $ScriptConfig.Cleanup.
     #>
-    [CmdletBinding()]
-    param()
-
-    # Certifique-se de que a hashtable de configuração existe
+        # Certifique-se de que a hashtable de configuração existe
     if (-not (Test-Path Variable:ScriptConfig)) {
         Write-Log "ERRO: \$ScriptConfig não encontrada. Certifique-se de que foi definida no topo do script." -Type Error
 Write-Log "ERRO: Configurações globais (\$ScriptConfig) não encontradas. Abortando otimizações." -Type Error
@@ -1558,9 +1542,7 @@ function Apply-PrivacyAndBloatwarePrevention {
         melhorar a privacidade do usuário e evitar a instalação ou execução de
         componentes indesejados (bloatware), controlados pela hashtable global $ScriptConfig.PrivacyTweaks.
     #>
-    [CmdletBinding()]
-    param()
-
+   
     # Certifique-se de que a hashtable de configuração existe
     if (-not (Test-Path Variable:ScriptConfig)) {
         Write-Log "ERRO: \$ScriptConfig não encontrada. Certifique-se de que foi definida no topo do script." -Type Error
@@ -1723,9 +1705,7 @@ function Apply-GPORegistrySettings {
         seriam controladas por Políticas de Grupo (GPO), aplicando-as diretamente via registro.
         As opções são controladas pela hashtable global $ScriptConfig.GPORegistrySettings.
     #>
-    [CmdletBinding()]
-    param()
-
+    
     # Certifique-se de que a hashtable de configuração existe
     if (-not (Test-Path Variable:ScriptConfig)) {
         Write-Log "ERRO: \$ScriptConfig não encontrada. Certifique-se de que foi definida no topo do script." -Type Error
@@ -1866,10 +1846,7 @@ function Show-PersonalizationMenu {
         como tema, transparência, animações, e itens da barra de tarefas/Explorer,
         controladas pela hashtable global $ScriptConfig.UITweaks.
     #>
-    [CmdletBinding()]
-    param()
-
-    if (-not (Test-Path Variable:ScriptConfig)) {
+       if (-not (Test-Path Variable:ScriptConfig)) {
         Write-Log "ERRO: \$ScriptConfig não encontrada. Certifique-se de que foi definida no topo do script." -Type Error
 Write-Log "ERRO: Configurações globais (\$ScriptConfig) não encontradas. Abortando ajustes de UI." -Type Error
         return
@@ -2608,9 +2585,7 @@ function Set-OptimizedPowerPlan {
         O plano de "Alto Desempenho" maximiza o desempenho do sistema,
         sendo ideal para tarefas que exigem mais processamento.
     #>
-    [CmdletBinding()]
-    param()
-
+    
     Write-Log "Iniciando a configuração do plano de energia otimizado (Alto Desempenho)." -Type Info
 Write-Log "Configurando o plano de energia para 'Alto Desempenho'..."
 
