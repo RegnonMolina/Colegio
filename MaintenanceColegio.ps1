@@ -3236,11 +3236,6 @@ function New-FolderForced {
 
 #region MENUS
 
-
-# -------------------------------------------------------------------------
-# Funções de Exibição de Menus
-# -------------------------------------------------------------------------
-
 function Show-MainMenu {
     do {
         clear-host
@@ -3463,7 +3458,7 @@ function Show-LimpezaMenu {
                 Invoke-DISM-Scan; Show-SuccessMessage
                 Invoke-SFC-Scan; Show-SuccessMessage
                 New-ChkDsk; Show-SuccessMessage
-                # Perform-Cleanup (Considerar se essa função global deve ser incluída no "Executar Todos" ou se as funções individuais são suficientes)
+                Perform-Cleanup; Show-SuccessMessage # Mantido aqui como uma ação geral de limpeza
                 Suspend-Script
             }
             'Y' { break }
@@ -3569,133 +3564,241 @@ function Show-ExternalScriptsMenu {
     } while ($true)
 }
 
+# --- Novos Sub-submenus para Tweaks ---
+
 function Show-TweaksMenu {
     do {
         clear-host
         Write-Host "==================================================="
         Write-Host "             Menu: Tweaks e Otimizações"
         Write-Host "==================================================="
+        Write-Host "Selecione uma categoria de Tweaks:"
+        Write-Host ""
+        Write-Host " B) Tweaks de UI (Interface do Usuário)"
+        Write-Host " C) Tweaks de Privacidade"
+        Write-Host " D) Tweaks de Sistema (Geral/Performance)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas de TODOS os Tweaks em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Show-UITweaksMenu }
+            'C' { Show-PrivacyTweaksMenu }
+            'D' { Show-SystemTweaksMenu }
+            'A' {
+                Write-Log "Executando todas as tarefas de TODOS os Tweaks em sequência..." -Type Info
+                # Chamando os blocos "A" de cada sub-submenu
+                Show-UITweaksMenu 'RunAll' # Passa um parâmetro para que a função execute tudo e retorne
+                Show-PrivacyTweaksMenu 'RunAll'
+                Show-SystemTweaksMenu 'RunAll'
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-UITweaksMenu {
+    param([string]$Action = "ShowMenu") # Adiciona um parâmetro para "Executar Todos"
+    if ($Action -eq "RunAll") {
+        Write-Log "Executando todas as tarefas de Tweaks de UI em sequência..." -Type Info
+        # Funções de UI em ordem alfabética
+        Apply-UITweaks; Show-SuccessMessage
+        Enable-ClassicContextMenu; Show-SuccessMessage
+        Enable-ClipboardHistory; Show-SuccessMessage
+        Enable-DarkTheme; Show-SuccessMessage
+        Enable-TaskbarEndTask; Show-SuccessMessage
+        Enable-TaskbarSeconds; Show-SuccessMessage
+        Grant-ControlPanelTweaks; Show-SuccessMessage
+        Optimize-ExplorerPerformance; Show-SuccessMessage
+        Set-PerformanceTheme; Show-SuccessMessage
+        Set-VisualPerformance; Show-SuccessMessage
+        return # Retorna após executar todas as tarefas
+    }
+
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Tweaks de UI"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Aplicar Tweaks de Interface (Apply-UITweaks)"
+        Write-Host " C) Habilitar Menu de Contexto Clássico (Win11) (Enable-ClassicContextMenu)"
+        Write-Host " D) Habilitar Histórico da Área de Transferência (Enable-ClipboardHistory)"
+        Write-Host " E) Habilitar Tema Escuro (Enable-DarkTheme)"
+        Write-Host " F) Habilitar Finalizar Tarefa na Barra de Tarefas (Enable-TaskbarEndTask)"
+        Write-Host " G) Habilitar Segundos na Barra de Tarefas (Enable-TaskbarSeconds)"
+        Write-Host " H) Aplicar Tweaks do Painel de Controle (Grant-ControlPanelTweaks)"
+        Write-Host " I) Otimizar Desempenho do Explorer (Optimize-ExplorerPerformance)"
+        Write-Host " J) Definir Tema de Desempenho (Set-PerformanceTheme)"
+        Write-Host " K) Definir Performance Visual (Set-VisualPerformance)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Apply-UITweaks; Show-SuccessMessage; Suspend-Script }
+            'C' { Enable-ClassicContextMenu; Show-SuccessMessage; Suspend-Script }
+            'D' { Enable-ClipboardHistory; Show-SuccessMessage; Suspend-Script }
+            'E' { Enable-DarkTheme; Show-SuccessMessage; Suspend-Script }
+            'F' { Enable-TaskbarEndTask; Show-SuccessMessage; Suspend-Script }
+            'G' { Enable-TaskbarSeconds; Show-SuccessMessage; Suspend-Script }
+            'H' { Grant-ControlPanelTweaks; Show-SuccessMessage; Suspend-Script }
+            'I' { Optimize-ExplorerPerformance; Show-SuccessMessage; Suspend-Script }
+            'J' { Set-PerformanceTheme; Show-SuccessMessage; Suspend-Script }
+            'K' { Set-VisualPerformance; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Show-UITweaksMenu 'RunAll' # Chama a própria função para executar tudo
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-PrivacyTweaksMenu {
+    param([string]$Action = "ShowMenu")
+    if ($Action -eq "RunAll") {
+        Write-Log "Executando todas as tarefas de Tweaks de Privacidade em sequência..." -Type Info
+        # Funções de Privacidade em ordem alfabética
+        Disable-ActionCenter-Notifications; Show-SuccessMessage
+        Disable-Cortana-AndSearch; Show-SuccessMessage
+        Enable-PrivacyHardening; Show-SuccessMessage
+        Grant-PrivacyTweaks; Show-SuccessMessage
+        Show-AutoLoginMenu; Show-SuccessMessage
+        return
+    }
+
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Tweaks de Privacidade"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Desabilitar Action Center e Notificações (Disable-ActionCenter-Notifications)"
+        Write-Host " C) Desabilitar Cortana e Pesquisa na Nuvem (Disable-Cortana-AndSearch)"
+        Write-Host " D) Habilitar Reforço de Privacidade (Enable-PrivacyHardening)"
+        Write-Host " E) Aplicar Tweaks de Privacidade (Grant-PrivacyTweaks)"
+        Write-Host " F) Exibir Menu de AutoLogin (Show-AutoLoginMenu)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Disable-ActionCenter-Notifications; Show-SuccessMessage; Suspend-Script }
+            'C' { Disable-Cortana-AndSearch; Show-SuccessMessage; Suspend-Script }
+            'D' { Enable-PrivacyHardening; Show-SuccessMessage; Suspend-Script }
+            'E' { Grant-PrivacyTweaks; Show-SuccessMessage; Suspend-Script }
+            'F' { Show-AutoLoginMenu; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Show-PrivacyTweaksMenu 'RunAll'
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-SystemTweaksMenu {
+    param([string]$Action = "ShowMenu")
+    if ($Action -eq "RunAll") {
+        Write-Log "Executando todas as tarefas de Tweaks de Sistema em sequência..." -Type Info
+        # Funções de Sistema em ordem alfabética
+        Apply-GPORegistrySettings; Show-SuccessMessage
+        Disable-UAC; Show-SuccessMessage
+        Enable-OtherMicrosoftUpdates; Show-SuccessMessage
+        Enable-PowerOptions; Show-SuccessMessage
+        Enable-RestartAppsAfterReboot; Show-SuccessMessage
+        Enable-Sudo; Show-SuccessMessage
+        Enable-WindowsHardening; Show-SuccessMessage
+        Enable-WindowsUpdateFast; Show-SuccessMessage
+        Grant-ExtraTweaks; Show-SuccessMessage
+        Grant-HardenOfficeMacros; Show-SuccessMessage
+        New-FolderForced; Show-SuccessMessage
+        New-SystemRestorePoint; Show-SuccessMessage
+        Optimize-Volumes; Show-SuccessMessage
+        Perform-SystemOptimizations; Show-SuccessMessage
+        Rename-Notebook; Show-SuccessMessage
+        Set-OptimizedPowerPlan; Show-SuccessMessage
+        return
+    }
+
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Tweaks de Sistema"
+        Write-Host "==================================================="
         Write-Host "Selecione uma opção:"
         Write-Host ""
         Write-Host " B) Aplicar Configurações GPO/Registro (Apply-GPORegistrySettings)"
-        Write-Host " C) Aplicar Tweaks de Interface (Apply-UITweaks)"
-        Write-Host " D) Desabilitar Action Center e Notificações (Disable-ActionCenter-Notifications)"
-        Write-Host " E) Desabilitar Cortana e Pesquisa na Nuvem (Disable-Cortana-AndSearch)"
-        Write-Host " F) Desabilitar UAC (Disable-UAC)"
-        Write-Host " G) Habilitar Menu de Contexto Clássico (Win11) (Enable-ClassicContextMenu)"
-        Write-Host " H) Habilitar Histórico da Área de Transferência (Enable-ClipboardHistory)"
-        Write-Host " I) Habilitar Tema Escuro (Enable-DarkTheme)"
-        Write-Host " J) Habilitar Outras Atualizações Microsoft (Enable-OtherMicrosoftUpdates)"
-        Write-Host " K) Habilitar Opções de Energia Avançadas (Enable-PowerOptions)"
-        Write-Host " L) Habilitar Reforço de Privacidade (Enable-PrivacyHardening)"
-        Write-Host " M) Habilitar Reinício de Apps Após Reboot (Enable-RestartAppsAfterReboot)"
-        Write-Host " N) Habilitar Sudo (Enable-Sudo)"
-        Write-Host " O) Habilitar Finalizar Tarefa na Barra de Tarefas (Enable-TaskbarEndTask)"
-        Write-Host " P) Habilitar Segundos na Barra de Tarefas (Enable-TaskbarSeconds)"
-        Write-Host " Q) Habilitar Reforço do Windows (Enable-WindowsHardening)"
-        Write-Host " R) Habilitar Windows Update Rápido (Enable-WindowsUpdateFast)"
-        Write-Host " S) Aplicar Tweaks do Painel de Controle (Grant-ControlPanelTweaks)"
-        Write-Host " T) Aplicar Tweaks Extras (Grant-ExtraTweaks)"
-        Write-Host " U) Reforçar Macros do Office (Grant-HardenOfficeMacros)"
-        Write-Host " V) Aplicar Tweaks de Privacidade (Grant-PrivacyTweaks)"
-        Write-Host " W) Criar Pasta Forçada (New-FolderForced)"
-        Write-Host " X) Criar Ponto de Restauração do Sistema (New-SystemRestorePoint)" # Removido Y, Z para navegação
-        Write-Host " Y) Otimizar Desempenho do Explorer (Optimize-ExplorerPerformance)"
-        Write-Host " Z) Otimizar Volumes (Desfragmentação/Trim) (Optimize-Volumes)"
-        Write-Host " A2) Realizar Otimizações do Sistema (Perform-SystemOptimizations)" # Se esgotar as letras, precisa de uma estratégia
-        Write-Host " B2) Renomear Notebook (Rename-Notebook)"
-        Write-Host " C2) Definir Plano de Energia Otimizado (Set-OptimizedPowerPlan)"
-        Write-Host " D2) Definir Tema de Desempenho (Set-PerformanceTheme)"
-        Write-Host " E2) Definir Performance Visual (Set-VisualPerformance)"
-        Write-Host " F2) Exibir Menu de AutoLogin (Show-AutoLoginMenu)"
+        Write-Host " C) Desabilitar UAC (Disable-UAC)"
+        Write-Host " D) Habilitar Outras Atualizações Microsoft (Enable-OtherMicrosoftUpdates)"
+        Write-Host " E) Habilitar Opções de Energia Avançadas (Enable-PowerOptions)"
+        Write-Host " F) Habilitar Reinício de Apps Após Reboot (Enable-RestartAppsAfterReboot)"
+        Write-Host " G) Habilitar Sudo (Enable-Sudo)"
+        Write-Host " H) Habilitar Reforço do Windows (Enable-WindowsHardening)"
+        Write-Host " I) Habilitar Windows Update Rápido (Enable-WindowsUpdateFast)"
+        Write-Host " J) Aplicar Tweaks Extras (Grant-ExtraTweaks)"
+        Write-Host " K) Reforçar Macros do Office (Grant-HardenOfficeMacros)"
+        Write-Host " L) Criar Pasta Forçada (New-FolderForced)"
+        Write-Host " M) Criar Ponto de Restauração do Sistema (New-SystemRestorePoint)"
+        Write-Host " N) Otimizar Volumes (Desfragmentação/Trim) (Optimize-Volumes)"
+        Write-Host " O) Realizar Otimizações do Sistema (Perform-SystemOptimizations)"
+        Write-Host " P) Renomear Notebook (Rename-Notebook)"
+        Write-Host " Q) Definir Plano de Energia Otimizado (Set-OptimizedPowerPlan)"
         Write-Host ""
         Write-Host " A) Executar Todas as Tarefas em Sequência"
-        Write-Host " Y2) Voltar ao Menu Anterior" # Usando Y2 para evitar conflito com Y de função
-        Write-Host " Z2) Voltar ao Menu Principal" # Usando Z2 para evitar conflito com Z de função
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
         Write-Host "==================================================="
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'B' { Apply-GPORegistrySettings; Show-SuccessMessage; Suspend-Script }
-            'C' { Apply-UITweaks; Show-SuccessMessage; Suspend-Script }
-            'D' { Disable-ActionCenter-Notifications; Show-SuccessMessage; Suspend-Script }
-            'E' { Disable-Cortana-AndSearch; Show-SuccessMessage; Suspend-Script }
-            'F' { Disable-UAC; Show-SuccessMessage; Suspend-Script }
-            'G' { Enable-ClassicContextMenu; Show-SuccessMessage; Suspend-Script }
-            'H' { Enable-ClipboardHistory; Show-SuccessMessage; Suspend-Script }
-            'I' { Enable-DarkTheme; Show-SuccessMessage; Suspend-Script }
-            'J' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage; Suspend-Script }
-            'K' { Enable-PowerOptions; Show-SuccessMessage; Suspend-Script }
-            'L' { Enable-PrivacyHardening; Show-SuccessMessage; Suspend-Script }
-            'M' { Enable-RestartAppsAfterReboot; Show-SuccessMessage; Suspend-Script }
-            'N' { Enable-Sudo; Show-SuccessMessage; Suspend-Script }
-            'O' { Enable-TaskbarEndTask; Show-SuccessMessage; Suspend-Script }
-            'P' { Enable-TaskbarSeconds; Show-SuccessMessage; Suspend-Script }
-            'Q' { Enable-WindowsHardening; Show-SuccessMessage; Suspend-Script }
-            'R' { Enable-WindowsUpdateFast; Show-SuccessMessage; Suspend-Script }
-            'S' { Grant-ControlPanelTweaks; Show-SuccessMessage; Suspend-Script }
-            'T' { Grant-ExtraTweaks; Show-SuccessMessage; Suspend-Script }
-            'U' { Grant-HardenOfficeMacros; Show-SuccessMessage; Suspend-Script }
-            'V' { Grant-PrivacyTweaks; Show-SuccessMessage; Suspend-Script }
-            'W' { New-FolderForced; Show-SuccessMessage; Suspend-Script }
-            'X' { New-SystemRestorePoint; Show-SuccessMessage; Suspend-Script }
-            'Y' { Optimize-ExplorerPerformance; Show-SuccessMessage; Suspend-Script }
-            'Z' { Optimize-Volumes; Show-SuccessMessage; Suspend-Script }
-            # Opções além de Z: exigem uma abordagem diferente, como A2, B2...
-            # Para evitar complexidade excessiva com o ReadKey, é melhor limitar o número de funções por submenu
-            # ou usar um esquema de paginação/outra forma de seleção.
-            # Por enquanto, vou mapear as funções restantes usando A2, B2 etc, mas o ReadKey padrão não lida com isso diretamente.
-            # Isso pode exigir que a seleção seja feita como "A2", e o ReadKey original só pega um caractere.
-            # Para manter "No Enter", a abordagem A2 etc. é complexa.
-            # Sugiro limitar a ~24 funções por submenu ou reavaliar "todas as opções devem ser letras".
-            # Para este exemplo, vou manter o mapeamento conceitual e deixarei um aviso.
-            'A2' { Perform-SystemOptimizations; Show-SuccessMessage; Suspend-Script }
-            'B2' { Rename-Notebook; Show-SuccessMessage; Suspend-Script }
-            'C2' { Set-OptimizedPowerPlan; Show-SuccessMessage; Suspend-Script }
-            'D2' { Set-PerformanceTheme; Show-SuccessMessage; Suspend-Script }
-            'E2' { Set-VisualPerformance; Show-SuccessMessage; Suspend-Script }
-            'F2' { Show-AutoLoginMenu; Show-SuccessMessage; Suspend-Script }
+            'C' { Disable-UAC; Show-SuccessMessage; Suspend-Script }
+            'D' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage; Suspend-Script }
+            'E' { Enable-PowerOptions; Show-SuccessMessage; Suspend-Script }
+            'F' { Enable-RestartAppsAfterReboot; Show-SuccessMessage; Suspend-Script }
+            'G' { Enable-Sudo; Show-SuccessMessage; Suspend-Script }
+            'H' { Enable-WindowsHardening; Show-SuccessMessage; Suspend-Script }
+            'I' { Enable-WindowsUpdateFast; Show-SuccessMessage; Suspend-Script }
+            'J' { Grant-ExtraTweaks; Show-SuccessMessage; Suspend-Script }
+            'K' { Grant-HardenOfficeMacros; Show-SuccessMessage; Suspend-Script }
+            'L' { New-FolderForced; Show-SuccessMessage; Suspend-Script }
+            'M' { New-SystemRestorePoint; Show-SuccessMessage; Suspend-Script }
+            'N' { Optimize-Volumes; Show-SuccessMessage; Suspend-Script }
+            'O' { Perform-SystemOptimizations; Show-SuccessMessage; Suspend-Script }
+            'P' { Rename-Notebook; Show-SuccessMessage; Suspend-Script }
+            'Q' { Set-OptimizedPowerPlan; Show-SuccessMessage; Suspend-Script }
             'A' {
-                Write-Log "Executando todas as tarefas de Tweaks em sequência..." -Type Info
-                Apply-GPORegistrySettings; Show-SuccessMessage
-                Apply-UITweaks; Show-SuccessMessage
-                Disable-ActionCenter-Notifications; Show-SuccessMessage
-                Disable-Cortana-AndSearch; Show-SuccessMessage
-                Disable-UAC; Show-SuccessMessage
-                Enable-ClassicContextMenu; Show-SuccessMessage
-                Enable-ClipboardHistory; Show-SuccessMessage
-                Enable-DarkTheme; Show-SuccessMessage
-                Enable-OtherMicrosoftUpdates; Show-SuccessMessage
-                Enable-PowerOptions; Show-SuccessMessage
-                Enable-PrivacyHardening; Show-SuccessMessage
-                Enable-RestartAppsAfterReboot; Show-SuccessMessage
-                Enable-Sudo; Show-SuccessMessage
-                Enable-TaskbarEndTask; Show-SuccessMessage
-                Enable-TaskbarSeconds; Show-SuccessMessage
-                Enable-WindowsHardening; Show-SuccessMessage
-                Enable-WindowsUpdateFast; Show-SuccessMessage
-                Grant-ControlPanelTweaks; Show-SuccessMessage
-                Grant-ExtraTweaks; Show-SuccessMessage
-                Grant-HardenOfficeMacros; Show-SuccessMessage
-                Grant-PrivacyTweaks; Show-SuccessMessage
-                New-FolderForced; Show-SuccessMessage
-                New-SystemRestorePoint; Show-SuccessMessage
-                Optimize-ExplorerPerformance; Show-SuccessMessage
-                Optimize-Volumes; Show-SuccessMessage
-                Perform-SystemOptimizations; Show-SuccessMessage
-                Rename-Notebook; Show-SuccessMessage
-                Set-OptimizedPowerPlan; Show-SuccessMessage
-                Set-PerformanceTheme; Show-SuccessMessage
-                Set-VisualPerformance; Show-SuccessMessage
-                Show-AutoLoginMenu; Show-SuccessMessage
+                Show-SystemTweaksMenu 'RunAll'
                 Suspend-Script
             }
-            'Y2' { break } # Voltar ao menu anterior
-            'Z2' { Show-MainMenu; return } # Voltar ao menu principal
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
             default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
         }
     } while ($true)
 }
+
+# --- Fim dos Novos Sub-submenus para Tweaks ---
 
 function Show-UndoMenu {
     do {
@@ -3754,7 +3857,7 @@ function Show-UndoMenu {
     } while ($true)
 }
 
-function Show-WindowsUpdateMenu {
+function Show-WindowsUpdateMenu { # Reutilizando a função que eu tinha antes
     do {
         clear-host
         Write-Host "==================================================="
@@ -3792,7 +3895,6 @@ function Show-WindowsUpdateMenu {
         }
     } while ($true)
 }
-
 #endregion
 
 # -------------------------------------------------------------------------
