@@ -1,6 +1,4 @@
 #region → PARÂMETROS DE EXECUÇÃO (Manter para compatibilidade se o script for chamado com parâmetros)
-
-[CmdletBinding()]
 param (
     [Parameter(HelpMessage="Executa todas as rotinas de limpeza.")]
     [bool]$RunAllCleanup = $false,
