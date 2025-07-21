@@ -3230,131 +3230,127 @@ function New-FolderForced {
 
 #region MENUS
 # ================================================
-# MENU INTERATIVO
+# MENU INTERATIVO REVISADO
 # ================================================
 
-function Show-BloatwareMenu {
+function Show-Menu {
+    param($Title, $Options)
     Clear-Host
-    Write-Host "=== BLOATWARE MENU ===" -ForegroundColor Cyan
-    @"
-1) Remover todos bloatwares
-2) Forçar remoção do OneDrive
-3) Remover Copilot
-4) Desativar Recall
-A) Executar tudo
-X) Voltar
-Z) Menu Principal
-"@ | Write-Host
+    Write-Host "=== $Title ===" -ForegroundColor Cyan
+    $Options | ForEach-Object { Write-Host $_ }
     return Read-Host 'Escolha uma opção'
 }
 
-function Show-TweaksMenu {
-    Clear-Host
-    Write-Host "=== TWEAKS MENU ===" -ForegroundColor Cyan
-    @"
-1) Aplicar privacy tweaks
-2) Windows Update
-A) Executar tudo
-X) Voltar
-Z) Menu Principal
-"@ | Write-Host
-    return Read-Host 'Escolha uma opção'
+function Main-Menu {
+    $opts = @(
+        '1) Bloatware'
+        '2) Tweaks'
+        '3) Redes'
+        '4) Apps'
+        '5) Diagnósticos'
+        '6) Undo'
+        'R) Reiniciar'
+        'S) Desligar'
+        '0) Sair'
+    )
+    return Show-Menu 'SCRIPT SUPREMO - MENU PRINCIPAL' $opts
 }
 
-function Show-RedesMenu {
-    Clear-Host
-    Write-Host "=== REDES MENU ===" -ForegroundColor Cyan
-    @"
-1) Otimização de redes
-A) Executar tudo
-X) Voltar
-Z) Menu Principal
-"@ | Write-Host
-    return Read-Host 'Escolha uma opção'
+function Bloatware-Menu {
+    $opts = @(
+        '1) Remover todos bloatwares'
+        '2) Forçar remoção do OneDrive'
+        '3) Remover Copilot'
+        '4) Desativar Recall'
+        'A) Executar tudo'
+        'X) Voltar'
+        'Z) Menu Principal'
+    )
+    return Show-Menu 'BLOATWARE MENU' $opts
 }
 
-function Show-AppsMenu {
-    Clear-Host
-    Write-Host "=== APPS MENU ===" -ForegroundColor Cyan
-    @"
-1) Instalar apps
-A) Executar tudo
-X) Voltar
-Z) Menu Principal
-"@ | Write-Host
-    return Read-Host 'Escolha uma opção'
+function Tweaks-Menu {
+    $opts = @(
+        '1) Privacy Tweaks'
+        '2) Windows Update'
+        'A) Executar tudo'
+        'X) Voltar'
+        'Z) Menu Principal'
+    )
+    return Show-Menu 'TWEAKS MENU' $opts
 }
 
-function Show-DiagnosticsMenu {
-    Clear-Host
-    Write-Host "=== DIAGNÓSTICOS MENU ===" -ForegroundColor Cyan
-    @"
-1) Executar diagnósticos
-A) Executar tudo
-X) Voltar
-Z) Menu Principal
-"@ | Write-Host
-    return Read-Host 'Escolha uma opção'
+function Redes-Menu {
+    $opts = @(
+        '1) Otimização de rede'
+        'A) Executar tudo'
+        'X) Voltar'
+        'Z) Menu Principal'
+    )
+    return Show-Menu 'REDES MENU' $opts
 }
 
-function Show-UndoMenu {
-    Clear-Host
-    Write-Host "=== UNDO MENU ===" -ForegroundColor Cyan
-    @"
-1) Restaurar sistema (ponto de restauração)
-A) Executar tudo
-X) Voltar
-Z) Menu Principal
-"@ | Write-Host
-    return Read-Host 'Escolha uma opção'
+function Apps-Menu {
+    $opts = @(
+        '1) Instalar apps'
+        'A) Executar tudo'
+        'X) Voltar'
+        'Z) Menu Principal'
+    )
+    return Show-Menu 'APPS MENU' $opts
 }
 
-function Show-MainMenu {
-    Clear-Host
-    Write-Host "=== SCRIPT SUPREMO - MENU PRINCIPAL ===" -ForegroundColor Cyan
-    @"
-1) Bloatware
-2) Tweaks
-3) Redes
-4) Apps
-5) Diagnósticos
-6) Undo
-R) Reiniciar
-S) Desligar
-0) Sair
-"@ | Write-Host
-    return Read-Host 'Escolha uma opção'
+function Diagnostics-Menu {
+    $opts = @(
+        '1) Executar diagnósticos'
+        'A) Executar tudo'
+        'X) Voltar'
+        'Z) Menu Principal'
+    )
+    return Show-Menu 'DIAGNÓSTICOS MENU' $opts
 }
 
-# Loop principal
-do {
-    $opt = Show-MainMenu
-    switch ($opt.ToUpper()) {
-        '1' {
-            do {
-                $sub = Show-BloatwareMenu
-                switch ($sub.ToUpper()) {
+function Undo-Menu {
+    $opts = @(
+        '1) Restaurar ponto de restauração'
+        'A) Executar tudo'
+        'X) Voltar'
+        'Z) Menu Principal'
+    )
+    return Show-Menu 'UNDO MENU' $opts
+}
+
+# Loop principal do menu
+while ($true) {
+    $choice = Main-Menu
+    switch ($choice.ToUpper()) {
+
+        '1' {  # Bloatware submenu
+            while ($true) {
+                $c = Bloatware-Menu
+                switch ($c.ToUpper()) {
                     '1' { Invoke-RemoveAllBloatware }
-                    '2' { Invoke-OneDriveRemoval }
+                    '2' { Invoke-ForceOneDriveRemoval }
                     '3' { Invoke-RemoveCopilot }
                     '4' { Invoke-DisableRecall }
                     'A' {
                         Invoke-RemoveAllBloatware
-                        Invoke-OneDriveRemoval
+                        Invoke-ForceOneDriveRemoval
                         Invoke-RemoveCopilot
                         Invoke-DisableRecall
                     }
-                    'X' { break }
-                    'Z' { goto Main }
+                    'X' { break }           # volta ao main
+                    'Z' { break 2 }         # sai dois níveis: submenu + main loop
                     default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
                 }
-                if ($sub.ToUpper() -in '1','2','3','4','A') { Read-Host 'ENTER para continuar' }
-            } while ($true)
+                Read-Host 'ENTER para continuar'
+            }
         }
-        '2' {
-            do {
-                $sub = Show-TweaksMenu
-                switch ($sub.ToUpper()) {
+
+        '2' {  # Tweaks submenu
+            while ($true) {
+                $c = Tweaks-Menu
+                switch ($c.ToUpper()) {
                     '1' { Invoke-PrivacyTweaks }
                     '2' { Invoke-RunWindowsUpdate }
                     'A' {
@@ -3362,69 +3358,75 @@ do {
                         Invoke-RunWindowsUpdate
                     }
                     'X' { break }
-                    'Z' { goto Main }
+                    'Z' { break 2 }
                     default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
                 }
-                if ($sub.ToUpper() -in '1','2','A') { Read-Host 'ENTER para continuar' }
-            } while ($true)
+                Read-Host 'ENTER para continuar'
+            }
         }
-        '3' {
-            do {
-                $sub = Show-RedesMenu
-                switch ($sub.ToUpper()) {
+
+        '3' {  # Redes submenu
+            while ($true) {
+                $c = Redes-Menu
+                switch ($c.ToUpper()) {
                     '1' { Invoke-NetworkOptimization }
                     'A' { Invoke-NetworkOptimization }
                     'X' { break }
-                    'Z' { goto Main }
+                    'Z' { break 2 }
                     default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
                 }
-                if ($sub.ToUpper() -in '1','A') { Read-Host 'ENTER para continuar' }
-            } while ($true)
+                Read-Host 'ENTER para continuar'
+            }
         }
-        '4' {
-            do {
-                $sub = Show-AppsMenu
-                switch ($sub.ToUpper()) {
+
+        '4' {  # Apps submenu
+            while ($true) {
+                $c = Apps-Menu
+                switch ($c.ToUpper()) {
                     '1' { Invoke-AppInstallation }
                     'A' { Invoke-AppInstallation }
                     'X' { break }
-                    'Z' { goto Main }
+                    'Z' { break 2 }
                     default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
                 }
-                if ($sub.ToUpper() -in '1','A') { Read-Host 'ENTER para continuar' }
-            } while ($true)
+                Read-Host 'ENTER para continuar'
+            }
         }
-        '5' {
-            do {
-                $sub = Show-DiagnosticsMenu
-                switch ($sub.ToUpper()) {
+
+        '5' {  # Diagnostics submenu
+            while ($true) {
+                $c = Diagnostics-Menu
+                switch ($c.ToUpper()) {
                     '1' { Invoke-Diagnostics }
                     'A' { Invoke-Diagnostics }
                     'X' { break }
-                    'Z' { goto Main }
+                    'Z' { break 2 }
                     default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
                 }
-                if ($sub.ToUpper() -in '1','A') { Read-Host 'ENTER para continuar' }
-            } while ($true)
+                Read-Host 'ENTER para continuar'
+            }
         }
-        '6' {
-            do {
-                $sub = Show-UndoMenu
-                switch ($sub.ToUpper()) {
+
+        '6' {  # Undo submenu
+            while ($true) {
+                $c = Undo-Menu
+                switch ($c.ToUpper()) {
                     '1' { 
-                        # Restaurar sistema via ponto de restauração
-                        Checkpoint-Computer -RestorePointType "APPLICATION_INSTALL" -Description "Undo via menu"
+                        Write-Log -Message 'Restaurando ponto de restauração...' -Type Info
+                        Checkpoint-Computer -Description 'Undo via menu' -RestorePointType 'APPLICATION_UNINSTALL'
                     }
                     'A' {
-                        Checkpoint-Computer -RestorePointType "APPLICATION_INSTALL" -Description "Undo via menu"
+                        Write-Log -Message 'Restaurando ponto de restauração...' -Type Info
+                        Checkpoint-Computer -Description 'Undo via menu' -RestorePointType 'APPLICATION_UNINSTALL'
                     }
                     'X' { break }
-                    'Z' { goto Main }
+                    'Z' { break 2 }
                     default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
                 }
-                if ($sub.ToUpper() -in '1','A') { Read-Host 'ENTER para continuar' }
-            } while ($true)
+                Read-Host 'ENTER para continuar'
+            }
         }
+
         'R' {
             Write-Host 'Reiniciando...' -ForegroundColor Cyan
             Restart-Computer -Force
@@ -3433,11 +3435,13 @@ do {
             Write-Host 'Desligando...' -ForegroundColor Cyan
             Stop-Computer -Force
         }
-        '0' { break }
+        '0' {
+            Write-Host 'Saindo do script...' -ForegroundColor Cyan
+            break
+        }
         default {
-            Write-Host 'Opção inválida no menu principal' -ForegroundColor Yellow
+            Write-Host 'Opção inválida no menu principal.' -ForegroundColor Yellow
         }
     }
-    :Main
-} while ($true)
+}
 #endregion
