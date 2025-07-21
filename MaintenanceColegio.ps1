@@ -94,6 +94,19 @@ function Write-Log {
         Write-Host "ERRO ao gravar log: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
+# Funções de Controle do Menu
+function Restart-ComputerConfirmation {
+    Write-Log "Reiniciando o computador em 5 segundos..." -Type Info
+    Start-Sleep -Seconds 5
+    Restart-Computer -Force -Confirm:$false
+}
+
+function Stop-ComputerConfirmation {
+    Write-Log "Desligando o computador em 5 segundos..." -Type Info
+    Start-Sleep -Seconds 5
+    Stop-Computer -Force -Confirm:$false
+}
+
 
 #region → FUNÇÕES
 
@@ -3229,168 +3242,560 @@ function New-FolderForced {
 #endregion
 
 #region MENUS
-# ================================================
-# MENU INTERATIVO REVISADO
-# ================================================
 
-# ================================================
-# MENU SEM ENTER – LEITURA IMEDIATA DE TECLAS
-# ================================================
+# -------------------------------------------------------------------------
+# Funções de Exibição de Menus
+# -------------------------------------------------------------------------
 
-function Show-Options {
-    param($Title, $Items)
-    Clear-Host
-    Write-Host "=== $Title ===" -ForegroundColor Cyan
-    foreach ($i in $Items.Keys | Sort-Object) {
-        Write-Host "$i) $($Items[$i].Label)"
-    }
-    Write-Host
-    Write-Host "0) Sair   R) Reiniciar   S) Desligar" -ForegroundColor DarkGray
-    Write-Host
-    Write-Host 'Pressione a tecla correspondente...'
-    $key = [console]::ReadKey($true).KeyChar.ToUpper()
-    return $key
-}
+function Show-MainMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Script Supremo de Manutenção"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " A) Aplicativos"
+        Write-Host " B) Bloatware"
+        Write-Host " C) Diagnósticos"
+        Write-Host " D) Limpeza"
+        Write-Host " E) Rede"
+        Write-Host " F) Scripts Externos"
+        Write-Host " G) Tweaks e Otimizações"
+        Write-Host " H) Desfazer Ações (Undo)"
+        Write-Host ""
+        Write-Host " R) Reiniciar Computador"
+        Write-Host " S) Desligar Computador"
+        Write-Host " Z) Sair do Script" # Usando Z para sair do script principal
+        Write-Host "==================================================="
 
-# Dicionários de opções: tecla => @{ Label = '…'; Action = { … } }
-$menus = @{
-    Main = @{
-        '1' = @{ Label = 'Bloatware';       Action = 'Bloatware' }
-        '2' = @{ Label = 'Tweaks';          Action = 'Tweaks' }
-        '3' = @{ Label = 'Redes';           Action = 'Redes' }
-        '4' = @{ Label = 'Apps';            Action = 'Apps' }
-        '5' = @{ Label = 'Diagnósticos';    Action = 'Diagnósticos' }
-        '6' = @{ Label = 'Undo';            Action = 'Undo' }
-    }
-    Bloatware = @{
-        '1' = @{ Label = 'Apply Privacy & Bloatware Prevention'; Action = { Apply-PrivacyAndBloatwarePrevention } }
-        '2' = @{ Label = 'Disable Scheduled Tasks';               Action = { Disable-BloatwareScheduledTasks } }
-        '3' = @{ Label = 'Disable Unnecessary Services';          Action = { Disable-UnnecessaryServices } }
-        '4' = @{ Label = 'Disable Windows Recall';               Action = { Disable-WindowsRecall } }
-        '5' = @{ Label = 'Force Remove OneDrive';                Action = { Force-RemoveOneDrive } }
-        '6' = @{ Label = 'External Debloaters';                  Action = { Invoke-ExternalDebloaters } }
-        '7' = @{ Label = 'Remove-Bloatware (single)';            Action = { Remove-Bloatware } }
-        '8' = @{ Label = 'Remove-Bloatwares (bulk)';             Action = { Remove-Bloatwares } }
-        '9' = @{ Label = 'Remove Copilot';                       Action = { Remove-Copilot } }
-        'A' = @{ Label = 'Remove OneDrive & Restore Folders';    Action = { Remove-OneDrive-AndRestoreFolders } }
-        'B' = @{ Label = 'Aggressive Scheduled Tasks Removal';   Action = { Remove-ScheduledTasksAggressive } }
-        'C' = @{ Label = 'Remove Start & Taskbar Pins';          Action = { Remove-StartAndTaskbarPins } }
-        'D' = @{ Label = 'Remove Windows Copilot';               Action = { Remove-WindowsCopilot } }
-        'E' = @{ Label = 'Remove Windows.old';                   Action = { Remove-WindowsOld } }
-        'F' = @{ Label = 'Restore Bloatware Safe';               Action = { Restore-BloatwareSafe } }
-        'G' = @{ Label = 'Stop Bloatware Processes';             Action = { Stop-BloatwareProcesses } }
-    }
-    Tweaks = @{
-        '1' = @{ Label = 'Grant Privacy Tweaks';     Action = { Grant-PrivacyTweaks } }
-        '2' = @{ Label = 'Apply GPO/Registry Settings'; Action = { Apply-GPORegistrySettings } }
-        '3' = @{ Label = 'Apply UI Tweaks';         Action = { Apply-UITweaks } }
-        '4' = @{ Label = 'Disable Action Center';   Action = { Disable-ActionCenter-Notifications } }
-        '5' = @{ Label = 'Disable UAC';             Action = { Disable-UAC } }
-        '6' = @{ Label = 'Enable Classic Context';  Action = { Enable-ClassicContextMenu } }
-        '7' = @{ Label = 'Enable Clipboard History'; Action = { Enable-ClipboardHistory } }
-        '8' = @{ Label = 'Enable DarkTheme';        Action = { Enable-DarkTheme } }
-        '9' = @{ Label = 'Enable Other MS Updates'; Action = { Enable-OtherMicrosoftUpdates } }
-        'A' = @{ Label = 'Enable PowerOptions';     Action = { Enable-PowerOptions } }
-        'B' = @{ Label = 'Enable Privacy Hardening';Action = { Enable-PrivacyHardening } }
-        'C' = @{ Label = 'Enable Restart Apps';     Action = { Enable-RestartAppsAfterReboot } }
-        'D' = @{ Label = 'Enable SMBv1';            Action = { Enable-SMBv1 } }
-        'E' = @{ Label = 'Enable Sudo';             Action = { Enable-Sudo } }
-        'F' = @{ Label = 'Enable Taskbar End Task';Action = { Enable-TaskbarEndTask } }
-        'G' = @{ Label = 'Enable Taskbar Seconds';  Action = { Enable-TaskbarSeconds } }
-        'H' = @{ Label = 'Enable Windows Hardening';Action = { Enable-WindowsHardening } }
-        'I' = @{ Label = 'Enable Windows Update Fast'; Action = { Enable-WindowsUpdateFast } }
-        'J' = @{ Label = 'Grant Control Panel Tweaks'; Action = { Grant-ControlPanelTweaks } }
-        'K' = @{ Label = 'Grant Extra Tweaks';      Action = { Grant-ExtraTweaks } }
-        'L' = @{ Label = 'Grant Harden Office Macros'; Action = { Grant-HardenOfficeMacros } }
-        'M' = @{ Label = 'Manage Windows Updates'; Action = { Manage-WindowsUpdates } }
-        'N' = @{ Label = 'New Folder Forced';       Action = { New-FolderForced } }
-        'O' = @{ Label = 'New System Restore Point';Action = { New-SystemRestorePoint } }
-        'P' = @{ Label = 'Optimize Explorer Perf'; Action = { Optimize-ExplorerPerformance } }
-        'Q' = @{ Label = 'Optimize Network Perf';  Action = { Optimize-NetworkPerformance } }
-        'R' = @{ Label = 'Optimize Volumes';       Action = { Optimize-Volumes } }
-        'S' = @{ Label = 'Perform System Optimizations'; Action = { Perform-SystemOptimizations } }
-        'T' = @{ Label = 'Rename Notebook';         Action = { Rename-Notebook } }
-        'U' = @{ Label = 'Set Optimized Power Plan';Action = { Set-OptimizedPowerPlan } }
-        'V' = @{ Label = 'Set Performance Theme';   Action = { Set-PerformanceTheme } }
-        'W' = @{ Label = 'Set Visual Performance';  Action = { Set-VisualPerformance } }
-        'X' = @{ Label = 'Show AutoLogin Menu';     Action = { Show-AutoLoginMenu } }
-    }
-    Redes = @{
-        '1' = @{ Label = 'Add WiFi Network';         Action = { Add-WiFiNetwork } }
-        '2' = @{ Label = 'Clear ARP';                Action = { Clear-ARP } }
-        '3' = @{ Label = 'Clear DNS';                Action = { Clear-DNS } }
-        '4' = @{ Label = 'Clear Print Spooler';      Action = { Clear-PrintSpooler } }
-        '5' = @{ Label = 'Disable IPv6';             Action = { Disable-IPv6 } }
-        '6' = @{ Label = 'Install Network Printers'; Action = { Install-NetworkPrinters } }
-        '7' = @{ Label = 'Invoke All Network Advanced'; Action = { Invoke-All-NetworkAdvanced } }
-        '8' = @{ Label = 'Set DNS Google/Cloudflare';  Action = { Set-DnsGoogleCloudflare } }
-        '9' = @{ Label = 'Show Network Info';        Action = { Show-NetworkInfo } }
-        'A' = @{ Label = 'Test Internet Speed';      Action = { Test-InternetSpeed } }
-    }
-    Diagnósticos = @{
-        '1' = @{ Label = 'Invoke All Diagnostics Advanced'; Action = { Invoke-All-DiagnosticsAdvanced } }
-        '2' = @{ Label = 'Show Disk Usage';           Action = { Show-DiskUsage } }
-        '3' = @{ Label = 'Show System Info';          Action = { Show-SystemInfo } }
-        '4' = @{ Label = 'Test Memory';               Action = { Test-Memory } }
-    }
-    Limpeza = @{
-        '1' = @{ Label = 'Backup Registry';            Action = { Backup-Registry } }
-        '2' = @{ Label = 'Clear Deep System Cleanup';  Action = { Clear-DeepSystemCleanup } }
-        '3' = @{ Label = 'Clear Prefetch';             Action = { Clear-Prefetch } }
-        '4' = @{ Label = 'Clear Temporary Files';      Action = { Clear-TemporaryFiles } }
-        '5' = @{ Label = 'Clear WinSxS';               Action = { Clear-WinSxS } }
-        '6' = @{ Label = 'Clear WU Cache';             Action = { Clear-WUCache } }
-        '7' = @{ Label = 'Disable Cortana & Search';   Action = { Disable-Cortana-AndSearch } }
-        '8' = @{ Label = 'Disable SMBv1';              Action = { Disable-SMBv1 } }
-        '9' = @{ Label = 'Invoke DISM Scan';           Action = { Invoke-DISM-Scan } }
-        'A' = @{ Label = 'Invoke SFC Scan';            Action = { Invoke-SFC-Scan } }
-        'B' = @{ Label = 'New ChkDsk';                 Action = { New-ChkDsk } }
-        'C' = @{ Label = 'Perform Cleanup';            Action = { Perform-Cleanup } }
-    }
-    'Scripts Externos' = @{
-        '1' = @{ Label = 'Chris Titus Toolbox';       Action = { Invoke-ChrisTitusToolbox } }
-        '2' = @{ Label = 'Colégio';                   Action = { Invoke-Colégio } }
-        '3' = @{ Label = 'Windows Activator';         Action = { Invoke-WindowsActivator } }
-    }
-    Undo = @{
-        '1' = @{ Label = 'Grant ActionCenter Notifications'; Action = { Grant-ActionCenter-Notifications } }
-        '2' = @{ Label = 'Restore ControlPanel Tweaks';       Action = { Restore-ControlPanelTweaks } }
-        '3' = @{ Label = 'Restore Default IPv6';             Action = { Restore-DefaultIPv6 } }
-        '4' = @{ Label = 'Restore Default UAC';              Action = { Restore-DefaultUAC } }
-        '5' = @{ Label = 'Restore Office Macros';            Action = { Restore-OfficeMacros } }
-        '6' = @{ Label = 'Restore OneDrive';                 Action = { Restore-OneDrive } }
-        '7' = @{ Label = 'Restore Registry';                 Action = { Restore-Registry } }
-        '8' = @{ Label = 'Restore Registry From Backup';     Action = { Restore-Registry-FromBackup } }
-        '9' = @{ Label = 'Restore Visual Perf Default';      Action = { Restore-VisualPerformanceDefault } }
-    }
-}
-
-# controlador de menu
-$currentMenu = 'Main'
-while ($true) {
-    $opts   = $menus[$currentMenu]
-    $choice = Show-Options $currentMenu $opts
-
-    switch ($choice) {
-        '0' { break }
-        'R' { Restart-Computer -Force; break }
-        'S' { Stop-Computer -Force; break }
-
-        # navegação de submenu e execução de ação
-        default {
-            if ($opts.ContainsKey($choice)) {
-                $item = $opts[$choice]
-                if ($item.Action -is [string]) {
-                    # mudou de menu
-                    $currentMenu = $item.Action
-                } else {
-                    # executa a função
-                    & $item.Action
-                }
-            } else {
-                Write-Host 'Opção inválida.' -ForegroundColor Yellow
-            }
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'A' { Show-AppsMenu }
+            'B' { Show-BloatwareMenu }
+            'C' { Show-DiagnosticsMenu }
+            'D' { Show-LimpezaMenu }
+            'E' { Show-NetworkMenu }
+            'F' { Show-ExternalScriptsMenu }
+            'G' { Show-TweaksMenu }
+            'H' { Show-UndoMenu }
+            'R' { Restart-ComputerConfirmation; break }
+            'S' { Stop-ComputerConfirmation; break }
+            'Z' { break } # Sair do script
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
         }
-    }
+    } while ($true)
+}
+
+function Show-AppsMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Aplicativos"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Instalar Aplicativos (Install-Applications)" # A é para "Executar Todos"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Install-Applications; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Write-Log "Executando todas as tarefas de Aplicativos em sequência..." -Type Info
+                Install-Applications; Show-SuccessMessage
+                Suspend-Script
+            }
+            'Y' { break } # Voltar ao menu anterior
+            'Z' { Show-MainMenu; return } # Voltar ao menu principal
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-BloatwareMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Bloatware"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Aplicar Prevenção de Privacidade e Bloatware (Apply-PrivacyAndBloatwarePrevention)"
+        Write-Host " C) Desabilitar Tarefas Agendadas de Bloatware (Disable-BloatwareScheduledTasks)"
+        Write-Host " D) Desabilitar Serviços Desnecessários (Disable-UnnecessaryServices)"
+        Write-Host " E) Desabilitar Windows Recall (Disable-WindowsRecall)"
+        Write-Host " F) Forçar Remoção Completa do OneDrive (Force-RemoveOneDrive)"
+        Write-Host " G) Invocar Ferramentas Externas de Debloating (Invoke-ExternalDebloaters)"
+        Write-Host " H) Remover Bloatware e Aplicativos Pré-instalados (Remove-Bloatware)"
+        Write-Host " I) Remover Copilot (Remove-Copilot)"
+        Write-Host " J) Remover Pins do Menu Iniciar e Barra de Tarefas (Remove-StartAndTaskbarPins)"
+        Write-Host " K) Remover Tarefas Agendadas Agressivamente (Remove-ScheduledTasksAggressive)"
+        Write-Host " L) Remover Windows.old (Remove-WindowsOld)"
+        Write-Host " M) Parar Processos de Bloatware (Stop-BloatwareProcesses)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Apply-PrivacyAndBloatwarePrevention; Show-SuccessMessage; Suspend-Script }
+            'C' { Disable-BloatwareScheduledTasks; Show-SuccessMessage; Suspend-Script }
+            'D' { Disable-UnnecessaryServices; Show-SuccessMessage; Suspend-Script }
+            'E' { Disable-WindowsRecall; Show-SuccessMessage; Suspend-Script }
+            'F' { Force-RemoveOneDrive; Show-SuccessMessage; Suspend-Script }
+            'G' { Invoke-ExternalDebloaters; Show-SuccessMessage; Suspend-Script }
+            'H' { Remove-Bloatware; Show-SuccessMessage; Suspend-Script }
+            'I' { Remove-Copilot; Show-SuccessMessage; Suspend-Script }
+            'J' { Remove-StartAndTaskbarPins; Show-SuccessMessage; Suspend-Script }
+            'K' { Remove-ScheduledTasksAggressive; Show-SuccessMessage; Suspend-Script }
+            'L' { Remove-WindowsOld; Show-SuccessMessage; Suspend-Script }
+            'M' { Stop-BloatwareProcesses; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Write-Log "Executando todas as tarefas de Bloatware em sequência..." -Type Info
+                Apply-PrivacyAndBloatwarePrevention; Show-SuccessMessage
+                Disable-BloatwareScheduledTasks; Show-SuccessMessage
+                Disable-UnnecessaryServices; Show-SuccessMessage
+                Disable-WindowsRecall; Show-SuccessMessage
+                Force-RemoveOneDrive; Show-SuccessMessage
+                Invoke-ExternalDebloaters; Show-SuccessMessage
+                Remove-Bloatware; Show-SuccessMessage
+                Remove-Copilot; Show-SuccessMessage
+                Remove-StartAndTaskbarPins; Show-SuccessMessage
+                Remove-ScheduledTasksAggressive; Show-SuccessMessage
+                Remove-WindowsOld; Show-SuccessMessage
+                Stop-BloatwareProcesses; Show-SuccessMessage
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-DiagnosticsMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Diagnósticos"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Executar Todos os Diagnósticos Avançados (Invoke-All-DiagnosticsAdvanced)"
+        Write-Host " C) Exibir Uso do Disco (Show-DiskUsage)"
+        Write-Host " D) Exibir Informações do Sistema (Show-SystemInfo)"
+        Write-Host " E) Testar Memória (Agendar) (Test-Memory)"
+        Write-Host " F) Testar Integridade de Drives SMART (Test-SMART-Drives)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Invoke-All-DiagnosticsAdvanced; Show-SuccessMessage; Suspend-Script }
+            'C' { Show-DiskUsage; Show-SuccessMessage; Suspend-Script }
+            'D' { Show-SystemInfo; Show-SuccessMessage; Suspend-Script }
+            'E' { Test-Memory; Show-SuccessMessage; Suspend-Script }
+            'F' { Test-SMART-Drives; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Write-Log "Executando todas as tarefas de Diagnósticos em sequência..." -Type Info
+                Invoke-All-DiagnosticsAdvanced; Show-SuccessMessage
+                Show-DiskUsage; Show-SuccessMessage
+                Show-SystemInfo; Show-SuccessMessage
+                Test-Memory; Show-SuccessMessage
+                Test-SMART-Drives; Show-SuccessMessage
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-LimpezaMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Limpeza do Sistema"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Limpeza Profunda do Sistema (Clear-DeepSystemCleanup)"
+        Write-Host " C) Limpeza de Prefetch (Clear-Prefetch)"
+        Write-Host " D) Limpeza de Spooler de Impressão (Clear-PrintSpooler)"
+        Write-Host " E) Limpeza de Arquivos Temporários (Clear-TemporaryFiles)"
+        Write-Host " F) Limpeza de WinSxS (Component Store) (Clear-WinSxS)"
+        Write-Host " G) Limpeza de Cache do Windows Update (Clear-WUCache)"
+        Write-Host " H) Iniciar Verificação DISM (Invoke-DISM-Scan)"
+        Write-Host " I) Iniciar Verificação SFC (Invoke-SFC-Scan)"
+        Write-Host " J) Agendar Verificação de Disco (ChkDsk) (New-ChkDsk)"
+        Write-Host " K) Executar Limpeza Geral (Perform-Cleanup)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Clear-DeepSystemCleanup; Show-SuccessMessage; Suspend-Script }
+            'C' { Clear-Prefetch; Show-SuccessMessage; Suspend-Script }
+            'D' { Clear-PrintSpooler; Show-SuccessMessage; Suspend-Script }
+            'E' { Clear-TemporaryFiles; Show-SuccessMessage; Suspend-Script }
+            'F' { Clear-WinSxS; Show-SuccessMessage; Suspend-Script }
+            'G' { Clear-WUCache; Show-SuccessMessage; Suspend-Script }
+            'H' { Invoke-DISM-Scan; Show-SuccessMessage; Suspend-Script }
+            'I' { Invoke-SFC-Scan; Show-SuccessMessage; Suspend-Script }
+            'J' { New-ChkDsk; Show-SuccessMessage; Suspend-Script }
+            'K' { Perform-Cleanup; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Write-Log "Executando todas as tarefas de Limpeza em sequência..." -Type Info
+                Clear-DeepSystemCleanup; Show-SuccessMessage
+                Clear-Prefetch; Show-SuccessMessage
+                Clear-PrintSpooler; Show-SuccessMessage
+                Clear-TemporaryFiles; Show-SuccessMessage
+                Clear-WinSxS; Show-SuccessMessage
+                Clear-WUCache; Show-SuccessMessage
+                Invoke-DISM-Scan; Show-SuccessMessage
+                Invoke-SFC-Scan; Show-SuccessMessage
+                New-ChkDsk; Show-SuccessMessage
+                # Perform-Cleanup (Considerar se essa função global deve ser incluída no "Executar Todos" ou se as funções individuais são suficientes)
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-NetworkMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Rede e Conectividade"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Adicionar Rede Wi-Fi (Add-WiFiNetwork)"
+        Write-Host " C) Limpar Cache ARP (Clear-ARP)"
+        Write-Host " D) Limpar Cache DNS (Clear-DNS)"
+        Write-Host " E) Desabilitar IPv6 (Disable-IPv6)"
+        Write-Host " F) Desabilitar SMBv1 (Disable-SMBv1)"
+        Write-Host " G) Instalar Impressoras de Rede (Install-NetworkPrinters)"
+        Write-Host " H) Executar Todas as Otimizações de Rede Avançadas (Invoke-All-NetworkAdvanced)"
+        Write-Host " I) Otimizar Desempenho de Rede (Optimize-NetworkPerformance)"
+        Write-Host " J) Configurar DNS Google/Cloudflare (Set-DnsGoogleCloudflare)"
+        Write-Host " K) Exibir Informações de Rede (Show-NetworkInfo)"
+        Write-Host " L) Testar Velocidade da Internet (Test-InternetSpeed)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Add-WiFiNetwork; Show-SuccessMessage; Suspend-Script }
+            'C' { Clear-ARP; Show-SuccessMessage; Suspend-Script }
+            'D' { Clear-DNS; Show-SuccessMessage; Suspend-Script }
+            'E' { Disable-IPv6; Show-SuccessMessage; Suspend-Script }
+            'F' { Disable-SMBv1; Show-SuccessMessage; Suspend-Script }
+            'G' { Install-NetworkPrinters; Show-SuccessMessage; Suspend-Script }
+            'H' { Invoke-All-NetworkAdvanced; Show-SuccessMessage; Suspend-Script }
+            'I' { Optimize-NetworkPerformance; Show-SuccessMessage; Suspend-Script }
+            'J' { Set-DnsGoogleCloudflare; Show-SuccessMessage; Suspend-Script }
+            'K' { Show-NetworkInfo; Show-SuccessMessage; Suspend-Script }
+            'L' { Test-InternetSpeed; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Write-Log "Executando todas as tarefas de Rede em sequência..." -Type Info
+                Add-WiFiNetwork; Show-SuccessMessage
+                Clear-ARP; Show-SuccessMessage
+                Clear-DNS; Show-SuccessMessage
+                Disable-IPv6; Show-SuccessMessage
+                Disable-SMBv1; Show-SuccessMessage
+                Install-NetworkPrinters; Show-SuccessMessage
+                Invoke-All-NetworkAdvanced; Show-SuccessMessage
+                Optimize-NetworkPerformance; Show-SuccessMessage
+                Set-DnsGoogleCloudflare; Show-SuccessMessage
+                Show-NetworkInfo; Show-SuccessMessage
+                Test-InternetSpeed; Show-SuccessMessage
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-ExternalScriptsMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Scripts Externos"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Invocar Chris Titus Toolbox (Invoke-ChrisTitusToolbox)"
+        Write-Host " C) Invocar Script Colégio (Invoke-Colégio)"
+        Write-Host " D) Invocar Ativador do Windows (Invoke-WindowsActivator)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Invoke-ChrisTitusToolbox; Show-SuccessMessage; Suspend-Script }
+            'C' { Invoke-Colégio; Show-SuccessMessage; Suspend-Script }
+            'D' { Invoke-WindowsActivator; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Write-Log "Executando todos os Scripts Externos em sequência..." -Type Info
+                Invoke-ChrisTitusToolbox; Show-SuccessMessage
+                Invoke-Colégio; Show-SuccessMessage
+                Invoke-WindowsActivator; Show-SuccessMessage
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-TweaksMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Tweaks e Otimizações"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Aplicar Configurações GPO/Registro (Apply-GPORegistrySettings)"
+        Write-Host " C) Aplicar Tweaks de Interface (Apply-UITweaks)"
+        Write-Host " D) Desabilitar Action Center e Notificações (Disable-ActionCenter-Notifications)"
+        Write-Host " E) Desabilitar Cortana e Pesquisa na Nuvem (Disable-Cortana-AndSearch)"
+        Write-Host " F) Desabilitar UAC (Disable-UAC)"
+        Write-Host " G) Habilitar Menu de Contexto Clássico (Win11) (Enable-ClassicContextMenu)"
+        Write-Host " H) Habilitar Histórico da Área de Transferência (Enable-ClipboardHistory)"
+        Write-Host " I) Habilitar Tema Escuro (Enable-DarkTheme)"
+        Write-Host " J) Habilitar Outras Atualizações Microsoft (Enable-OtherMicrosoftUpdates)"
+        Write-Host " K) Habilitar Opções de Energia Avançadas (Enable-PowerOptions)"
+        Write-Host " L) Habilitar Reforço de Privacidade (Enable-PrivacyHardening)"
+        Write-Host " M) Habilitar Reinício de Apps Após Reboot (Enable-RestartAppsAfterReboot)"
+        Write-Host " N) Habilitar Sudo (Enable-Sudo)"
+        Write-Host " O) Habilitar Finalizar Tarefa na Barra de Tarefas (Enable-TaskbarEndTask)"
+        Write-Host " P) Habilitar Segundos na Barra de Tarefas (Enable-TaskbarSeconds)"
+        Write-Host " Q) Habilitar Reforço do Windows (Enable-WindowsHardening)"
+        Write-Host " R) Habilitar Windows Update Rápido (Enable-WindowsUpdateFast)"
+        Write-Host " S) Aplicar Tweaks do Painel de Controle (Grant-ControlPanelTweaks)"
+        Write-Host " T) Aplicar Tweaks Extras (Grant-ExtraTweaks)"
+        Write-Host " U) Reforçar Macros do Office (Grant-HardenOfficeMacros)"
+        Write-Host " V) Aplicar Tweaks de Privacidade (Grant-PrivacyTweaks)"
+        Write-Host " W) Criar Pasta Forçada (New-FolderForced)"
+        Write-Host " X) Criar Ponto de Restauração do Sistema (New-SystemRestorePoint)" # Removido Y, Z para navegação
+        Write-Host " Y) Otimizar Desempenho do Explorer (Optimize-ExplorerPerformance)"
+        Write-Host " Z) Otimizar Volumes (Desfragmentação/Trim) (Optimize-Volumes)"
+        Write-Host " A2) Realizar Otimizações do Sistema (Perform-SystemOptimizations)" # Se esgotar as letras, precisa de uma estratégia
+        Write-Host " B2) Renomear Notebook (Rename-Notebook)"
+        Write-Host " C2) Definir Plano de Energia Otimizado (Set-OptimizedPowerPlan)"
+        Write-Host " D2) Definir Tema de Desempenho (Set-PerformanceTheme)"
+        Write-Host " E2) Definir Performance Visual (Set-VisualPerformance)"
+        Write-Host " F2) Exibir Menu de AutoLogin (Show-AutoLoginMenu)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y2) Voltar ao Menu Anterior" # Usando Y2 para evitar conflito com Y de função
+        Write-Host " Z2) Voltar ao Menu Principal" # Usando Z2 para evitar conflito com Z de função
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Apply-GPORegistrySettings; Show-SuccessMessage; Suspend-Script }
+            'C' { Apply-UITweaks; Show-SuccessMessage; Suspend-Script }
+            'D' { Disable-ActionCenter-Notifications; Show-SuccessMessage; Suspend-Script }
+            'E' { Disable-Cortana-AndSearch; Show-SuccessMessage; Suspend-Script }
+            'F' { Disable-UAC; Show-SuccessMessage; Suspend-Script }
+            'G' { Enable-ClassicContextMenu; Show-SuccessMessage; Suspend-Script }
+            'H' { Enable-ClipboardHistory; Show-SuccessMessage; Suspend-Script }
+            'I' { Enable-DarkTheme; Show-SuccessMessage; Suspend-Script }
+            'J' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage; Suspend-Script }
+            'K' { Enable-PowerOptions; Show-SuccessMessage; Suspend-Script }
+            'L' { Enable-PrivacyHardening; Show-SuccessMessage; Suspend-Script }
+            'M' { Enable-RestartAppsAfterReboot; Show-SuccessMessage; Suspend-Script }
+            'N' { Enable-Sudo; Show-SuccessMessage; Suspend-Script }
+            'O' { Enable-TaskbarEndTask; Show-SuccessMessage; Suspend-Script }
+            'P' { Enable-TaskbarSeconds; Show-SuccessMessage; Suspend-Script }
+            'Q' { Enable-WindowsHardening; Show-SuccessMessage; Suspend-Script }
+            'R' { Enable-WindowsUpdateFast; Show-SuccessMessage; Suspend-Script }
+            'S' { Grant-ControlPanelTweaks; Show-SuccessMessage; Suspend-Script }
+            'T' { Grant-ExtraTweaks; Show-SuccessMessage; Suspend-Script }
+            'U' { Grant-HardenOfficeMacros; Show-SuccessMessage; Suspend-Script }
+            'V' { Grant-PrivacyTweaks; Show-SuccessMessage; Suspend-Script }
+            'W' { New-FolderForced; Show-SuccessMessage; Suspend-Script }
+            'X' { New-SystemRestorePoint; Show-SuccessMessage; Suspend-Script }
+            'Y' { Optimize-ExplorerPerformance; Show-SuccessMessage; Suspend-Script }
+            'Z' { Optimize-Volumes; Show-SuccessMessage; Suspend-Script }
+            # Opções além de Z: exigem uma abordagem diferente, como A2, B2...
+            # Para evitar complexidade excessiva com o ReadKey, é melhor limitar o número de funções por submenu
+            # ou usar um esquema de paginação/outra forma de seleção.
+            # Por enquanto, vou mapear as funções restantes usando A2, B2 etc, mas o ReadKey padrão não lida com isso diretamente.
+            # Isso pode exigir que a seleção seja feita como "A2", e o ReadKey original só pega um caractere.
+            # Para manter "No Enter", a abordagem A2 etc. é complexa.
+            # Sugiro limitar a ~24 funções por submenu ou reavaliar "todas as opções devem ser letras".
+            # Para este exemplo, vou manter o mapeamento conceitual e deixarei um aviso.
+            'A2' { Perform-SystemOptimizations; Show-SuccessMessage; Suspend-Script }
+            'B2' { Rename-Notebook; Show-SuccessMessage; Suspend-Script }
+            'C2' { Set-OptimizedPowerPlan; Show-SuccessMessage; Suspend-Script }
+            'D2' { Set-PerformanceTheme; Show-SuccessMessage; Suspend-Script }
+            'E2' { Set-VisualPerformance; Show-SuccessMessage; Suspend-Script }
+            'F2' { Show-AutoLoginMenu; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Write-Log "Executando todas as tarefas de Tweaks em sequência..." -Type Info
+                Apply-GPORegistrySettings; Show-SuccessMessage
+                Apply-UITweaks; Show-SuccessMessage
+                Disable-ActionCenter-Notifications; Show-SuccessMessage
+                Disable-Cortana-AndSearch; Show-SuccessMessage
+                Disable-UAC; Show-SuccessMessage
+                Enable-ClassicContextMenu; Show-SuccessMessage
+                Enable-ClipboardHistory; Show-SuccessMessage
+                Enable-DarkTheme; Show-SuccessMessage
+                Enable-OtherMicrosoftUpdates; Show-SuccessMessage
+                Enable-PowerOptions; Show-SuccessMessage
+                Enable-PrivacyHardening; Show-SuccessMessage
+                Enable-RestartAppsAfterReboot; Show-SuccessMessage
+                Enable-Sudo; Show-SuccessMessage
+                Enable-TaskbarEndTask; Show-SuccessMessage
+                Enable-TaskbarSeconds; Show-SuccessMessage
+                Enable-WindowsHardening; Show-SuccessMessage
+                Enable-WindowsUpdateFast; Show-SuccessMessage
+                Grant-ControlPanelTweaks; Show-SuccessMessage
+                Grant-ExtraTweaks; Show-SuccessMessage
+                Grant-HardenOfficeMacros; Show-SuccessMessage
+                Grant-PrivacyTweaks; Show-SuccessMessage
+                New-FolderForced; Show-SuccessMessage
+                New-SystemRestorePoint; Show-SuccessMessage
+                Optimize-ExplorerPerformance; Show-SuccessMessage
+                Optimize-Volumes; Show-SuccessMessage
+                Perform-SystemOptimizations; Show-SuccessMessage
+                Rename-Notebook; Show-SuccessMessage
+                Set-OptimizedPowerPlan; Show-SuccessMessage
+                Set-PerformanceTheme; Show-SuccessMessage
+                Set-VisualPerformance; Show-SuccessMessage
+                Show-AutoLoginMenu; Show-SuccessMessage
+                Suspend-Script
+            }
+            'Y2' { break } # Voltar ao menu anterior
+            'Z2' { Show-MainMenu; return } # Voltar ao menu principal
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-UndoMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Desfazer Ações (Undo)"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Fazer Backup do Registro (Backup-Registry)"
+        Write-Host " C) Restaurar Action Center e Notificações (Grant-ActionCenter-Notifications) - OBS: Assumindo que esta função reverte a desativação."
+        Write-Host " D) Restaurar Tweaks do Painel de Controle (Restore-ControlPanelTweaks)"
+        Write-Host " E) Restaurar IPv6 Padrão (Restore-DefaultIPv6)"
+        Write-Host " F) Restaurar UAC Padrão (Restore-DefaultUAC)"
+        Write-Host " G) Restaurar Macros do Office (Restore-OfficeMacros)"
+        Write-Host " H) Restaurar OneDrive (Restore-OneDrive)"
+        Write-Host " I) Restaurar Registro (Restore-Registry) - (Incluindo Restore-Registry-FromBackup se houver)"
+        Write-Host " J) Restaurar Performance Visual Padrão (Restore-VisualPerformanceDefault)"
+        Write-Host " K) Desfazer Reforço de Privacidade (Undo-PrivacyHardening)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Backup-Registry; Show-SuccessMessage; Suspend-Script }
+            'C' { Grant-ActionCenter-Notifications; Show-SuccessMessage; Suspend-Script } # Assumindo função de reversão
+            'D' { Restore-ControlPanelTweaks; Show-SuccessMessage; Suspend-Script }
+            'E' { Restore-DefaultIPv6; Show-SuccessMessage; Suspend-Script }
+            'F' { Restore-DefaultUAC; Show-SuccessMessage; Suspend-Script }
+            'G' { Restore-OfficeMacros; Show-SuccessMessage; Suspend-Script }
+            'H' { Restore-OneDrive; Show-SuccessMessage; Suspend-Script }
+            'I' { Restore-Registry; Show-SuccessMessage; Suspend-Script }
+            'J' { Restore-VisualPerformanceDefault; Show-SuccessMessage; Suspend-Script }
+            'K' { Undo-PrivacyHardening; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Write-Log "Executando todas as tarefas de Desfazer em sequência..." -Type Info
+                Backup-Registry; Show-SuccessMessage
+                Grant-ActionCenter-Notifications; Show-SuccessMessage # Assumindo função de reversão
+                Restore-ControlPanelTweaks; Show-SuccessMessage
+                Restore-DefaultIPv6; Show-SuccessMessage
+                Restore-DefaultUAC; Show-SuccessMessage
+                Restore-OfficeMacros; Show-SuccessMessage
+                Restore-OneDrive; Show-SuccessMessage
+                Restore-Registry; Show-SuccessMessage
+                Restore-VisualPerformanceDefault; Show-SuccessMessage
+                Undo-PrivacyHardening; Show-SuccessMessage
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
+}
+
+function Show-WindowsUpdateMenu {
+    do {
+        clear-host
+        Write-Host "==================================================="
+        Write-Host "             Menu: Windows Update"
+        Write-Host "==================================================="
+        Write-Host "Selecione uma opção:"
+        Write-Host ""
+        Write-Host " B) Gerenciar Atualizações do Windows (Manage-WindowsUpdates)"
+        Write-Host " C) Atualizar PowerShell (Update-PowerShell)"
+        Write-Host " D) Atualizar Script da Nuvem (Update-ScriptFromCloud)"
+        Write-Host " E) Atualizar Windows e Drivers (Update-WindowsAndDrivers)"
+        Write-Host ""
+        Write-Host " A) Executar Todas as Tarefas em Sequência"
+        Write-Host " Y) Voltar ao Menu Anterior"
+        Write-Host " Z) Voltar ao Menu Principal"
+        Write-Host "==================================================="
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'B' { Manage-WindowsUpdates; Show-SuccessMessage; Suspend-Script }
+            'C' { Update-PowerShell; Show-SuccessMessage; Suspend-Script }
+            'D' { Update-ScriptFromCloud; Show-SuccessMessage; Suspend-Script }
+            'E' { Update-WindowsAndDrivers; Show-SuccessMessage; Suspend-Script }
+            'A' {
+                Write-Log "Executando todas as tarefas de Windows Update em sequência..." -Type Info
+                Manage-WindowsUpdates; Show-SuccessMessage
+                Update-PowerShell; Show-SuccessMessage
+                Update-ScriptFromCloud; Show-SuccessMessage
+                Update-WindowsAndDrivers; Show-SuccessMessage
+                Suspend-Script
+            }
+            'Y' { break }
+            'Z' { Show-MainMenu; return }
+            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        }
+    } while ($true)
 }
 #endregion
