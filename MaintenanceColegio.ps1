@@ -37,13 +37,6 @@ $global:WarningPreference = 'Continue'
 $global:VerbosePreference = 'SilentlyContinue' # Alterado para SilentlyContinue
 $global:DebugPreference = 'SilentlyContinue'   # Alterado para SilentlyContinue
 
-#region → CONFIGURAÇÕES GLOBAIS
-$ScriptConfig = @{
-    LogFilePath              = Join-Path $PSScriptRoot "ScriptSupremo.log" 
-    ConfirmBeforeDestructive = $true
-}
-#endregion
-
 # Garante que o PowerShell esteja usando o TLS 1.2 para downloads seguros
 [Net.ServicePointManager]::SecurityProtocol = `  [Net.ServicePointManager]::SecurityProtocol -bor `  [Net.SecurityProtocolType]::Tls12
 
