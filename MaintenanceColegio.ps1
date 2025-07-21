@@ -3831,7 +3831,7 @@ function Start-ScriptSupremo {
         Write-Log "⚙️ Chamando o menu principal..." -Type Warning
         Show-MainMenu
     } catch {
-        Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" Red
+        Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Warning
     }
 }
 
