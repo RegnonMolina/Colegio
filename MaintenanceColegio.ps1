@@ -3236,6 +3236,7 @@ function New-FolderForced {
 
 #region MENUS
 
+
 # -------------------------------------------------------------------------
 # Funções de Exibição de Menus
 # -------------------------------------------------------------------------
@@ -3791,4 +3792,23 @@ function Show-WindowsUpdateMenu {
         }
     } while ($true)
 }
+
 #endregion
+
+# -------------------------------------------------------------------------
+# 🔧 Função principal: ponto de entrada do script
+# -------------------------------------------------------------------------
+function Start-ScriptSupremo {
+    Write-Log "`n🛠️ Iniciando o script de manutenção..." -Type Info
+
+    try {
+        Write-Log "⚙️ Chamando o menu principal..." -Type Warning
+        Show-MainMenu
+    } catch {
+        Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Error
+    }
+}
+
+# -------------------------------------------------------------------------
+# Ativa o script (CHAMADA PRINCIPAL NO FINAL)
+Start-ScriptSupremo
