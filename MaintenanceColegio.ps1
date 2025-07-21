@@ -3258,7 +3258,7 @@ function Show-BloatwareMenu {
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'B' { PrivacyAndBloatwarePrevention; Show-SuccessMessage; Suspend-Script }
+            'B' { Apply-PrivacyAndBloatwarePrevention; Show-SuccessMessage; Suspend-Script }
             'C' { Disable-BloatwareScheduledTasks; Show-SuccessMessage; Suspend-Script }
             'D' { Disable-UnnecessaryServices; Show-SuccessMessage; Suspend-Script }
             'E' { Disable-WindowsRecall; Show-SuccessMessage; Suspend-Script }
@@ -3272,7 +3272,7 @@ function Show-BloatwareMenu {
             'M' { Stop-BloatwareProcesses; Show-SuccessMessage; Suspend-Script }
             'A' {
                 Write-Log "Executando todas as tarefas de Bloatware em sequência..." Cyan
-                PrivacyAndBloatwarePrevention; Show-SuccessMessage
+                Apply-PrivacyAndBloatwarePrevention; Show-SuccessMessage
                 Disable-BloatwareScheduledTasks; Show-SuccessMessage
                 Disable-UnnecessaryServices; Show-SuccessMessage
                 Disable-WindowsRecall; Show-SuccessMessage
