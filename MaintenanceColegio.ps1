@@ -3233,214 +3233,163 @@ function New-FolderForced {
 # MENU INTERATIVO REVISADO
 # ================================================
 
-function Show-Menu {
-    param($Title, $Options)
+# ================================================
+# MENU SEM ENTER – LEITURA IMEDIATA DE TECLAS
+# ================================================
+
+function Show-Options {
+    param($Title, $Items)
     Clear-Host
     Write-Host "=== $Title ===" -ForegroundColor Cyan
-    $Options | ForEach-Object { Write-Host $_ }
-    return Read-Host 'Escolha uma opção'
+    foreach ($i in $Items.Keys | Sort-Object) {
+        Write-Host "$i) $($Items[$i].Label)"
+    }
+    Write-Host
+    Write-Host "0) Sair   R) Reiniciar   S) Desligar" -ForegroundColor DarkGray
+    Write-Host
+    Write-Host 'Pressione a tecla correspondente...'
+    $key = [console]::ReadKey($true).KeyChar.ToUpper()
+    return $key
 }
 
-function Main-Menu {
-    $opts = @(
-        '1) Bloatware'
-        '2) Tweaks'
-        '3) Redes'
-        '4) Apps'
-        '5) Diagnósticos'
-        '6) Undo'
-        'R) Reiniciar'
-        'S) Desligar'
-        '0) Sair'
-    )
-    return Show-Menu 'SCRIPT SUPREMO - MENU PRINCIPAL' $opts
+# Dicionários de opções: tecla => @{ Label = '…'; Action = { … } }
+$menus = @{
+    Main = @{
+        '1' = @{ Label = 'Bloatware';       Action = 'Bloatware' }
+        '2' = @{ Label = 'Tweaks';          Action = 'Tweaks' }
+        '3' = @{ Label = 'Redes';           Action = 'Redes' }
+        '4' = @{ Label = 'Apps';            Action = 'Apps' }
+        '5' = @{ Label = 'Diagnósticos';    Action = 'Diagnósticos' }
+        '6' = @{ Label = 'Undo';            Action = 'Undo' }
+    }
+    Bloatware = @{
+        '1' = @{ Label = 'Apply Privacy & Bloatware Prevention'; Action = { Apply-PrivacyAndBloatwarePrevention } }
+        '2' = @{ Label = 'Disable Scheduled Tasks';               Action = { Disable-BloatwareScheduledTasks } }
+        '3' = @{ Label = 'Disable Unnecessary Services';          Action = { Disable-UnnecessaryServices } }
+        '4' = @{ Label = 'Disable Windows Recall';               Action = { Disable-WindowsRecall } }
+        '5' = @{ Label = 'Force Remove OneDrive';                Action = { Force-RemoveOneDrive } }
+        '6' = @{ Label = 'External Debloaters';                  Action = { Invoke-ExternalDebloaters } }
+        '7' = @{ Label = 'Remove-Bloatware (single)';            Action = { Remove-Bloatware } }
+        '8' = @{ Label = 'Remove-Bloatwares (bulk)';             Action = { Remove-Bloatwares } }
+        '9' = @{ Label = 'Remove Copilot';                       Action = { Remove-Copilot } }
+        'A' = @{ Label = 'Remove OneDrive & Restore Folders';    Action = { Remove-OneDrive-AndRestoreFolders } }
+        'B' = @{ Label = 'Aggressive Scheduled Tasks Removal';   Action = { Remove-ScheduledTasksAggressive } }
+        'C' = @{ Label = 'Remove Start & Taskbar Pins';          Action = { Remove-StartAndTaskbarPins } }
+        'D' = @{ Label = 'Remove Windows Copilot';               Action = { Remove-WindowsCopilot } }
+        'E' = @{ Label = 'Remove Windows.old';                   Action = { Remove-WindowsOld } }
+        'F' = @{ Label = 'Restore Bloatware Safe';               Action = { Restore-BloatwareSafe } }
+        'G' = @{ Label = 'Stop Bloatware Processes';             Action = { Stop-BloatwareProcesses } }
+    }
+    Tweaks = @{
+        '1' = @{ Label = 'Grant Privacy Tweaks';     Action = { Grant-PrivacyTweaks } }
+        '2' = @{ Label = 'Apply GPO/Registry Settings'; Action = { Apply-GPORegistrySettings } }
+        '3' = @{ Label = 'Apply UI Tweaks';         Action = { Apply-UITweaks } }
+        '4' = @{ Label = 'Disable Action Center';   Action = { Disable-ActionCenter-Notifications } }
+        '5' = @{ Label = 'Disable UAC';             Action = { Disable-UAC } }
+        '6' = @{ Label = 'Enable Classic Context';  Action = { Enable-ClassicContextMenu } }
+        '7' = @{ Label = 'Enable Clipboard History'; Action = { Enable-ClipboardHistory } }
+        '8' = @{ Label = 'Enable DarkTheme';        Action = { Enable-DarkTheme } }
+        '9' = @{ Label = 'Enable Other MS Updates'; Action = { Enable-OtherMicrosoftUpdates } }
+        'A' = @{ Label = 'Enable PowerOptions';     Action = { Enable-PowerOptions } }
+        'B' = @{ Label = 'Enable Privacy Hardening';Action = { Enable-PrivacyHardening } }
+        'C' = @{ Label = 'Enable Restart Apps';     Action = { Enable-RestartAppsAfterReboot } }
+        'D' = @{ Label = 'Enable SMBv1';            Action = { Enable-SMBv1 } }
+        'E' = @{ Label = 'Enable Sudo';             Action = { Enable-Sudo } }
+        'F' = @{ Label = 'Enable Taskbar End Task';Action = { Enable-TaskbarEndTask } }
+        'G' = @{ Label = 'Enable Taskbar Seconds';  Action = { Enable-TaskbarSeconds } }
+        'H' = @{ Label = 'Enable Windows Hardening';Action = { Enable-WindowsHardening } }
+        'I' = @{ Label = 'Enable Windows Update Fast'; Action = { Enable-WindowsUpdateFast } }
+        'J' = @{ Label = 'Grant Control Panel Tweaks'; Action = { Grant-ControlPanelTweaks } }
+        'K' = @{ Label = 'Grant Extra Tweaks';      Action = { Grant-ExtraTweaks } }
+        'L' = @{ Label = 'Grant Harden Office Macros'; Action = { Grant-HardenOfficeMacros } }
+        'M' = @{ Label = 'Manage Windows Updates'; Action = { Manage-WindowsUpdates } }
+        'N' = @{ Label = 'New Folder Forced';       Action = { New-FolderForced } }
+        'O' = @{ Label = 'New System Restore Point';Action = { New-SystemRestorePoint } }
+        'P' = @{ Label = 'Optimize Explorer Perf'; Action = { Optimize-ExplorerPerformance } }
+        'Q' = @{ Label = 'Optimize Network Perf';  Action = { Optimize-NetworkPerformance } }
+        'R' = @{ Label = 'Optimize Volumes';       Action = { Optimize-Volumes } }
+        'S' = @{ Label = 'Perform System Optimizations'; Action = { Perform-SystemOptimizations } }
+        'T' = @{ Label = 'Rename Notebook';         Action = { Rename-Notebook } }
+        'U' = @{ Label = 'Set Optimized Power Plan';Action = { Set-OptimizedPowerPlan } }
+        'V' = @{ Label = 'Set Performance Theme';   Action = { Set-PerformanceTheme } }
+        'W' = @{ Label = 'Set Visual Performance';  Action = { Set-VisualPerformance } }
+        'X' = @{ Label = 'Show AutoLogin Menu';     Action = { Show-AutoLoginMenu } }
+    }
+    Redes = @{
+        '1' = @{ Label = 'Add WiFi Network';         Action = { Add-WiFiNetwork } }
+        '2' = @{ Label = 'Clear ARP';                Action = { Clear-ARP } }
+        '3' = @{ Label = 'Clear DNS';                Action = { Clear-DNS } }
+        '4' = @{ Label = 'Clear Print Spooler';      Action = { Clear-PrintSpooler } }
+        '5' = @{ Label = 'Disable IPv6';             Action = { Disable-IPv6 } }
+        '6' = @{ Label = 'Install Network Printers'; Action = { Install-NetworkPrinters } }
+        '7' = @{ Label = 'Invoke All Network Advanced'; Action = { Invoke-All-NetworkAdvanced } }
+        '8' = @{ Label = 'Set DNS Google/Cloudflare';  Action = { Set-DnsGoogleCloudflare } }
+        '9' = @{ Label = 'Show Network Info';        Action = { Show-NetworkInfo } }
+        'A' = @{ Label = 'Test Internet Speed';      Action = { Test-InternetSpeed } }
+    }
+    Diagnósticos = @{
+        '1' = @{ Label = 'Invoke All Diagnostics Advanced'; Action = { Invoke-All-DiagnosticsAdvanced } }
+        '2' = @{ Label = 'Show Disk Usage';           Action = { Show-DiskUsage } }
+        '3' = @{ Label = 'Show System Info';          Action = { Show-SystemInfo } }
+        '4' = @{ Label = 'Test Memory';               Action = { Test-Memory } }
+    }
+    Limpeza = @{
+        '1' = @{ Label = 'Backup Registry';            Action = { Backup-Registry } }
+        '2' = @{ Label = 'Clear Deep System Cleanup';  Action = { Clear-DeepSystemCleanup } }
+        '3' = @{ Label = 'Clear Prefetch';             Action = { Clear-Prefetch } }
+        '4' = @{ Label = 'Clear Temporary Files';      Action = { Clear-TemporaryFiles } }
+        '5' = @{ Label = 'Clear WinSxS';               Action = { Clear-WinSxS } }
+        '6' = @{ Label = 'Clear WU Cache';             Action = { Clear-WUCache } }
+        '7' = @{ Label = 'Disable Cortana & Search';   Action = { Disable-Cortana-AndSearch } }
+        '8' = @{ Label = 'Disable SMBv1';              Action = { Disable-SMBv1 } }
+        '9' = @{ Label = 'Invoke DISM Scan';           Action = { Invoke-DISM-Scan } }
+        'A' = @{ Label = 'Invoke SFC Scan';            Action = { Invoke-SFC-Scan } }
+        'B' = @{ Label = 'New ChkDsk';                 Action = { New-ChkDsk } }
+        'C' = @{ Label = 'Perform Cleanup';            Action = { Perform-Cleanup } }
+    }
+    'Scripts Externos' = @{
+        '1' = @{ Label = 'Chris Titus Toolbox';       Action = { Invoke-ChrisTitusToolbox } }
+        '2' = @{ Label = 'Colégio';                   Action = { Invoke-Colégio } }
+        '3' = @{ Label = 'Windows Activator';         Action = { Invoke-WindowsActivator } }
+    }
+    Undo = @{
+        '1' = @{ Label = 'Grant ActionCenter Notifications'; Action = { Grant-ActionCenter-Notifications } }
+        '2' = @{ Label = 'Restore ControlPanel Tweaks';       Action = { Restore-ControlPanelTweaks } }
+        '3' = @{ Label = 'Restore Default IPv6';             Action = { Restore-DefaultIPv6 } }
+        '4' = @{ Label = 'Restore Default UAC';              Action = { Restore-DefaultUAC } }
+        '5' = @{ Label = 'Restore Office Macros';            Action = { Restore-OfficeMacros } }
+        '6' = @{ Label = 'Restore OneDrive';                 Action = { Restore-OneDrive } }
+        '7' = @{ Label = 'Restore Registry';                 Action = { Restore-Registry } }
+        '8' = @{ Label = 'Restore Registry From Backup';     Action = { Restore-Registry-FromBackup } }
+        '9' = @{ Label = 'Restore Visual Perf Default';      Action = { Restore-VisualPerformanceDefault } }
+    }
 }
 
-function Bloatware-Menu {
-    $opts = @(
-        '1) Remover todos bloatwares'
-        '2) Forçar remoção do OneDrive'
-        '3) Remover Copilot'
-        '4) Desativar Recall'
-        'A) Executar tudo'
-        'X) Voltar'
-        'Z) Menu Principal'
-    )
-    return Show-Menu 'BLOATWARE MENU' $opts
-}
-
-function Tweaks-Menu {
-    $opts = @(
-        '1) Privacy Tweaks'
-        '2) Windows Update'
-        'A) Executar tudo'
-        'X) Voltar'
-        'Z) Menu Principal'
-    )
-    return Show-Menu 'TWEAKS MENU' $opts
-}
-
-function Redes-Menu {
-    $opts = @(
-        '1) Otimização de rede'
-        'A) Executar tudo'
-        'X) Voltar'
-        'Z) Menu Principal'
-    )
-    return Show-Menu 'REDES MENU' $opts
-}
-
-function Apps-Menu {
-    $opts = @(
-        '1) Instalar apps'
-        'A) Executar tudo'
-        'X) Voltar'
-        'Z) Menu Principal'
-    )
-    return Show-Menu 'APPS MENU' $opts
-}
-
-function Diagnostics-Menu {
-    $opts = @(
-        '1) Executar diagnósticos'
-        'A) Executar tudo'
-        'X) Voltar'
-        'Z) Menu Principal'
-    )
-    return Show-Menu 'DIAGNÓSTICOS MENU' $opts
-}
-
-function Undo-Menu {
-    $opts = @(
-        '1) Restaurar ponto de restauração'
-        'A) Executar tudo'
-        'X) Voltar'
-        'Z) Menu Principal'
-    )
-    return Show-Menu 'UNDO MENU' $opts
-}
-
-# Loop principal do menu
+# controlador de menu
+$currentMenu = 'Main'
 while ($true) {
-    $choice = Main-Menu
-    switch ($choice.ToUpper()) {
+    $opts   = $menus[$currentMenu]
+    $choice = Show-Options $currentMenu $opts
 
-        '1' {  # Bloatware submenu
-            while ($true) {
-                $c = Bloatware-Menu
-                switch ($c.ToUpper()) {
-                    '1' { Invoke-RemoveAllBloatware }
-                    '2' { Invoke-ForceOneDriveRemoval }
-                    '3' { Invoke-RemoveCopilot }
-                    '4' { Invoke-DisableRecall }
-                    'A' {
-                        Invoke-RemoveAllBloatware
-                        Invoke-ForceOneDriveRemoval
-                        Invoke-RemoveCopilot
-                        Invoke-DisableRecall
-                    }
-                    'X' { break }           # volta ao main
-                    'Z' { break 2 }         # sai dois níveis: submenu + main loop
-                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
-                }
-                Read-Host 'ENTER para continuar'
-            }
-        }
+    switch ($choice) {
+        '0' { break }
+        'R' { Restart-Computer -Force; break }
+        'S' { Stop-Computer -Force; break }
 
-        '2' {  # Tweaks submenu
-            while ($true) {
-                $c = Tweaks-Menu
-                switch ($c.ToUpper()) {
-                    '1' { Invoke-PrivacyTweaks }
-                    '2' { Invoke-RunWindowsUpdate }
-                    'A' {
-                        Invoke-PrivacyTweaks
-                        Invoke-RunWindowsUpdate
-                    }
-                    'X' { break }
-                    'Z' { break 2 }
-                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
-                }
-                Read-Host 'ENTER para continuar'
-            }
-        }
-
-        '3' {  # Redes submenu
-            while ($true) {
-                $c = Redes-Menu
-                switch ($c.ToUpper()) {
-                    '1' { Invoke-NetworkOptimization }
-                    'A' { Invoke-NetworkOptimization }
-                    'X' { break }
-                    'Z' { break 2 }
-                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
-                }
-                Read-Host 'ENTER para continuar'
-            }
-        }
-
-        '4' {  # Apps submenu
-            while ($true) {
-                $c = Apps-Menu
-                switch ($c.ToUpper()) {
-                    '1' { Invoke-AppInstallation }
-                    'A' { Invoke-AppInstallation }
-                    'X' { break }
-                    'Z' { break 2 }
-                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
-                }
-                Read-Host 'ENTER para continuar'
-            }
-        }
-
-        '5' {  # Diagnostics submenu
-            while ($true) {
-                $c = Diagnostics-Menu
-                switch ($c.ToUpper()) {
-                    '1' { Invoke-Diagnostics }
-                    'A' { Invoke-Diagnostics }
-                    'X' { break }
-                    'Z' { break 2 }
-                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
-                }
-                Read-Host 'ENTER para continuar'
-            }
-        }
-
-        '6' {  # Undo submenu
-            while ($true) {
-                $c = Undo-Menu
-                switch ($c.ToUpper()) {
-                    '1' { 
-                        Write-Log -Message 'Restaurando ponto de restauração...' -Type Info
-                        Checkpoint-Computer -Description 'Undo via menu' -RestorePointType 'APPLICATION_UNINSTALL'
-                    }
-                    'A' {
-                        Write-Log -Message 'Restaurando ponto de restauração...' -Type Info
-                        Checkpoint-Computer -Description 'Undo via menu' -RestorePointType 'APPLICATION_UNINSTALL'
-                    }
-                    'X' { break }
-                    'Z' { break 2 }
-                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
-                }
-                Read-Host 'ENTER para continuar'
-            }
-        }
-
-        'R' {
-            Write-Host 'Reiniciando...' -ForegroundColor Cyan
-            Restart-Computer -Force
-        }
-        'S' {
-            Write-Host 'Desligando...' -ForegroundColor Cyan
-            Stop-Computer -Force
-        }
-        '0' {
-            Write-Host 'Saindo do script...' -ForegroundColor Cyan
-            break
-        }
+        # navegação de submenu e execução de ação
         default {
-            Write-Host 'Opção inválida no menu principal.' -ForegroundColor Yellow
+            if ($opts.ContainsKey($choice)) {
+                $item = $opts[$choice]
+                if ($item.Action -is [string]) {
+                    # mudou de menu
+                    $currentMenu = $item.Action
+                } else {
+                    # executa a função
+                    & $item.Action
+                }
+            } else {
+                Write-Host 'Opção inválida.' -ForegroundColor Yellow
+            }
         }
     }
 }
