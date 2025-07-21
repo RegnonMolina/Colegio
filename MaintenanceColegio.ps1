@@ -1,114 +1,18 @@
-#region → PARÂMETROS DE EXECUÇÃO (Manter para compatibilidade se o script for chamado com parâmetros)
-param (
-    [Parameter(HelpMessage="Executa todas as rotinas de limpeza.")]
-    [bool]$RunAllCleanup = $false,
-
-    [Parameter(HelpMessage="Executa a remoção de Bloatware.")]
-    [bool]$RunBloatwareRemoval = $false,
-
-    [Parameter(HelpMessage="Aplica os ajustes de privacidade e registro.")]
-    [bool]$RunPrivacyTweaks = $false,
-
-    [Parameter(HelpMessage="Otimiza o desempenho de rede.")]
-    [bool]$RunNetworkOptimization = $false,
-
-    [Parameter(HelpMessage="Instala os aplicativos definidos.")]
-    [bool]$RunAppInstallation = $false,
-
-    [Parameter(HelpMessage="Executa diagnósticos do sistema.")]
-    [bool]$RunDiagnostics = $false,
-
-    [Parameter(HelpMessage="Cria um ponto de restauração do sistema antes de iniciar.")]
-    [bool]$CreateRestorePoint = $false,
-
-    [Parameter(HelpMessage="Força a remoção completa do OneDrive.")]
-    [bool]$ForceOneDriveRemoval = $false,
-
-    [Parameter(HelpMessage="Remove e desativa o Windows Copilot.")]
-    [bool]$RemoveCopilot = $false,
-
-    [Parameter(HelpMessage="Desativa o recurso Windows Recall.")]
-    [bool]$DisableRecall = $false,
-
-    [Parameter(HelpMessage="Executa o processo de atualização do Windows via PSWindowsUpdate.")]
-    [bool]$RunWindowsUpdate = $false,
-
-    [Parameter(HelpMessage="Aplica a configuração de plano de energia otimizado.")]
-    [bool]$ApplyOptimizedPowerPlan = $false
+param(
+    [switch]$RunAllCleanup,
+    [switch]$RunBloatwareRemoval,
+    [switch]$RunPrivacyTweaks,
+    [switch]$RunNetworkOptimization,
+    [switch]$RunAppInstallation,
+    [switch]$RunDiagnostics,
+    [switch]$CreateRestorePoint,
+    [switch]$ForceOneDriveRemoval,
+    [switch]$RemoveCopilot,
+    [switch]$DisableRecall,
+    [switch]$RunWindowsUpdate,
+    [switch]$ApplyOptimizedPowerPlan
 )
-#endregion
 
-# Cores padrão para cada tipo de log (Definição essencial)
-$global:defaultColors = @{ # Usado $global: para garantir acessibilidade em todo o script
-    'Info'    = 'Cyan'
-    'Success' = 'Green'
-    'Warning' = 'Yellow'
-    'Error'   = 'Red'
-    'Debug'   = 'DarkGray'
-    'Verbose' = 'Gray'
-}
-
-# Variável de configuração (simulada, assumindo que existiria no ambiente real)
-# Se você tiver um arquivo de configuração ou um objeto $script:ScriptConfig real, use-o.
-# Caso contrário, esta linha é um placeholder para evitar erros.
-if (-not (Get-Variable -Name ScriptConfig -Scope Script -ErrorAction SilentlyContinue)) {
-    $script:ScriptConfig = [PSCustomObject]@{
-        LogFilePath = Join-Path $env:TEMP 'ScriptSupremo.log'
-    }
-}
-
-# -------------------------------------------------------------------------
-# Funções Auxiliares
-# -------------------------------------------------------------------------
-
-function Write-Log {
-    param(
-        [Parameter(Mandatory,Position=0)]
-        [object]$Message = '',
-
-        [Parameter(Position=1)]
-        [ValidateSet('Info','Success','Warning','Error','Debug','Verbose')]
-        [string]$Type = 'Info'
-    )
-
-    # Garante texto
-    if ($null -eq $Message) { $Message = '' }
-    $text = if ($Message -is [array]) {
-        ($Message | ForEach-Object { ($_ -ne $null) ? $_.ToString() : '' }) -join ' '
-    } else {
-        $Message.ToString()
-    }
-
-    $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-    $entry     = "[$timestamp] [$Type] $text"
-    
-    # Valida e usa a cor da hash table global
-    if ($global:defaultColors.ContainsKey($Type)) {
-        $color = $global:defaultColors[$Type]
-    } else {
-        $color = 'White' # Cor padrão se o tipo não for encontrado, para evitar erro
-        Write-Host "ATENÇÃO: Tipo de log '$Type' não encontrado em \$defaultColors. Usando branco." -ForegroundColor Yellow
-    }
-
-    Write-Host $entry -ForegroundColor $color
-
-    $logPath = $script:ScriptConfig.LogFilePath
-    if (-not $logPath) { $logPath = Join-Path $env:TEMP 'ScriptSupremo.log' }
-
-    try {
-        $entry | Out-File -FilePath $logPath -Append -Encoding UTF8
-    } catch {
-        Write-Host "ERRO ao gravar log: $($_.Exception.Message)" -ForegroundColor Red
-    }
-}
-
-function Show-SuccessMessage {
-    Write-Log "`n✅ Tarefa concluída com sucesso!" -Type Success
-}
-
-function Suspend-Script {
-    Show-SuccessMessage
-}
 
 # ===============================
 # SCRIPT SUPREMO DE MANUTENÇÃO 🛠️
@@ -145,6 +49,44 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     exit
 }
 
+# =========================================================================
+# 📦 FUNÇÕES DE UTILIDADE E AUXILIARES (FUNDAMENTAL: Write-Log)
+# =========================================================================
+# 📝 Função de Log Personalizada (MANTENHA ESTA AQUI!)
+# --- Função Write-Log robusta ---
+function Write-Log {
+    param(
+        [Parameter(Mandatory,Position=0)]
+        [object]$Message = '',
+
+        [Parameter(Position=1)]
+        [ValidateSet('Info','Success','Warning','Error','Debug','Verbose')]
+        [string]$Type = 'Info'
+    )
+
+    # Garante texto
+    if ($null -eq $Message) { $Message = '' }
+    $text = if ($Message -is [array]) {
+        ($Message | ForEach-Object { ($_ -ne $null) ? $_.ToString() : '' }) -join ' '
+    } else {
+        $Message.ToString()
+    }
+
+    $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    $entry     = "[$timestamp] [$Type] $text"
+    $color     = $defaultColors[$Type]  # já existe garantia de key
+
+    Write-Host $entry -ForegroundColor $color
+
+    $logPath = $script:ScriptConfig.LogFilePath
+    if (-not $logPath) { $logPath = Join-Path $env:TEMP 'ScriptSupremo.log' }
+
+    try {
+        $entry | Out-File -FilePath $logPath -Append -Encoding UTF8
+    } catch {
+        Write-Host "ERRO ao gravar log: $($_.Exception.Message)" -ForegroundColor -Type Error
+    }
+}
 # Funções de Controle do Menu
 function Restart-ComputerConfirmation {
     Write-Log "Reiniciando o computador em 5 segundos..." -Type Info
@@ -165,10 +107,10 @@ function Stop-ComputerConfirmation {
 
 # Cores padrão para cada tipo de log
 $defaultColors = @{
-    'Info'    = '-Type Info'
-    'Success' = '-Type Success'
-    'Warning' = '-Type Warning'
-    'Error'   = '-Type Error'
+    'Cyan'    = '-Type Info'
+    'Green' = '-Type Success'
+    'Yellow' = '-Type Warning'
+    'Red'   = '-Type Error'
     'Debug'   = 'DarkGray'
     'Verbose' = 'Gray'
 }
