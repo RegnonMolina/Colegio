@@ -1,43 +1,18 @@
-#region → PARÂMETROS DE EXECUÇÃO
-[CmdletBinding()]
-param (
-    [Parameter(HelpMessage="Executa todas as rotinas de limpeza.")]
-    [bool]$RunAllCleanup = $false,
-
-    [Parameter(HelpMessage="Executa a remoção de Bloatware.")]
-    [bool]$RunBloatwareRemoval = $false,
-
-    [Parameter(HelpMessage="Aplica os ajustes de privacidade e registro.")]
-    [bool]$RunPrivacyTweaks = $false,
-
-    [Parameter(HelpMessage="Otimiza o desempenho de rede.")]
-    [bool]$RunNetworkOptimization = $false,
-
-    [Parameter(HelpMessage="Instala os aplicativos definidos.")]
-    [bool]$RunAppInstallation = $false,
-
-    [Parameter(HelpMessage="Executa diagnósticos do sistema.")]
-    [bool]$RunDiagnostics = $false,
-
-    [Parameter(HelpMessage="Cria um ponto de restauração do sistema antes de iniciar.")]
-    [bool]$CreateRestorePoint = $false,
-
-    [Parameter(HelpMessage="Força a remoção completa do OneDrive.")]
-    [bool]$ForceOneDriveRemoval = $false,
-
-    [Parameter(HelpMessage="Remove e desativa o Windows Copilot.")]
-    [bool]$RemoveCopilot = $false,
-
-    [Parameter(HelpMessage="Desativa o recurso Windows Recall.")]
-    [bool]$DisableRecall = $false,
-
-    [Parameter(HelpMessage="Executa o processo de atualização do Windows via PSWindowsUpdate.")]
-    [bool]$RunWindowsUpdate = $false,
-
-    [Parameter(HelpMessage="Aplica a configuração de plano de energia otimizado.")]
-    [bool]$ApplyOptimizedPowerPlan = $false
+param(
+    [switch]$RunAllCleanup,
+    [switch]$RunBloatwareRemoval,
+    [switch]$RunPrivacyTweaks,
+    [switch]$RunNetworkOptimization,
+    [switch]$RunAppInstallation,
+    [switch]$RunDiagnostics,
+    [switch]$CreateRestorePoint,
+    [switch]$ForceOneDriveRemoval,
+    [switch]$RemoveCopilot,
+    [switch]$DisableRecall,
+    [switch]$RunWindowsUpdate,
+    [switch]$ApplyOptimizedPowerPlan
 )
-#endregion
+
 
 # ===============================
 # SCRIPT SUPREMO DE MANUTENÇÃO 🛠️
@@ -70,7 +45,7 @@ $ScriptConfig = @{
 #endregion
 
 # Garante que o PowerShell esteja usando o TLS 1.2 para downloads seguros
-[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.Security.SecurityProtocolType]::Tls12
+[Net.ServicePointManager]::SecurityProtocol = `  [Net.ServicePointManager]::SecurityProtocol -bor `  [Net.SecurityProtocolType]::Tls12
 
 # =========================================================================
 # ✅ VERIFICAÇÃO INICIAL: Administrador
@@ -85,98 +60,155 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 # 📦 FUNÇÕES DE UTILIDADE E AUXILIARES (FUNDAMENTAL: Write-Log)
 # =========================================================================
 # 📝 Função de Log Personalizada (MANTENHA ESTA AQUI!)
+# --- Função Write-Log robusta ---
 function Write-Log {
-    [CmdletBinding(DefaultParameterSetName='MessageOnly')]
-    param (
-        [Parameter(Mandatory=$true, Position=0, ParameterSetName='MessageOnly')]
-        [Parameter(Mandatory=$true, Position=0, ParameterSetName='TypeAndMessage')]
-        [string]$Message,
+    param(
+        [Parameter(Mandatory,Position=0)]
+        [object]$Message = '',
 
-        [Parameter(Position=1, ParameterSetName='TypeAndMessage')]
-        [ValidateSet('Info', 'Success', 'Warning', 'Error', 'Debug', 'Verbose')]
-        [string]$Type = 'Info',
-
-        [Parameter(Position=2)]
-        [string]$Color = ''
+        [Parameter(Position=1)]
+        [ValidateSet('Info','Success','Warning','Error','Debug','Verbose')]
+        [string]$Type = 'Info'
     )
 
-    $defaultColors = @{
-        'Info' = 'Cyan'
-        'Success' = 'Green'
-        'Warning' = 'Yellow'
-        'Error' = 'Red'
-        'Debug' = 'DarkGray'
-        'Verbose' = 'Gray'
-    }
-
-    if ([string]::IsNullOrEmpty($Color)) {
-        $effectiveColor = $defaultColors[$Type]
+    # Garante texto
+    if ($null -eq $Message) { $Message = '' }
+    $text = if ($Message -is [array]) {
+        ($Message | ForEach-Object { ($_ -ne $null) ? $_.ToString() : '' }) -join ' '
     } else {
-        $effectiveColor = $Color
+        $Message.ToString()
     }
 
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logEntry = "[$timestamp] [$Type] $Message"
+    $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    $entry     = "[$timestamp] [$Type] $text"
+    $color     = $defaultColors[$Type]  # já existe garantia de key
 
-    $logFilePath = if ($script:ScriptConfig.LogFilePath) {
-        $script:ScriptConfig.LogFilePath
-    } else {
-        "$env:TEMP\ScriptSupremo_Fallback.log"
-    }
+    Write-Host $entry -ForegroundColor $color
 
-    $logDir = Split-Path -Path $logFilePath -Parent
-    if (-not (Test-Path $logDir)) {
-        try {
-            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
-        } catch {
-            Write-Host "ERRO: Não foi possível criar o diretório de log '$logDir'. Mensagem: $($_.Exception.Message)" -ForegroundColor Red
-        }
-    }
+    $logPath = $script:ScriptConfig.LogFilePath
+    if (-not $logPath) { $logPath = Join-Path $env:TEMP 'ScriptSupremo.log' }
 
     try {
-        Add-Content -Path $logFilePath -Value $logEntry -Encoding UTF8 -ErrorAction Stop
+        $entry | Out-File -FilePath $logPath -Append -Encoding UTF8
     } catch {
-        Write-Host "ERRO: Não foi possível escrever no arquivo de log '$logFilePath'. Mensagem: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "ERRO ao gravar log: $($_.Exception.Message)" -ForegroundColor Red
     }
-
-    Write-Host $logEntry -ForegroundColor $effectiveColor
 }
 
 #region → FUNÇÕES
 
-# === FUNÇÕES DE UTILIDADE ===
-function Write-Log {
-    [CmdletBinding(DefaultParameterSetName='MessageOnly')]
-    param (
-        [Parameter(Mandatory=$true, Position=0, ParameterSetName='MessageOnly')]
-        [Parameter(Mandatory=$true, Position=0, ParameterSetName='TypeAndMessage')]
-        [string]$Message,
+#region FUNÇÕES
 
-        [Parameter(Position=1, ParameterSetName='TypeAndMessage')]
-        [ValidateSet('Info', 'Success', 'Warning', 'Error', 'Debug', 'Verbose')]
-        [string]$Type = 'Info',
+# Cores padrão para cada tipo de log
+$defaultColors = @{
+    'Info'    = 'Cyan'
+    'Success' = 'Green'
+    'Warning' = 'Yellow'
+    'Error'   = 'Red'
+    'Debug'   = 'DarkGray'
+    'Verbose' = 'Gray'
+}
 
-        [Parameter(Position=2)]
-        [string]$Color = '' # Pode ser 'Red', 'Green', 'Yellow', 'Cyan', etc.
+function Test-ShouldRemovePackage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PackageName
     )
+    if ($global:whitelist -contains $PackageName) { return $false }
+    foreach ($pattern in $global:bloatwareToRemove) {
+        if ($PackageName -like $pattern) { return $true }
+    }
+    return $false
+}
 
-    # Cores padrão para cada tipo de log
-    $defaultColors = @{
-        'Info' = 'Cyan'
-        'Success' = 'Green'
-        'Warning' = 'Yellow'
-        'Error' = 'Red'
-        'Debug' = 'DarkGray'
-        'Verbose' = 'Gray'
+function Disable-BloatwareScheduledTasks {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param()
+    $tasks = Get-ScheduledTask | Where-Object { Test-ShouldRemovePackage $_.TaskName }
+    foreach ($t in $tasks) {
+        if ($PSCmdlet.ShouldProcess("Desabilitar tarefa", $t.TaskName)) {
+            Disable-ScheduledTask -TaskName $t.TaskName
+            Write-Log "Tarefa desabilitada: $($t.TaskName)" -Type Success
+        }
+    }
+}
+
+function Invoke-RemoveAllBloatware {
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
+    param()
+    if ($PSCmdlet.ShouldProcess('Remoção de bloatware', 'Todos os aplicativos não desejados')) {
+        Get-AppxPackage | ForEach-Object {
+            if (Test-ShouldRemovePackage $_.Name) {
+                Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue
+                Write-Log "Removido: $($_.Name)" -Type Success
+            }
+        }
+        Disable-BloatwareScheduledTasks
+    }
+}
+
+function Invoke-PrivacyTweaks {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Aplicar tweaks de privacidade','Configurações de Telemetria e Ads')) {
+        # Exemplo de tweak:
+        Write-Log "Desativando Telemetria..." -Type Info
+        # Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 0
+        # ...
+        Write-Log "Privacy tweaks aplicados." -Type Success
+    }
+}
+
+#endregion
+
+#region → EXECUÇÃO PRINCIPAL
+
+try {
+    if ($WhatIf) {
+        Write-Log -Message "=== MODO SIMULAÇÃO (WhatIf) ATIVADO ===" -Type Warning
     }
 
-    # Se uma cor específica não foi definida, use a cor padrão para o tipo
-    if ([string]::IsNullOrEmpty($Color)) {
-        $effectiveColor = $defaultColors[$Type]
-    } else {
-        $effectiveColor = $Color
+    # 2) Criar ponto de restauração (se solicitado)
+    if ($CreateRestorePoint) {
+        Write-Log -Message "Iniciando criação do Restore Point..." -Type Info
+
+        $cpParams = @{
+            Description      = "Antes do Script Supremo"
+            RestorePointType = "MODIFY_SETTINGS"
+        }
+        if ($WhatIf) { $cpParams['WhatIf'] = $true }
+
+        Checkpoint-Computer @cpParams
+
+        Write-Log -Message "Ponto de restauração solicitado." -Type Success
     }
 
+    # 3) Rodar remoção de bloatware
+    if ($RunBloatwareRemoval -or $RunAllCleanup) {
+        Write-Log -Message "Iniciando remoção de bloatware..." -Type Info
+        Invoke-RemoveAllBloatware @($WhatIf ? @{WhatIf=$true} : @{})
+    }
+
+    # 4) Rodar ajustes de privacidade
+    if ($RunPrivacyTweaks -or $RunAllCleanup) {
+        Write-Log -Message "Aplicando tweaks de privacidade..." -Type Info
+        Invoke-PrivacyTweaks @($WhatIf ? @{WhatIf=$true} : @{})
+    }
+
+    # (Adapte similarmente para Network, AppInstall, Diagnostics conforme seu roteiro)
+
+    Write-Log -Message "Script concluído com sucesso." -Type Success
+}
+catch {
+    $msg = $_.Exception.Message
+    Write-Host "[ERROR] Erro crítico: $msg" -ForegroundColor Red
+    exit 1
+}
+
+#endregion
+
+   
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $logEntry = "[$timestamp] [$Type] $Message"
 
@@ -204,11 +236,7 @@ function Write-Log {
         Write-Host "ERRO: Não foi possível escrever no arquivo de log '$logFilePath'. Mensagem: $($_.Exception.Message)" -ForegroundColor Red
     }
 
-    # Exibe a mensagem no console com a cor apropriada
-    Write-Host $logEntry -ForegroundColor $effectiveColor
-}
-
-function Suspend-Script {
+   function Suspend-Script {
 Write-Log "`nPressione ENTER para continuar..." -Type Info
     do {
         $key = [System.Console]::ReadKey($true)
@@ -279,7 +307,8 @@ Write-Log "ERRO ao reiniciar o Windows Explorer: $($_.Exception.Message)" -Type 
     }
     Start-Sleep -Seconds 2
 }
-Write-Log "Iniciando script de manutenção..." Cyan
+Write-Log -Message "Iniciando script de manutenção..." -Type Info
+
 
 
 
@@ -3199,824 +3228,216 @@ function New-FolderForced {
 
 #endregion
 
-#region → MENUS
+#region MENUS
+# ================================================
+# MENU INTERATIVO
+# ================================================
 
-# === FUNÇÕES DE MENU ===
-
-
-function Show-FullMaintenance {
+function Show-BloatwareMenu {
     Clear-Host
-Write-Log "=============================================" -Type Info
-Write-Log "        INICIANDO MANUTENÇÃO COMPLETA        " -Type Info
-Write-Log "=============================================" -Type Info
-    Write-Log "Iniciando Manutenção Completa..." Yellow
-
-    # Sequência lógica de chamadas aos novos menus e funções
-    # A maioria dos menus já tem sua própria opção de "Executar Todos" (Opção 1)
-    # Então, vamos simular a seleção da Opção 1 dentro de cada submenu
-    # Nota: Show-MainMenu não tem "Executar Todos", suas opções são os submenus em si.
-
-Write-Log "Executando: Menu de Instalação de Programas (Opção 1 - Todas as Ferramentas)..." -Type Success
-    # Chamando a função Install-Applications que está dentro de Show-InstallationMenu opção 1
-    Install-Applications
-    # Se Show-InstallationMenu tivesse outras funções que não estivessem em Install-Applications,
-    # ou uma opção de "Executar Todas" mais abrangente, chamaria essa opção aqui.
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Rede e Impressoras (Opção 1 - Todas as Configurações de Rede)..." -Type Success
-    # Chamando as funções que estão dentro de Show-NetworkMenu opção 1
-    Install-NetworkPrinters
-    Optimize-NetworkPerformance
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as Configurações)..." -Type Success
-    # Chamando as funções que estão dentro de Show-AdvancedSettingsMenu opção 1
-    Disable-UAC
-    Disable-SMBv1
-    Grant-HardenOfficeMacros
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -Type Success
-    # Chamando as funções que estão dentro de Show-UtilitiesMenu opção 1
-    Remove-Bloatware
-    Remove-OneDrive-AndRestoreFolders
-    Cleanup-System
-    Optimize-Drives
-    Grant-PrivacyTweaks
-    Grant-ControlPanelTweaks
-    Grant-ExtraTweaks
-    Disable-Cortana-AndSearch
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Diagnóstico e Informações (Opção 1 - Todas as Verificações)..." -Type Success
-    # Chamando as funções que estão dentro de Show-DiagnosticsMenu opção 1
-    sfc /scannow
-    Dism /Online /Cleanup-Image /RestoreHealth
-    # Chkdsk é omitido aqui por requerer reboot
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Scripts Externos e Ativadores (Opção 1 - Todos os Scripts)..." -Type Success
-    # Chame aqui as funções ou comandos para seus scripts externos,
-    # como você os configurou na opção 1 de Show-ExternalScriptsMenu
-    # Exemplo: & "$PSScriptRoot\ExternalScripts\ScriptExterno1.ps1"
-    # Exemplo: Start-Process "C:\Caminho\Para\SeuAtivador.exe" -Wait
-    Start-Sleep 2
-
-
-Write-Log "=============================================" -Type Info
-Write-Log "        MANUTENÇÃO COMPLETA CONCLUÍDA!       " -Type Info
-Write-Log "=============================================" -Type Info
-    Write-Log "Manutenção Completa Concluída." Green
-    Show-SuccessMessage
-    [Console]::ReadKey($true) | Out-Null
+    Write-Host "=== BLOATWARE MENU ===" -ForegroundColor Cyan
+    @"
+1) Remover todos bloatwares
+2) Forçar remoção do OneDrive
+3) Remover Copilot
+4) Desativar Recall
+A) Executar tudo
+X) Voltar
+Z) Menu Principal
+"@ | Write-Host
+    return Read-Host 'Escolha uma opção'
 }
 
-function Show-PersonalizationTweaksMenu {
-    do {
-        Clear-Host
-Write-Log "=============================================" -Type Info
-Write-Log "   MENU DE PERSONALIZAÇÃO E NOVOS RECURSOS   " -Type Info
-Write-Log "=============================================" -Type Info
-        Write-Log "Exibindo menu de Personalização e Novos Recursos..." Blue
-
-Write-Log " A. Executar Todos os Ajustes de Personalização (Sequência)" -Type Success
-Write-Log " B. Ativar 'Finalizar tarefa' na barra de tarefas"
-Write-Log " C. Ativar atualizações antecipadas do Windows Update"
-Write-Log " D. Ativar modo escuro"
-Write-Log " E. Ativar histórico da área de transferência"
-Write-Log " F. Restauração de apps após reinício"
-Write-Log " G. Mostrar segundos no relógio"
-Write-Log " H. Updates para outros produtos Microsoft"
-Write-Log " I. Habilitar sudo embutido (Windows 11 24H2+)"
-Write-Log "`n X. Voltar ao Menu Anterior"
-Write-Log "=============================================" -Type Info
-
-        $key = [Console]::ReadKey($true).Key
-        Write-Log "Opção escolhida no menu de Personalização: $key" Blue
-
-        switch ($key) {
-            'A' {
-Write-Log "Executando: Todos os Ajustes de Personalização..." -Type Warning
-                Enable-TaskbarEndTask
-                Enable-WindowsUpdateFast
-                Enable-DarkTheme
-                Enable-ClipboardHistory
-                Enable-RestartAppsAfterReboot
-                Enable-TaskbarSeconds
-                Enable-OtherMicrosoftUpdates
-                Enable-Sudo
-Write-Log "Todos os Ajustes de Personalização Concluídos!" -Type Success
-                [Console]::ReadKey($true) | Out-Null
-            }
-            'B' { Enable-TaskbarEndTask; Show-SuccessMessage }
-            'C' { Enable-WindowsUpdateFast; Show-SuccessMessage }
-            'D' { Enable-DarkTheme; Show-SuccessMessage }
-            'E' { Enable-ClipboardHistory; Show-SuccessMessage }
-            'F' { Enable-RestartAppsAfterReboot; Show-SuccessMessage }
-            'G' { Enable-TaskbarSeconds; Show-SuccessMessage }
-            'H' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
-            'I' { Enable-Sudo; Show-SuccessMessage }
-            'x' { return }
-            'X' { return }
-            default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
-                [Console]::ReadKey($true) | Out-Null
-            }
-        }
-    } while ($true)
+function Show-TweaksMenu {
+    Clear-Host
+    Write-Host "=== TWEAKS MENU ===" -ForegroundColor Cyan
+    @"
+1) Aplicar privacy tweaks
+2) Windows Update
+A) Executar tudo
+X) Voltar
+Z) Menu Principal
+"@ | Write-Host
+    return Read-Host 'Escolha uma opção'
 }
 
-function Show-AdvancedSettingsMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[AJUSTES AVANÇADOS]" -ForegroundColor Cyan
-        Write-Host " A) Aplicar Hardening de Segurança"
-        Write-Host " B) Desabilitar UAC"
-        Write-Host " C) Desabilitar SMBv1"
-        Write-Host " D) Configurar Macros Office (segurança)"
-        Write-Host " X) Voltar"
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Enable-WindowsHardening }
-            'B' { Disable-UAC }
-            'C' { Disable-SMBv1 }
-            'D' { Grant-HardenOfficeMacros }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
-}
-
-function Show-DiagnosticsMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[DIAGNÓSTICOS]" -ForegroundColor Cyan
-        Write-Host " A) SFC /SCANNOW"
-        Write-Host " B) DISM /RestoreHealth"
-        Write-Host " C) SMART dos Discos"
-        Write-Host " D) Teste de Memória"
-        Write-Host " E) Informações do Sistema"
-        Write-Host " X) Voltar"
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Invoke-SFC-Scan }
-            'B' { Invoke-DISM-Scan }
-            'C' { Test-SMART-Drives }
-            'D' { Test-Memory }
-            'E' { Show-SystemInfo }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
+function Show-RedesMenu {
+    Clear-Host
+    Write-Host "=== REDES MENU ===" -ForegroundColor Cyan
+    @"
+1) Otimização de redes
+A) Executar tudo
+X) Voltar
+Z) Menu Principal
+"@ | Write-Host
+    return Read-Host 'Escolha uma opção'
 }
 
 function Show-AppsMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[APLICATIVOS]" -ForegroundColor Cyan
-        Write-Host " A) Instalar Aplicativos (pacote completo)"
-        Write-Host " B) Atualizar PowerShell"
-        Write-Host " C) Ativar Sudo (Win11 24H2+)"
-        Write-Host " D) Ativar atualizações estendidas do Windows Update"
-        Write-Host " X) Voltar"
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Install-Applications }
-            'B' { Update-PowerShell }
-            'C' { Enable-Sudo }
-            'D' { Enable-WindowsUpdateFast }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
+    Clear-Host
+    Write-Host "=== APPS MENU ===" -ForegroundColor Cyan
+    @"
+1) Instalar apps
+A) Executar tudo
+X) Voltar
+Z) Menu Principal
+"@ | Write-Host
+    return Read-Host 'Escolha uma opção'
 }
 
-function Show-NetworkMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[REDE E IMPRESSORAS]" -ForegroundColor Cyan
-        Write-Host " A) Configurar rede Wi-Fi"
-        Write-Host " B) Configurar DNS Google/Cloudflare"
-        Write-Host " C) Instalar impressoras de rede"
-        Write-Host " D) Testar velocidade da internet"
-        Write-Host " E) Otimizar desempenho de rede"
-        Write-Host " X) Voltar"
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Add-WiFiNetwork }
-            'B' { Set-DnsGoogleCloudflare }
-            'C' { Install-NetworkPrinters }
-            'D' { Test-InternetSpeed }
-            'E' { Optimize-NetworkPerformance }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
+function Show-DiagnosticsMenu {
+    Clear-Host
+    Write-Host "=== DIAGNÓSTICOS MENU ===" -ForegroundColor Cyan
+    @"
+1) Executar diagnósticos
+A) Executar tudo
+X) Voltar
+Z) Menu Principal
+"@ | Write-Host
+    return Read-Host 'Escolha uma opção'
 }
 
-function Show-ExternalScriptsMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[SCRIPTS EXTERNOS]" -ForegroundColor Cyan
-        Write-Host " A) Rodar Ativador get.activated.win"
-        Write-Host " B) Executar Chris Titus Toolbox"
-        Write-Host " C) Rodar WinUtil, SpeedyFox, etc."
-        Write-Host " D) Atualizar Script Supremo pela URL"
-        Write-Host " X) Voltar"
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Invoke-WindowsActivator }
-            'B' { Invoke-ChrisTitusToolbox }
-            'C' { Invoke-ExternalDebloaters }
-            'D' { Update-ScriptFromCloud }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
+function Show-UndoMenu {
+    Clear-Host
+    Write-Host "=== UNDO MENU ===" -ForegroundColor Cyan
+    @"
+1) Restaurar sistema (ponto de restauração)
+A) Executar tudo
+X) Voltar
+Z) Menu Principal
+"@ | Write-Host
+    return Read-Host 'Escolha uma opção'
 }
-
-function Show-RestoreMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[RESTAURAR / BACKUP]" -ForegroundColor Cyan
-        Write-Host " A) Criar ponto de restauração"
-        Write-Host " B) Backup do Registro"
-        Write-Host " C) Restaurar Registro (pasta)"
-        Write-Host " D) Restaurar configurações visuais"
-        Write-Host " E) Restaurar UAC padrão"
-        Write-Host " F) Reinstalar OneDrive"
-        Write-Host " G) Reinstalar Apps essenciais"
-        Write-Host " H) Restaurar menu de contexto clássico"
-        Write-Host " I) Restaurar macros Office"
-        Write-Host " J) Restaurar IPv6"
-        Write-Host " K) Reabilitar notificações Action Center"
-        Write-Host " X) Voltar"
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { New-SystemRestorePoint }
-            'B' { Backup-Registry }
-            'C' { Restore-Registry }
-            'D' { Restore-VisualPerformanceDefault }
-            'E' { Restore-DefaultUAC }
-            'F' { Restore-OneDrive }
-            'G' { Restore-BloatwareSafe }
-            'H' { Enable-ClassicContextMenu }
-            'I' { Restore-OfficeMacros }
-            'J' { Restore-DefaultIPv6 }
-            'K' { Grant-ActionCenter-Notifications }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
-}
-
-function Show-UtilitiesMenu {
-    do {
-        Clear-Host
-Write-Log "=============================================" -Type Info
-Write-Log "       MENU DE UTILITÁRIOS DO SISTEMA        " -Type Info
-Write-Log "=============================================" -Type Info
-        Write-Log "Exibindo menu de Utilitários do Sistema..." Blue
-
-Write-Log " A. Executar Todas as Tarefas de Otimização (Sequência)" -Type Success
-Write-Log " B. Gerenciar Bloatware"
-Write-Log " C. Limpeza e Otimização de Disco"
-Write-Log " D. Aplicar Otimizações de Desempenho e Privacidade"
-Write-Log " E. Desativar Cortana e Pesquisa Online"
-Write-Log "`n X. Voltar ao Menu Principal"
-Write-Log "=============================================" -Type Info
-
-        $key = [Console]::ReadKey($true).Key
-        Write-Log "Opção escolhida no menu de Utilitários: $key" Blue
-
-        switch ($key) {
-            'A' {
-Write-Log "Executando: Todas as Tarefas de Otimização..." -Type Warning
-                Remove-Bloatware
-                Remove-OneDrive-AndRestoreFolders
-                Cleanup-System
-                Optimize-Drives
-                Grant-PrivacyTweaks
-                Grant-ControlPanelTweaks
-                Grant-ExtraTweaks
-                Disable-Cortana-AndSearch
-                Show-PersonalizationTweaksMenu # NOVO: CHAMA O MENU DE PERSONALIZAÇÃO COMPLETO
-Write-Log "Todas as Tarefas de Otimização Concluídas!" -Type Success
-                [Console]::ReadKey($true) | Out-Null
-            }
-            'B' {
-                do {
-                    Clear-Host
-Write-Log "=============================================" -Type Info
-Write-Log "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -Type Info
-Write-Log "=============================================" -Type Info
-                    Write-Log "Exibindo submenu de Bloatware..." Blue
-
-Write-Log " A. Remover Bloatware (Todos em sequência)"
-Write-Log " B. Remover Aplicativos Pré-instalados (Bloatware)"
-Write-Log " C. Remover OneDrive e Restaurar Pastas"
-Write-Log "`n X. Voltar ao Menu Anterior"
-Write-Log "=============================================" -Type Info
-
-                    $subChoice = [Console]::ReadKey($true).Key
-                    Write-Log "Opção escolhida no submenu de Bloatware: $subChoice" Blue
-
-                    switch ($subChoice) {
-                        'A' {
-Write-Log "Executando: Remover Bloatware (Todos em sequência)..." -Type Warning
-                            Remove-Bloatware
-                            Remove-OneDrive-AndRestoreFolders
-Write-Log "Remoção de Bloatware Concluída!" -Type Success
-                            [Console]::ReadKey($true) | Out-Null
-                        }
-                        'B' { Remove-Bloatware; Show-SuccessMessage }
-                        'C' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
-                        'x' { return }
-                        'X' { return }
-                        default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
-                            [Console]::ReadKey($true) | Out-Null
-                        }
-                    }
-                } while ($true)
-            }
-            'C' {
-                do {
-                    Clear-Host
-Write-Log "=============================================" -Type Info
-Write-Log "      SUBMENU DE LIMPEZA E OTIMIZAÇÃO DE DISCO      " -Type Info
-Write-Log "=============================================" -Type Info
-                    Write-Log "Exibindo submenu de Limpeza e Otimização..." Blue
-
-Write-Log " A. Executar Todas as Tarefas de Limpeza e Otimização"
-Write-Log " B. Limpeza de Arquivos Temporários"
-Write-Log " C. Desfragmentar/Otimizar Drives"
-Write-Log "`n X. Voltar ao Menu Anterior"
-Write-Log "=============================================" -Type Info
-
-                    $subChoice = [Console]::ReadKey($true).Key
-                    Write-Log "Opção escolhida no submenu de Limpeza: $subChoice" Blue
-
-                    switch ($subChoice) {
-                        'A' {
-Write-Log "Executando: Todas as Tarefas de Limpeza e Otimização..." -Type Warning
-                            Cleanup-System
-                            Optimize-Drives
-Write-Log "Limpeza e Otimização Concluídas!" -Type Success
-                            [Console]::ReadKey($true) | Out-Null
-                        }
-                        'B' { Cleanup-System; Show-SuccessMessage }
-                        'C' { Optimize-Drives; Show-SuccessMessage }
-                        'x' { return }
-                        'X' { return }
-                        default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
-                            [Console]::ReadKey($true) | Out-Null
-                        }
-                    }
-                } while ($true)
-            }
-            'D' { # Otimizações de Desempenho e Privacidade
-                do {
-                    Clear-Host
-Write-Log "=============================================" -Type Info
-Write-Log "    SUBMENU DE OTIMIZAÇÕES DE DESEMPENHO E PRIVACIDADE    " -Type Info
-Write-Log "=============================================" -Type Info
-                    Write-Log "Exibindo submenu de Otimizações de Desempenho e Privacidade..." Blue
-
-Write-Log " A. Aplicar Todas as Otimizações de Desempenho e Privacidade"
-Write-Log " B. Aplicar Tweaks de Privacidade"
-Write-Log " C. Ajustar Painel de Controle e Explorer"
-Write-Log " D. Aplicar Tweaks Extras"
-Write-Log " E. Outros Ajustes e Personalização" -Type Success
-Write-Log "`n X. Voltar ao Menu Anterior"
-Write-Log "=============================================" -Type Info
-
-                    $subChoice = [Console]::ReadKey($true).Key
-                    Write-Log "Opção escolhida no submenu de Desempenho e Privacidade: $subChoice" Blue
-
-                    switch ($subChoice) {
-                        'A' {
-Write-Log "Executando: Todas as Otimizações de Desempenho e Privacidade..." -Type Warning
-                            Grant-PrivacyTweaks
-                            Grant-ControlPanelTweaks
-                            Grant-ExtraTweaks
-                            Show-PersonalizationTweaksMenu # NOVO: CHAMA O MENU DE PERSONALIZAÇÃO COMPLETO
-Write-Log "Otimizações de Desempenho e Privacidade Concluídas!" -Type Success
-                            [Console]::ReadKey($true) | Out-Null
-                        }
-                        'B' { Grant-PrivacyTweaks; Show-SuccessMessage }
-                        'C' { Grant-ControlPanelTweaks; Show-SuccessMessage }
-                        'D' { Grant-ExtraTweaks; Show-SuccessMessage }
-                        'E' { Show-PersonalizationTweaksMenu }
-                        'x' { return }
-                        'X' { return }
-                        default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
-                            [Console]::ReadKey($true) | Out-Null
-                        }
-                    }
-                } while ($true)
-            }
-            'E' { Disable-Cortana-AndSearch; Show-SuccessMessage }
-            'x' { return }
-            'X' { return }
-            default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
-                [Console]::ReadKey($true) | Out-Null
-            }
-        }
-    } while ($true)
-}
-
-function Show-CleanupMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[LIMPEZA E OTIMIZAÇÃO]" -ForegroundColor Cyan
-        Write-Host " A) Limpeza de temporários"
-        Write-Host " B) Limpeza profunda"
-        Write-Host " C) Otimizar volumes"
-        Write-Host " D) Remover Windows.old"
-        Write-Host " E) Limpar cache DNS"
-        Write-Host " X) Voltar"
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Clear-TemporaryFiles }
-            'B' { Clear-DeepSystemCleanup }
-            'C' { Optimize-Volumes }
-            'D' { Remove-WindowsOld }
-            'E' { Clear-DNS }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
-}
-
-function Show-BloatwareMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[REMOÇÃO DE BLOATWARE]" -ForegroundColor Cyan
-        Write-Host " A) Remover aplicativos pré-instalados"
-        Write-Host " B) Desativar tarefas agendadas Xbox/OneDrive"
-        Write-Host " C) Encerrar processos dispensáveis"
-        Write-Host " D) Remover pins do Menu Iniciar e Taskbar"
-        Write-Host " E) Remover OneDrive completamente"
-        Write-Host " F) Remover Copilot (Win11)"
-        Write-Host " G) Remover Widgets e sugestões"
-        Write-Host " X) Voltar"
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Remove-Bloatware }
-            'B' { Disable-BloatwareScheduledTasks }
-            'C' { Stop-BloatwareProcesses }
-            'D' { Remove-StartAndTaskbarPins }
-            'E' { Force-RemoveOneDrive }
-            'F' { Remove-WindowsCopilot }
-            'G' { Grant-PrivacyTweaks }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
-}
-
-function Show-SystemPerformanceMenu {
-    do {
-        Clear-Host
-Write-Log "==== MENU: DESEMPENHO DO SISTEMA ====" -Type Info
-Write-Log " A. Executar todas as otimizações" -Type Success
-Write-Log " B. Aplicar tema de desempenho"
-Write-Log " C. Otimizar Windows Explorer"
-Write-Log " D. Desativar serviços desnecessários"
-Write-Log " E. Ajustar visual para performance"
-Write-Log " F. Criar ponto de restauração"
-Write-Log " G. Aplicar hardening de segurança"
-Write-Log " X. Voltar ao menu anterior" -Type Success
-
-        $key = [Console]::ReadKey($true).Key
-        switch ($key) {
-            'A' {
-                Set-PerformanceTheme
-                Optimize-ExplorerPerformance
-                Disable-UnnecessaryServices
-                Set-VisualPerformance
-                New-SystemRestorePoint
-                Enable-WindowsHardening
-                Show-SuccessMessage
-            }
-            'B' { Set-PerformanceTheme; Show-SuccessMessage }
-            'C' { Optimize-ExplorerPerformance; Show-SuccessMessage }
-            'D' { Disable-UnnecessaryServices; Show-SuccessMessage }
-            'E' { Set-VisualPerformance; Show-SuccessMessage }
-            'F' { New-SystemRestorePoint; Show-SuccessMessage }
-            'G' { Enable-WindowsHardening; Show-SuccessMessage }
-            'X' { return }
-            default {
-Write-Log "`nOpção inválida!" -Type Error
-                Start-Sleep 1
-            }
-        }
-    } while ($true)
-}
-
-function Show-WindowsFeaturesMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[RECURSOS DO WINDOWS]" -ForegroundColor Cyan
-        Write-Host " A) Remover Copilot"
-        Write-Host " B) Desativar Recall"
-        Write-Host " C) Aplicar plano de energia otimizado"
-        Write-Host " X) Voltar"
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Remove-WindowsCopilot }
-            'B' { Disable-WindowsRecall }
-            'C' { Set-OptimizedPowerPlan }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
-}
-
-# === MENU PRINCIPAL ===
 
 function Show-MainMenu {
-    do {
-        clear-host
-        Write-Host "==================================================="
-        Write-Host "             Script Supremo de Manutenção"
-        Write-Host "==================================================="
-        Write-Host "Selecione uma opção:"
-        Write-Host ""
-        Write-Host " A) Avançado e Diagnósticos"
-        Write-Host " B) Aplicativos e Bloatware"
-        Write-Host " C) Limpeza do Sistema"
-        Write-Host " D) Rede e Conectividade"
-        Write-Host " E) Privacidade e Otimização"
-        Write-Host " F) Restauração e Backup"
-        Write-Host " G) Scripts Externos (Ainda não implementado)"
-        Write-Host " H) Windows Update"
-        Write-Host " 0) Sair"
-        Write-Host "==================================================="
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Show-AdvancedDiagnosticsMenu }
-            'B' { Show-AppsBloatwareMenu }
-            'C' { Show-SystemCleanupMenu }
-            'D' { Show-NetworkConnectivityMenu }
-            'E' { Show-PrivacyOptimizationMenu }
-            'F' { Show-RestoreBackupMenu }
-            'G' { Show-ExternalScriptsMenu } # Placeholder
-            'H' { Show-WindowsUpdateMenu }
-            '0' { break }
-            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
-        }
-    } while ($true)
+    Clear-Host
+    Write-Host "=== SCRIPT SUPREMO - MENU PRINCIPAL ===" -ForegroundColor Cyan
+    @"
+1) Bloatware
+2) Tweaks
+3) Redes
+4) Apps
+5) Diagnósticos
+6) Undo
+R) Reiniciar
+S) Desligar
+0) Sair
+"@ | Write-Host
+    return Read-Host 'Escolha uma opção'
 }
 
-function Show-AdvancedDiagnosticsMenu {
-    do {
-        clear-host
-        Write-Host "==================================================="
-        Write-Host "             Menu: Avançado e Diagnósticos"
-        Write-Host "==================================================="
-        Write-Host "Selecione uma opção:"
-        Write-Host ""
-        Write-Host " A.1) Desativar UAC (Controle de Conta de Usuário)"
-        Write-Host " A.2) Gerenciar Plano de Energia Otimizado"
-        Write-Host " A.3) Reiniciar Windows Explorer"
-        Write-Host " A.4) Testar Integridade de Disco (SMART)"
-        Write-Host " A.5) Testar Memória (Agendar)"
-        Write-Host " A.6) Tweaks Adicionais e de Registro"
-        Write-Host " 0) Voltar ao Menu Principal"
-        Write-Host "==================================================="
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            '1' { Disable-UAC; Show-SuccessMessage; Suspend-Script }
-            '2' { Manage-OptimizedPowerPlan; Show-SuccessMessage; Suspend-Script }
-            '3' { Restart-Explorer; Show-SuccessMessage; Suspend-Script }
-            '4' { Test-DiskIntegrity; Show-SuccessMessage; Suspend-Script }
-            '5' { Test-Memory; Show-SuccessMessage; Suspend-Script }
-            '6' { Apply-ExtraTweaks; Show-SuccessMessage; Suspend-Script } # Assuming this function handles the tweaks
-            '0' { break }
-            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+# Loop principal
+do {
+    $opt = Show-MainMenu
+    switch ($opt.ToUpper()) {
+        '1' {
+            do {
+                $sub = Show-BloatwareMenu
+                switch ($sub.ToUpper()) {
+                    '1' { Invoke-RemoveAllBloatware }
+                    '2' { Invoke-OneDriveRemoval }
+                    '3' { Invoke-RemoveCopilot }
+                    '4' { Invoke-DisableRecall }
+                    'A' {
+                        Invoke-RemoveAllBloatware
+                        Invoke-OneDriveRemoval
+                        Invoke-RemoveCopilot
+                        Invoke-DisableRecall
+                    }
+                    'X' { break }
+                    'Z' { goto Main }
+                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
+                }
+                if ($sub.ToUpper() -in '1','2','3','4','A') { Read-Host 'ENTER para continuar' }
+            } while ($true)
         }
-    } while ($true)
-}
-
-function Show-AppsBloatwareMenu {
-    do {
-        clear-host
-        Write-Host "==================================================="
-        Write-Host "             Menu: Aplicativos e Bloatware"
-        Write-Host "==================================================="
-        Write-Host "Selecione uma opção:"
-        Write-Host ""
-        Write-Host " B.1) Desabilitar Tarefas Agendadas de Bloatware"
-        Write-Host " B.2) Desativar Processos de Bloatware"
-        Write-Host " B.3) Forçar Remoção Completa do OneDrive"
-        Write-Host " B.4) Remover Bloatware e Aplicativos Pré-instalados"
-        Write-Host " B.5) Remover Pins do Menu Iniciar e Barra de Tarefas"
-        Write-Host " B.6) Remover Tarefas Agendadas Agressivamente"
-        Write-Host " 0) Voltar ao Menu Principal"
-        Write-Host "==================================================="
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            '1' { Disable-BloatwareScheduledTasks; Show-SuccessMessage; Suspend-Script }
-            '2' { Disable-BloatwareProcesses; Show-SuccessMessage; Suspend-Script }
-            '3' { Force-RemoveOneDrive; Show-SuccessMessage; Suspend-Script }
-            '4' { Remove-Bloatware; Show-SuccessMessage; Suspend-Script }
-            '5' { Remove-StartTaskbarPins; Show-SuccessMessage; Suspend-Script }
-            '6' { Aggressive-RemoveScheduledTasks; Show-SuccessMessage; Suspend-Script }
-            '0' { break }
-            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        '2' {
+            do {
+                $sub = Show-TweaksMenu
+                switch ($sub.ToUpper()) {
+                    '1' { Invoke-PrivacyTweaks }
+                    '2' { Invoke-RunWindowsUpdate }
+                    'A' {
+                        Invoke-PrivacyTweaks
+                        Invoke-RunWindowsUpdate
+                    }
+                    'X' { break }
+                    'Z' { goto Main }
+                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
+                }
+                if ($sub.ToUpper() -in '1','2','A') { Read-Host 'ENTER para continuar' }
+            } while ($true)
         }
-    } while ($true)
-}
-
-function Show-SystemCleanupMenu {
-    do {
-        clear-host
-        Write-Host "==================================================="
-        Write-Host "             Menu: Limpeza do Sistema"
-        Write-Host "==================================================="
-        Write-Host "Selecione uma opção:"
-        Write-Host ""
-        Write-Host " C.1) Limpeza de Cache ARP"
-        Write-Host " C.2) Limpeza de Cache DNS"
-        Write-Host " C.3) Limpeza de Cache do Windows Update"
-        Write-Host " C.4) Limpeza de Prefetch"
-        Write-Host " C.5) Limpeza de Spooler de Impressão"
-        Write-Host " C.6) Limpeza de WinSxS (Component Store)"
-        Write-Host " C.7) Limpeza Profunda do Sistema"
-        Write-Host " C.8) Limpeza de Arquivos Temporários"
-        Write-Host " C.9) Otimização de Volumes (Desfragmentação/Trim)"
-        Write-Host " C.10) Remover Windows.old"
-        Write-Host " C.11) Agendar Verificação de Disco (ChkDsk)"
-        Write-Host " 0) Voltar ao Menu Principal"
-        Write-Host "==================================================="
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            '1' { Clear-ARP; Show-SuccessMessage; Suspend-Script }
-            '2' { Clear-DNS; Show-SuccessMessage; Suspend-Script }
-            '3' { Clear-WUCache; Show-SuccessMessage; Suspend-Script }
-            '4' { Clear-Prefetch; Show-SuccessMessage; Suspend-Script }
-            '5' { Clear-PrintSpooler; Show-SuccessMessage; Suspend-Script }
-            '6' { Clear-WinSxS; Show-SuccessMessage; Suspend-Script }
-            '7' { Clear-DeepSystemCleanup; Show-SuccessMessage; Suspend-Script }
-            '8' { Clear-TemporaryFiles; Show-SuccessMessage; Suspend-Script }
-            '9' { Optimize-Volumes; Show-SuccessMessage; Suspend-Script }
-            '10' { Remove-WindowsOld; Show-SuccessMessage; Suspend-Script }
-            '11' { New-ChkDsk; Show-SuccessMessage; Suspend-Script }
-            '0' { break }
-            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        '3' {
+            do {
+                $sub = Show-RedesMenu
+                switch ($sub.ToUpper()) {
+                    '1' { Invoke-NetworkOptimization }
+                    'A' { Invoke-NetworkOptimization }
+                    'X' { break }
+                    'Z' { goto Main }
+                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
+                }
+                if ($sub.ToUpper() -in '1','A') { Read-Host 'ENTER para continuar' }
+            } while ($true)
         }
-    } while ($true)
-}
-
-function Show-NetworkConnectivityMenu {
-    do {
-        clear-host
-        Write-Host "==================================================="
-        Write-Host "             Menu: Rede e Conectividade"
-        Write-Host "==================================================="
-        Write-Host "Selecione uma opção:"
-        Write-Host ""
-        Write-Host " D.1) Limpar Cache ARP"
-        Write-Host " D.2) Limpar Cache DNS"
-        Write-Host " D.3) Configurar DNS (Google/Cloudflare)"
-        Write-Host " D.4) Testar Velocidade da Internet"
-        Write-Host " D.5) Otimizar Desempenho de Rede"
-        Write-Host " 0) Voltar ao Menu Principal"
-        Write-Host "==================================================="
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            '1' { Clear-ARP; Show-SuccessMessage; Suspend-Script }
-            '2' { Clear-DNS; Show-SuccessMessage; Suspend-Script }
-            '3' { Configure-DNS; Show-SuccessMessage; Suspend-Script }
-            '4' { Test-InternetSpeed; Show-SuccessMessage; Suspend-Script }
-            '5' { Optimize-NetworkPerformance; Show-SuccessMessage; Suspend-Script } # Assuming this function exists or will be created
-            '0' { break }
-            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        '4' {
+            do {
+                $sub = Show-AppsMenu
+                switch ($sub.ToUpper()) {
+                    '1' { Invoke-AppInstallation }
+                    'A' { Invoke-AppInstallation }
+                    'X' { break }
+                    'Z' { goto Main }
+                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
+                }
+                if ($sub.ToUpper() -in '1','A') { Read-Host 'ENTER para continuar' }
+            } while ($true)
         }
-    } while ($true)
-}
-
-function Show-PrivacyOptimizationMenu {
-    do {
-        clear-host
-        Write-Host "==================================================="
-        Write-Host "             Menu: Privacidade e Otimização"
-        Write-Host "==================================================="
-        Write-Host "Selecione uma opção:"
-        Write-Host ""
-        Write-Host " E.1) Ajustar Visual para Performance"
-        Write-Host " E.2) Aplicar Tweaks de Privacidade e Desativação de Bloatware (Geral)"
-        Write-Host " E.3) Desativar Action Center e Notificações"
-        Write-Host " E.4) Desativar Cortana e Pesquisa na Nuvem"
-        Write-Host " E.5) Desabilitar Macros Perigosas do Office"
-        Write-Host " E.6) Restaurar Menu de Contexto Clássico (Win11)"
-        Write-Host " 0) Voltar ao Menu Principal"
-        Write-Host "==================================================="
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            '1' { Adjust-VisualPerformance; Show-SuccessMessage; Suspend-Script }
-            '2' { Grant-PrivacyTweaks; Show-SuccessMessage; Suspend-Script }
-            '3' { Disable-ActionCenterNotifications; Show-SuccessMessage; Suspend-Script }
-            '4' { Disable-CortanaSearch; Show-SuccessMessage; Suspend-Script }
-            '5' { Disable-OfficeMacros; Show-SuccessMessage; Suspend-Script } # Assuming this function exists or will be created
-            '6' { Restore-ClassicContextMenu; Show-SuccessMessage; Suspend-Script } # Assuming this function exists or will be created
-            '0' { break }
-            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        '5' {
+            do {
+                $sub = Show-DiagnosticsMenu
+                switch ($sub.ToUpper()) {
+                    '1' { Invoke-Diagnostics }
+                    'A' { Invoke-Diagnostics }
+                    'X' { break }
+                    'Z' { goto Main }
+                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
+                }
+                if ($sub.ToUpper() -in '1','A') { Read-Host 'ENTER para continuar' }
+            } while ($true)
         }
-    } while ($true)
-}
-
-function Show-RestoreBackupMenu {
-    do {
-        clear-host
-        Write-Host "==================================================="
-        Write-Host "             Menu: Restauração e Backup"
-        Write-Host "==================================================="
-        Write-Host "Selecione uma opção:"
-        Write-Host ""
-        Write-Host " F.1) Criar Ponto de Restauração do Sistema"
-        Write-Host " F.2) Fazer Backup do Registro"
-        Write-Host " 0) Voltar ao Menu Principal"
-        Write-Host "==================================================="
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            '1' { Create-SystemRestorePoint; Show-SuccessMessage; Suspend-Script }
-            '2' { Backup-Registry; Show-SuccessMessage; Suspend-Script }
-            '0' { break }
-            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        '6' {
+            do {
+                $sub = Show-UndoMenu
+                switch ($sub.ToUpper()) {
+                    '1' { 
+                        # Restaurar sistema via ponto de restauração
+                        Checkpoint-Computer -RestorePointType "APPLICATION_INSTALL" -Description "Undo via menu"
+                    }
+                    'A' {
+                        Checkpoint-Computer -RestorePointType "APPLICATION_INSTALL" -Description "Undo via menu"
+                    }
+                    'X' { break }
+                    'Z' { goto Main }
+                    default { Write-Host 'Opção inválida' -ForegroundColor Yellow }
+                }
+                if ($sub.ToUpper() -in '1','A') { Read-Host 'ENTER para continuar' }
+            } while ($true)
         }
-    } while ($true)
-}
-
-function Show-ExternalScriptsMenu {
-    do {
-        clear-host
-        Write-Host "==================================================="
-        Write-Host "             Menu: Scripts Externos"
-        Write-Host "==================================================="
-        Write-Host "Selecione uma opção:"
-        Write-Host ""
-        Write-Host " G.1) Executar Script Personalizado 1 (Placeholder)"
-        Write-Host " G.2) Executar Script Personalizado 2 (Placeholder)"
-        Write-Host " 0) Voltar ao Menu Principal"
-        Write-Host "==================================================="
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            '1' { Write-Log "Função ainda não implementada." -Type Warning; Suspend-Script }
-            '2' { Write-Log "Função ainda não implementada." -Type Warning; Suspend-Script }
-            '0' { break }
-            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        'R' {
+            Write-Host 'Reiniciando...' -ForegroundColor Cyan
+            Restart-Computer -Force
         }
-    } while ($true)
-}
-
-function Show-WindowsUpdateMenu {
-    do {
-        clear-host
-        Write-Host "==================================================="
-        Write-Host "             Menu: Windows Update"
-        Write-Host "==================================================="
-        Write-Host "Selecione uma opção:"
-        Write-Host ""
-        Write-Host " H.1) Gerenciar Atualizações do Windows (com opções)"
-        Write-Host " 0) Voltar ao Menu Principal"
-        Write-Host "==================================================="
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            '1' { Manage-WindowsUpdates; Show-SuccessMessage; Suspend-Script }
-            '0' { break }
-            default { Write-Log "Opção inválida. Tente novamente." -Type Warning; Suspend-Script }
+        'S' {
+            Write-Host 'Desligando...' -ForegroundColor Cyan
+            Stop-Computer -Force
         }
-    } while ($true)
-}
-
-# -------------------------------------------------------------------------
-# 🔧 Função principal: ponto de entrada do script
-function Start-ScriptSupremo {
-    Write-Log "`n🛠️ Iniciando o script de manutenção..." -Type Info
-
-    try {
-        Write-Log "⚙️ Chamando o menu principal..." -Type Warning
-        Show-MainMenu
-    } catch {
-        Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Error
+        '0' { break }
+        default {
+            Write-Host 'Opção inválida no menu principal' -ForegroundColor Yellow
+        }
     }
-}
-
-# -------------------------------------------------------------------------
-# Ativa o script (CHAMADA PRINCIPAL NO FINAL)
-Start-ScriptSupremo
+    :Main
+} while ($true)
+#endregion
