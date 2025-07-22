@@ -5550,37 +5550,30 @@ function Show-BloatwareMenu {
 function Show-SystemPerformanceMenu {
     do {
         Clear-Host
-Write-Log "==== MENU: DESEMPENHO DO SISTEMA ====" -Type Info
-Write-Log " A. Executar todas as otimizações" -Type Success
-Write-Log " B. Aplicar tema de desempenho"
-Write-Log " C. Otimizar Windows Explorer"
-Write-Log " D. Desativar serviços desnecessários"
-Write-Log " E. Ajustar visual para performance"
-Write-Log " F. Criar ponto de restauração"
-Write-Log " G. Aplicar hardening de segurança"
-Write-Log " X. Voltar ao menu anterior" -Type Success
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " MENU: SISTEMA E DESEMPENHO" -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " A) Otimizar Desempenho do Explorer"
+        Write-Host " B) Definir Plano de Energia Otimizado"
+        Write-Host " C) Ajustar Efeitos Visuais para Desempenho"
+        Write-Host " D) Realizar Otimizações Gerais do Sistema"
+        Write-Host " E) Criar Ponto de Restauração do Sistema"
+        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
+        Write-Host "=============================================" -ForegroundColor Cyan
 
-        $key = [Console]::ReadKey($true).Key
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' {
-                Set-PerformanceTheme
-                Optimize-ExplorerPerformance
-                Disable-UnnecessaryServices
-                Set-VisualPerformance
-                New-SystemRestorePoint
-                Enable-WindowsHardening
-                Show-SuccessMessage
-            }
-            'B' { Set-PerformanceTheme; Show-SuccessMessage }
-            'C' { Optimize-ExplorerPerformance; Show-SuccessMessage }
-            'D' { Disable-UnnecessaryServices; Show-SuccessMessage }
-            'E' { Set-VisualPerformance; Show-SuccessMessage }
-            'F' { New-SystemRestorePoint; Show-SuccessMessage }
-            'G' { Enable-WindowsHardening; Show-SuccessMessage }
+            'A' { Optimize-ExplorerPerformance; Show-SuccessMessage }
+            'B' { Set-OptimizedPowerPlan; Show-SuccessMessage }
+            'C' { Set-VisualPerformance; Show-SuccessMessage }
+            'D' { Perform-SystemOptimizations; Show-SuccessMessage }
+            'E' { New-SystemRestorePoint; Show-SuccessMessage }
+            'Z' { Invoke-SystemPerformance; Show-SuccessMessage } # Chama o orquestrador
             'X' { return }
             default {
-Write-Log "`nOpção inválida!" -Type Error
-                Start-Sleep 1
+                Write-Host 'Opção inválida. Pressione qualquer tecla para continuar...' -ForegroundColor Yellow
+                $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             }
         }
     } while ($true)
