@@ -266,13 +266,16 @@ function Test-RequiredFunctions {
 function Invoke-Cleanup {
     Write-Log "Iniciando o orquestrador de Limpeza e Manutenção Completa..." -Type Info
     try {
+		Clear-DeepSystemCleanup
+		Clear-Prefetch
+		Clear-PrintSpooler
+		Clear-TemporaryFiles
+		Clear-WUCache
+		Clear-WinSxS
+		Perform-Cleanup
+		Remove-WindowsOld
         Backup-Registry
-        Clear-DeepSystemCleanup
-        Clear-Prefetch
         Clear-TemporaryFiles
-        Clear-WinSxS
-        Clear-WUCache
-        Disable-Cortana-AndSearch
         Disable-SMBv1
         Invoke-DISM-Scan
         Invoke-SFC-Scan
@@ -551,38 +554,6 @@ function Clear-WUCache {
 
         } catch {
             Write-Log "ERRO ao limpar cache do Windows Update: $($_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-        } finally {
-            Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
-        }
-    }
-}
-
-function Clear-DNS {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-     
-    )
-    Write-Log "Iniciando limpeza de cache DNS..." -Type Info
-    $activity = "Limpeza de Cache DNS"
-
-    if ($PSCmdlet.ShouldProcess("cache DNS", "limpar")) {
-        try {
-            Write-Progress -Activity $activity -Status "Executando 'ipconfig /flushdns'..." -PercentComplete 50
-            Write-Log "Executando 'ipconfig /flushdns'..." -Type Info
-            if (-not $WhatIf) {
-                $process = Start-Process -FilePath "ipconfig.exe" -ArgumentList "/flushdns" -WindowStyle Hidden -Wait -PassThru
-                $process.WaitForExit() # Garante que o processo termine antes de continuar
-                if ($process.ExitCode -ne 0) {
-                    throw "Comando ipconfig /flushdns falhou com código de saída $($process.ExitCode)."
-                }
-            } else {
-                Write-Log "Modo WhatIf: 'ipconfig /flushdns' seria executado." -Type Debug
-            }
-            Write-Log "Cache DNS limpo." -Type Success
-
-        } catch {
-            Write-Log "ERRO ao limpar cache DNS: $($_.Exception.Message)" -Type Error
             Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
         } finally {
             Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
@@ -878,40 +849,6 @@ function Clear-Prefetch {
     }
 }
 
-function Clear-ARP {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-       
-            )
-    Write-Log "Iniciando limpeza de cache ARP..." -Type Info
-    $activity = "Limpeza de Cache ARP"
-
-    if ($PSCmdlet.ShouldProcess("cache ARP", "limpar")) {
-        try {
-            Write-Progress -Activity $activity -Status "Executando 'arp -d *'..." -PercentComplete 50
-            Write-Log "Executando 'arp -d *'..." -Type Info
-            if (-not $WhatIf) {
-                # O comando ARP não joga exceções PowerShell para erros de execução, mas sim para o stderr
-                # Redirecionamos stderr para stdout (2>&1) e verificamos a saída ou $LASTEXITCODE
-                $arpOutput = & arp -d * 2>&1
-                if ($LASTEXITCODE -ne 0) {
-                    throw "Comando 'arp -d *' falhou com código de saída $LASTEXITCODE. Output: $arpOutput"
-                }
-            } else {
-                Write-Log "Modo WhatIf: 'arp -d *' seria executado." -Type Debug
-            }
-            Write-Log "Cache ARP limpo." -Type Success
-
-        } catch {
-            Write-Log "ERRO ao limpar cache ARP: $($_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-            Write-Log "Verifique se o PowerShell está rodando como Administrador." -Type Info
-        } finally {
-            Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
-        }
-    }
-}
-
 function Manage-WindowsUpdates {
     <#
     .SYNOPSIS
@@ -1075,15 +1012,6 @@ function Perform-Cleanup {
             $completedFunctions++
             Write-Progress -Activity $activity -Status "Otimizando volumes do disco..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Optimize-Volumes -WhatIf:$WhatIf
-
-            # Manage-WindowsUpdates é interativa. Se você quiser que ela seja executada
-            # automaticamente neste fluxo, ela precisaria de um parâmetro -Automatic ou similar.
-            # Por padrão, se ela for interativa, é melhor chamá-la separadamente ou criar
-            # uma lógica para que Perform-Cleanup a chame se for o caso.
-            # Se for sempre interativa, o orquestrador não deve chamá-la diretamente aqui.
-            # Para este exemplo, ela não é incluída na contagem de progresso automática.
-            # Write-Log "Gerenciando atualizações do Windows (interativo)..." -Type Info
-            # Manage-WindowsUpdates -WhatIf:$WhatIf
 
             Write-Log "Todas as rotinas de limpeza e otimização foram concluídas." -Type Success
         } catch {
@@ -2482,6 +2410,73 @@ function Disable-IPv6 {
         }
     }
 }
+
+function Clear-DNS {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param(
+     
+    )
+    Write-Log "Iniciando limpeza de cache DNS..." -Type Info
+    $activity = "Limpeza de Cache DNS"
+
+    if ($PSCmdlet.ShouldProcess("cache DNS", "limpar")) {
+        try {
+            Write-Progress -Activity $activity -Status "Executando 'ipconfig /flushdns'..." -PercentComplete 50
+            Write-Log "Executando 'ipconfig /flushdns'..." -Type Info
+            if (-not $WhatIf) {
+                $process = Start-Process -FilePath "ipconfig.exe" -ArgumentList "/flushdns" -WindowStyle Hidden -Wait -PassThru
+                $process.WaitForExit() # Garante que o processo termine antes de continuar
+                if ($process.ExitCode -ne 0) {
+                    throw "Comando ipconfig /flushdns falhou com código de saída $($process.ExitCode)."
+                }
+            } else {
+                Write-Log "Modo WhatIf: 'ipconfig /flushdns' seria executado." -Type Debug
+            }
+            Write-Log "Cache DNS limpo." -Type Success
+
+        } catch {
+            Write-Log "ERRO ao limpar cache DNS: $($_.Exception.Message)" -Type Error
+            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+        } finally {
+            Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
+        }
+    }
+}
+
+function Clear-ARP {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param(
+       
+            )
+    Write-Log "Iniciando limpeza de cache ARP..." -Type Info
+    $activity = "Limpeza de Cache ARP"
+
+    if ($PSCmdlet.ShouldProcess("cache ARP", "limpar")) {
+        try {
+            Write-Progress -Activity $activity -Status "Executando 'arp -d *'..." -PercentComplete 50
+            Write-Log "Executando 'arp -d *'..." -Type Info
+            if (-not $WhatIf) {
+                # O comando ARP não joga exceções PowerShell para erros de execução, mas sim para o stderr
+                # Redirecionamos stderr para stdout (2>&1) e verificamos a saída ou $LASTEXITCODE
+                $arpOutput = & arp -d * 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Comando 'arp -d *' falhou com código de saída $LASTEXITCODE. Output: $arpOutput"
+                }
+            } else {
+                Write-Log "Modo WhatIf: 'arp -d *' seria executado." -Type Debug
+            }
+            Write-Log "Cache ARP limpo." -Type Success
+
+        } catch {
+            Write-Log "ERRO ao limpar cache ARP: $($_.Exception.Message)" -Type Error
+            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+            Write-Log "Verifique se o PowerShell está rodando como Administrador." -Type Info
+        } finally {
+            Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
+        }
+    }
+}
+
 
 #endregion
 
@@ -4960,55 +4955,14 @@ Write-Log "        INICIANDO MANUTENÇÃO COMPLETA        " -Type Info
 Write-Log "=============================================" -Type Info
     Write-Log "Iniciando Manutenção Completa..." -Type Warning
 
-    # Sequência lógica de chamadas aos novos menus e funções
-    # A maioria dos menus já tem sua própria opção de "Executar Todos" (Opção 1)
-    # Então, vamos simular a seleção da Opção 1 dentro de cada submenu
-    # Nota: Show-MainMenu não tem "Executar Todos", suas opções são os submenus em si.
-
-Write-Log "Executando: Menu de Instalação de Programas (Opção 1 - Todas as Ferramentas)..." -Type Success
-    # Chamando a função Install-Applications que está dentro de Show-InstallationMenu opção 1
-    Install-Applications
-    # Se Show-InstallationMenu tivesse outras funções que não estivessem em Install-Applications,
-    # ou uma opção de "Executar Todas" mais abrangente, chamaria essa opção aqui.
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Rede e Impressoras (Opção 1 - Todas as Configurações de Rede)..." -Type Success
-    # Chamando as funções que estão dentro de Show-NetworkMenu opção 1
-    Install-NetworkPrinters
-    Optimize-NetworkPerformance
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as Configurações)..." -Type Success
-    # Chamando as funções que estão dentro de Show-AdvancedSettingsMenu opção 1
-    Disable-UAC
-    Disable-SMBv1
-    Grant-HardenOfficeMacros
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -Type Success
-    # Chamando as funções que estão dentro de Show-UtilitiesMenu opção 1
-    Remove-AppxBloatware
-    Remove-OneDrive-AndRestoreFolders
-    Cleanup-System
-    Optimize-Drives
-    Grant-PrivacyTweaks
-    Grant-ControlPanelTweaks
-    Grant-ExtraTweaks
-    Disable-Cortana-AndSearch
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Diagnóstico e Informações (Opção 1 - Todas as Verificações)..." -Type Success
-    # Chamando as funções que estão dentro de Show-DiagnosticsMenu opção 1
-    sfc /scannow
-    Dism /Online /Cleanup-Image /RestoreHealth
-    # Chkdsk é omitido aqui por requerer reboot
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Scripts Externos e Ativadores (Opção 1 - Todos os Scripts)..." -Type Success
-    # Chame aqui as funções ou comandos para seus scripts externos,
-    # como você os configurou na opção 1 de Show-ExternalScriptsMenu
-    # Exemplo: & "$PSScriptRoot\ExternalScripts\ScriptExterno1.ps1"
-    # Exemplo: Start-Process "C:\Caminho\Para\SeuAtivador.exe" -Wait
+    Clear-TemporaryFiles
+	Clear-WUCache
+	Clear-WinSxS
+	Remove-WindowsOld
+	Clear-DeepSystemCleanup
+	Clear-PrintSpooler
+	Clear-Prefetch
+	Perform-Cleanup
     Start-Sleep 2
 
 
@@ -5083,7 +5037,8 @@ function Show-AdvancedSettingsMenu {
         Write-Host " B) Desabilitar UAC"
         Write-Host " C) Desabilitar SMBv1"
         Write-Host " D) Configurar Macros Office (segurança)"
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Cyan
+		Write-Host " Z) Rotina Completa" -ForegroundColor Green
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Enable-WindowsHardening }
@@ -5091,6 +5046,7 @@ function Show-AdvancedSettingsMenu {
             'C' { Disable-SMBv1 }
             'D' { Grant-HardenOfficeMacros }
             'X' { return }
+			'Z' { Invoke-Tweaks }
         }
         Show-SuccessMessage
     } while ($true)
@@ -5105,7 +5061,8 @@ function Show-DiagnosticsMenu {
         Write-Host " C) SMART dos Discos"
         Write-Host " D) Teste de Memória"
         Write-Host " E) Informações do Sistema"
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Cyan
+		Write-Host " Z) Rotina Completa" -ForegroundColor Green
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-SFC-Scan }
@@ -5114,6 +5071,7 @@ function Show-DiagnosticsMenu {
             'D' { Test-Memory }
             'E' { Show-SystemInfo }
             'X' { return }
+			'Z' { Invoke-Diagnose }
         }
         Show-SuccessMessage
     } while ($true)
@@ -5125,15 +5083,11 @@ function Show-AppsMenu {
         Write-Host "`n[APLICATIVOS]" -ForegroundColor Cyan
         Write-Host " A) Instalar Aplicativos (pacote completo)"
         Write-Host " B) Atualizar PowerShell"
-        Write-Host " C) Ativar Sudo (Win11 24H2+)"
-        Write-Host " D) Ativar atualizações estendidas do Windows Update"
         Write-Host " X) Voltar"
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Install-Applications }
             'B' { Update-PowerShell }
-            'C' { Enable-Sudo }
-            'D' { Enable-WindowsUpdateFast }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5149,7 +5103,8 @@ function Show-NetworkMenu {
         Write-Host " C) Instalar impressoras de rede"
         Write-Host " D) Testar velocidade da internet"
         Write-Host " E) Otimizar desempenho de rede"
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Cyan
+		Write-Host " Z) Rotina Completa" -ForegroundColor Green
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Add-WiFiNetwork }
@@ -5157,6 +5112,7 @@ function Show-NetworkMenu {
             'C' { Install-NetworkPrinters }
             'D' { Test-InternetSpeed }
             'E' { Optimize-NetworkPerformance }
+			'Z' { Invoke-NetworkUtilities }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5199,7 +5155,8 @@ function Show-RestoreMenu {
         Write-Host " I) Restaurar macros Office"
         Write-Host " J) Restaurar IPv6"
         Write-Host " K) Reabilitar notificações Action Center"
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Cyan
+		Write-Host " Z) Rotina Completa" -ForegroundColor Green
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { New-SystemRestorePoint }
@@ -5214,6 +5171,7 @@ function Show-RestoreMenu {
             'J' { Restore-DefaultIPv6 }
             'K' { Grant-ActionCenter-Notifications }
             'X' { return }
+			'Z' { Invoke-Undo }
         }
         Show-SuccessMessage
     } while ($true)
@@ -5387,7 +5345,9 @@ function Show-CleanupMenu {
         Write-Host " C) Otimizar volumes"
         Write-Host " D) Remover Windows.old"
         Write-Host " E) Limpar cache DNS"
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Cyan
+		Write-Host " Z) Rotina Completa" -ForegroundColor Green
+
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Clear-TemporaryFiles }
@@ -5396,6 +5356,7 @@ function Show-CleanupMenu {
             'D' { Remove-WindowsOld }
             'E' { Clear-DNS }
             'X' { return }
+			'Z' { Invoke-Cleanup }
         }
         Show-SuccessMessage
     } while ($true)
@@ -5412,7 +5373,9 @@ function Show-BloatwareMenu {
         Write-Host " E) Remover OneDrive completamente"
         Write-Host " F) Remover Copilot (Win11)"
         Write-Host " G) Remover Widgets e sugestões"
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Cyan
+		Write-Host " Z) Rotina Completa" -ForegroundColor Green
+
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Remove-AppxBloatware }
@@ -5422,6 +5385,7 @@ function Show-BloatwareMenu {
             'E' { Force-RemoveOneDrive }
             'F' { Remove-WindowsCopilot }
             'G' { Grant-PrivacyTweaks }
+			'Z' { Invoke-Bloatware }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5444,13 +5408,39 @@ Write-Log " X. Voltar ao menu anterior" -Type Success
         $key = [Console]::ReadKey($true).Key
         switch ($key) {
             'A' {
-                Set-PerformanceTheme
-                Optimize-ExplorerPerformance
-                Disable-UnnecessaryServices
-                Set-VisualPerformance
-                New-SystemRestorePoint
-                Enable-WindowsHardening
-                Show-SuccessMessage
+                Apply-GPORegistrySettings
+				Apply-UITweaks
+				Disable-ActionCenter-Notifications
+				Disable-UAC
+				Enable-ClassicContextMenu
+				Enable-ClipboardHistory
+				Enable-DarkTheme
+				Enable-OtherMicrosoftUpdates
+				Enable-PowerOptions
+				Enable-PrivacyHardening
+				Enable-RestartAppsAfterReboot
+				Enable-SMBv1
+				Enable-Sudo
+				Enable-TaskbarEndTask
+				Enable-TaskbarSeconds
+				Enable-WindowsHardening
+				Enable-WindowsUpdateFast
+				Grant-ControlPanelTweaks
+				Grant-ExtraTweaks
+				Grant-HardenOfficeMacros
+				Grant-PrivacyTweaks
+				Manage-WindowsUpdates
+				New-FolderForced
+				New-SystemRestorePoint
+				Optimize-ExplorerPerformance
+				Optimize-NetworkPerformance
+				Optimize-Volumes
+				Perform-SystemOptimizations
+				Rename-Notebook
+				Set-OptimizedPowerPlan
+				Set-PerformanceTheme
+				Set-VisualPerformance
+				Show-AutoLoginMenu
             }
             'B' { Set-PerformanceTheme; Show-SuccessMessage }
             'C' { Optimize-ExplorerPerformance; Show-SuccessMessage }
@@ -5474,12 +5464,14 @@ function Show-WindowsFeaturesMenu {
         Write-Host " A) Remover Copilot"
         Write-Host " B) Desativar Recall"
         Write-Host " C) Aplicar plano de energia otimizado"
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Cyan
+		Write-Host " Z) Rotina Completa" -ForegroundColor Green
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Remove-WindowsCopilot }
             'B' { Disable-WindowsRecall }
             'C' { Set-OptimizedPowerPlan }
+			'Z' { Invoke-Tweaks }
             'X' { return }
         }
         Show-SuccessMessage
