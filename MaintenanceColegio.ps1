@@ -3088,50 +3088,23 @@ function Set-VisualPerformance {
             Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
         }
     }
-	# --- Início do "recheio" da função Set-DesktopWallpaper ---
-
-# Caminho da imagem (você pode tornar isso um parâmetro de uma função maior ou definir diretamente)
-$ImagePath = "G:\Drives compartilhados\MundoCOC\Wallpaper\wallpaper.jpg"
-
-# Verifica se o arquivo de imagem existe
-if (-not (Test-Path $ImagePath)) {
-    Write-Error "Erro: O arquivo de imagem especificado não foi encontrado em '$ImagePath'."
-    # Você pode adicionar 'return' aqui se estiver dentro de uma função
-} else {
-    # Adiciona o tipo necessário para chamar a função da API do Windows
-    Add-Type -TypeDefinition @"
+	# Declara o import da API
+Add-Type @"
 using System;
 using System.Runtime.InteropServices;
-
-public class WallpaperSetter
-{
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    public static extern int SystemParametersInfo(UInt32 uiAction, UInt32 uiParam, String pvParam, UInt32 fWinIni);
-
-    // Constantes para SystemParametersInfo
-    public const UInt32 SPI_SETDESKWALLPAPER = 0x14; // 20
-    public const UInt32 SPIF_UPDATEINIFILE = 0x01;   // Atualiza o arquivo Win.ini
-    public const UInt32 SPIF_SENDCHANGE = 0x02;      // Envia uma mensagem WM_SETTINGCHANGE para todas as janelas
+public class Wallpaper {
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SystemParametersInfo(
+        int uAction, int uParam, string lpvParam, int fuWinIni);
 }
 "@
 
-    # Define os parâmetros para a chamada da função
-    $uiAction = [WallpaperSetter]::SPI_SETDESKWALLPAPER
-    $uiParam = 0
-    $fWinIni = [WallpaperSetter]::SPIF_UPDATEINIFILE -bor [WallpaperSetter]::SPIF_SENDCHANGE
+# Caminho completo da imagem
+$img = 'G:\Drives compartilhados\MundoCOC\Wallpaper\wallpaper.jpg'
 
-    # Tenta definir o papel de parede
-    try {
-        $result = [WallpaperSetter]::SystemParametersInfo($uiAction, $uiParam, $ImagePath, $fWinIni)
-        if ($result -ne 0) {
-            Write-Host "Papel de parede definido com sucesso para: $ImagePath"
-        } else {
-            Write-Error "Falha ao definir o papel de parede. Verifique o caminho e as permissões do arquivo."
-        }
-    } catch {
-        Write-Error "Ocorreu um erro inesperado: $($_.Exception.Message)"
-    }
-}
+# Ação 20 = SPI_SETDESKWALLPAPER, e 3 = SPIF_UPDATEINIFILE|SPIF_SENDWININICHANGE
+[Wallpaper]::SystemParametersInfo(20, 0, $img, 3) | Out-Null
+
 }
 
 function Perform-SystemOptimizations {
