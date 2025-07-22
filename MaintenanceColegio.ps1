@@ -48,30 +48,77 @@ param (
 # Desenvolvido com sangue, café e PowerShell 💪
 
 clear-host
-[cite_start]Write-Host "-------------------------------------------------------------------------" [cite: 1]
-[cite_start]Write-Host "| Script pra ajustes de notebooks do ambiente do Colégio Mundo do Saber |" [cite: 1]
-[cite_start]Write-Host "-------------------------------------------------------------------------" [cite: 2]
+Write-Host "-------------------------------------------------------------------------" 
+Write-Host "| Script pra ajustes de notebooks do ambiente do Colégio Mundo do Saber |" 
+Write-Host "-------------------------------------------------------------------------" 
 
 # =========================================================================
 # ⚙️ CONFIGURAÇÕES GLOBAIS E VARIÁVEIS INICIAIS
 # =========================================================================
 
 # Variáveis globais para controle de preferências
-[cite_start]$global:ConfirmPreference = 'None' [cite: 2]
-[cite_start]$global:ProgressPreference = 'SilentlyContinue' [cite: 2]
-[cite_start]$global:ErrorActionPreference = 'Continue' [cite: 2]
-[cite_start]$global:WarningPreference = 'Continue' [cite: 2]
-[cite_start]$global:VerbosePreference = 'SilentlyContinue' # Alterado para SilentlyContinue 
-[cite_start]$global:DebugPreference = 'SilentlyContinue'   # Alterado para SilentlyContinue 
+$global:ConfirmPreference = 'None' 
+$global:ProgressPreference = 'SilentlyContinue' 
+$global:ErrorActionPreference = 'Continue' 
+$global:WarningPreference = 'Continue' 
+$global:VerbosePreference = 'SilentlyContinue' # Alterado para SilentlyContinue 
+$global:DebugPreference = 'SilentlyContinue'   # Alterado para SilentlyContinue 
 
 # Configurações gerais do script
 $ScriptConfig = @{
-    [cite_start]LogFilePath              = Join-Path $PSScriptRoot "ScriptSupremo.log" [cite: 2]
+    LogFilePath              = Join-Path $PSScriptRoot "ScriptSupremo.log" 
     ConfirmBeforeDestructive = $true # Usado na função Force-RemoveOneDrive
+    
+    Cleanup = @{
+        CleanTemporaryFiles = $true
+        CleanWUCache = $true
+        OptimizeVolumes = $true
+        PerformDeepSystemCleanup = $true
+        ClearDNSCache = $true
+        DisableMemoryDumps = $true
+    }
+    
+    PrivacyTweaks = @{
+        DisableTelemetry = $true
+        DisableDiagnosticData = $true
+        BlockTelemetryHosts = $true
+        DisableLocationServices = $true
+        DisableActivityHistory = $true
+        DisableAdvertisingID = $true
+        DisableCortana = $true
+        DisableBiometrics = $true
+        DisableFeedbackRequests = $true
+        DisableSuggestedContent = $true
+        DisableAutoUpdatesStoreApps = $true
+        DisableWidgets = $true
+        DisableNewsAndInterests = $true
+    }
+    
+    GPORegistrySettings = @{
+        EnableUpdateManagement = $true
+        DisableAutoReboot = $true
+        SetScheduledUpdateTime = $true
+        DisableDriverUpdates = $true
+        ConfigureEdge = $true
+        ConfigureChrome = $true
+        DisableWindowsTips = $true
+    }
+    
+    UITweaks = @{
+        EnableDarkMode = $true
+        DisableTransparency = $true
+        DisableAnimations = $true
+        TaskbarAlignLeft = $true
+        HideSearchBox = $true
+        ShowDesktopIcons = $true
+        HideDupliDrive = $true
+        Hide3dObjects = $true
+        HideOneDriveFolder = $true
+    }
 }
 
 # Garante que o PowerShell esteja usando o TLS 1.2 para downloads seguros
-[cite_start][Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 [cite: 2]
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 
 
 # Cores padrão para cada tipo de log (movido para o escopo global)
 $global:defaultColors = @{
@@ -93,7 +140,7 @@ $global:bloatwareToRemove = @(
     "*Print3D*", "*ScreenSketch*", "*SoundRecorder*", "*MixedRealityPortal*",
     "*ConnectivityStore*", "*DolbyAccess*", "*DolbyLaboratories.DolbyAccess*",
     "*Netflix*", "*Spotify*", "*TikTok*", "*Instagram*", "*Facebook*", "*Twitter*",
-    [cite_start]"*Microsoft.StorePurchaseApp*", "*WindowsCalculator*", "*AlarmsAndClock*", [cite: 465, 466]
+    "*Microsoft.StorePurchaseApp*", "*WindowsCalculator*", "*AlarmsAndClock*", 
     "*WindowsCamera*", "*WindowsDefaultLockScreen*", "*WindowsMaps*", "*WindowsMail*",
     "*Microsoft.GamingApp*", # App Xbox principal
     "*GamingServices*", # Serviços relacionados a jogos
@@ -102,7 +149,7 @@ $global:bloatwareToRemove = @(
 )
 
 $global:whitelist = @(
-    [cite_start]"Microsoft.DesktopAppInstaller", # winget [cite: 467]
+    "Microsoft.DesktopAppInstaller", # winget 
     "Microsoft.Store", # Loja da Microsoft
     "Microsoft.Windows.StartMenuExperienceHost", # Menu Iniciar
     "Microsoft.Windows.ShellExperienceHost", # Shell
@@ -111,7 +158,7 @@ $global:whitelist = @(
     "Microsoft.NET.Native.Framework.X.X", # Bibliotecas .NET
     "Microsoft.NET.Native.Runtime.X.X", # Bibliotecas .NET
     "Microsoft.Services.Store.Engagement", # Loja
-    [cite_start]"Microsoft.Xbox.TCUI", # Componentes Xbox (se necessário) 
+    "Microsoft.Xbox.TCUI", # Componentes Xbox (se necessário) 
     "Microsoft.XboxGameCallableUI", # Componentes Xbox (se necessário)
     "Microsoft.AccountsControl",
     "Microsoft.LockApp",
@@ -123,7 +170,7 @@ $global:whitelist = @(
 # ✅ VERIFICAÇÃO INICIAL: Administrador
 # =========================================================================
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "Este script precisa ser executado como Administrador. Por favor, feche e execute o PowerShell como Administrador." [cite_start]-ForegroundColor Red [cite: 3]
+    Write-Host "Este script precisa ser executado como Administrador. Por favor, feche e execute o PowerShell como Administrador." -ForegroundColor Red 
     Start-Sleep 5
     exit
 }
@@ -143,36 +190,36 @@ function Write-Log {
     )
 
     # Garante texto e converte arrays para string
-    [cite_start]if ($null -eq $Message) { $Message = '' } [cite: 4]
+    if ($null -eq $Message) { $Message = '' } 
     $text = if ($Message -is [array]) {
         ($Message | ForEach-Object { ($_ -ne $null) ? $_.ToString() : '' }) -join ' '
     } else {
         $Message.ToString()
     }
 
-    [cite_start]$timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') [cite: 4]
-    [cite_start]$entry     = "[$timestamp] [$Type] $text" [cite: 4]
-    [cite_start]$color     = $global:defaultColors[$Type] # Acessa cores do escopo global [cite: 4]
+    $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') 
+    $entry     = "[$timestamp] [$Type] $text" 
+    $color     = $global:defaultColors[$Type] # Acessa cores do escopo global 
 
-    [cite_start]Write-Host $entry -ForegroundColor $color [cite: 4]
+    Write-Host $entry -ForegroundColor $color 
 
-    [cite_start]$logPath = $script:ScriptConfig.LogFilePath [cite: 4]
-    [cite_start]if (-not $logPath) { $logPath = Join-Path $env:TEMP 'ScriptSupremo.log' } [cite: 4]
+    $logPath = $script:ScriptConfig.LogFilePath 
+    if (-not $logPath) { $logPath = Join-Path $env:TEMP 'ScriptSupremo.log' } 
 
     # Certifica-se de que o diretório de log existe (movido para dentro da função Write-Log)
     $logDir = Split-Path -Path $logPath -Parent
     if (-not (Test-Path $logDir)) {
         try {
-            New-Item -Path $logDir -ItemType Directory -Force | [cite_start]Out-Null [cite: 421]
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null 
         } catch {
             Write-Host "ERRO: Não foi possível criar o diretório de log '$logDir'. Mensagem: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
 
     try {
-        $entry | [cite_start]Out-File -FilePath $logPath -Append -Encoding UTF8 [cite: 5]
+        $entry | Out-File -FilePath $logPath -Append -Encoding UTF8 
     } catch {
-        [cite_start]Write-Host "ERRO ao gravar log: $($_.Exception.Message)" -ForegroundColor Red [cite: 5]
+        Write-Host "ERRO ao gravar log: $($_.Exception.Message)" -ForegroundColor Red 
     }
 }
 
@@ -197,7 +244,7 @@ function Test-RequiredFunctions {
     $allGood = $true
 
     foreach ($func in $FunctionList) {
-        [cite_start]if (Get-Command $func -ErrorAction SilentlyContinue) { [cite: 423]
+        if (Get-Command $func -ErrorAction SilentlyContinue) {
             Write-Log "✅ $func" -Type Success
         } else {
             Write-Log "❌ $func (não encontrada)" -Type Error
@@ -206,10 +253,10 @@ function Test-RequiredFunctions {
     }
 
     if (-not $allGood) {
-        Write-Log "`n❗ Algumas funções estão faltando. O script pode falhar!" [cite_start]-Type Warning [cite: 424]
-        # throw "Funções ausentes detectadas. Corrija antes de continuar." [cite: 425]
+        Write-Log "`n❗ Algumas funções estão faltando. O script pode falhar!" -Type Warning 
+        # throw "Funções ausentes detectadas. Corrija antes de continuar."
     } else {
-        [cite_start]Write-Log "`n✔️ Todas as funções estão disponíveis. Continuando execução..." -Type Info [cite: 426]
+        Write-Log "`n✔️ Todas as funções estão disponíveis. Continuando execução..." -Type Info 
     }
 }
 #endregion
@@ -247,8 +294,8 @@ function Invoke-Bloatware {
 		Disable-WindowsRecall
 		Force-RemoveOneDrive
 		Invoke-ExternalDebloaters
-		Remove-Bloatware
-		Remove-Copilot
+		Remove-AppxBloatware
+		Remove-WindowsCopilot
 		Remove-OneDrive-AndRestoreFolders
 		Remove-ScheduledTasksAggressive
 		Remove-StartAndTaskbarPins
@@ -1689,7 +1736,7 @@ function Disable-WindowsRecall {
     }
 }
 
-function Remove-Bloatwares { # Esta é a função orquestradora
+function Remove-AppxBloatwares { # Esta é a função orquestradora
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
         [Parameter()]
@@ -2003,19 +2050,28 @@ function Install-NetworkPrinters {
             Write-Log "Tentando instalar drivers: ssn3m.inf e E_WF1YWE.INF." -Type Info
             # Atenção: Caminhos de driver em disco G:\ compartilhados. Verifique acessibilidade.
             if (-not $WhatIf) {
-                # pnputil é um executável externo, erros podem não ser capturados diretamente pelo try/catch do PowerShell
-                # O ideal seria verificar o $LASTEXITCODE
-                try {
-                    pnputil /add-driver "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\ssn3m.inf" /install -ErrorAction Stop | Out-Null
-                    Write-Log "Driver ssn3m.inf instalado com sucesso." -Type Success
-                } catch {
-                    Write-Log "Falha ao instalar ssn3m.inf: $($_.Exception.Message)" -Type Warning
-                }
-                try {
-                    pnputil /add-driver "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\E_WF1YWE.INF" /install -ErrorAction Stop | Out-Null
-                    Write-Log "Driver E_WF1YWE.INF instalado com sucesso." -Type Success
-                } catch {
-                    Write-Log "Falha ao instalar E_WF1YWE.INF: $($_.Exception.Message)" -Type Warning
+                # Lista de caminhos de drivers para tentar
+                $driverPaths = @(
+                    "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\ssn3m.inf",
+                    "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\E_WF1YWE.INF"
+                )
+                
+                foreach ($driverPath in $driverPaths) {
+                    $driverName = Split-Path $driverPath -Leaf
+                    if (Test-Path $driverPath) {
+                        try {
+                            pnputil /add-driver $driverPath /install | Out-Null
+                            if ($LASTEXITCODE -eq 0) {
+                                Write-Log "Driver $driverName instalado com sucesso." -Type Success
+                            } else {
+                                Write-Log "Falha ao instalar $driverName (código: $LASTEXITCODE)" -Type Warning
+                            }
+                        } catch {
+                            Write-Log "Erro ao instalar $driverName: $($_.Exception.Message)" -Type Warning
+                        }
+                    } else {
+                        Write-Log "Driver não encontrado: $driverPath" -Type Warning
+                    }
                 }
             } else {
                 Write-Log "Modo WhatIf: Drivers ssn3m.inf e E_WF1YWE.INF seriam instalados." -Type Debug
@@ -3793,31 +3849,9 @@ function Set-PerformanceTheme {
 
 #region → FUNÇÕES DE OTIMIZAÇÃO E DESEMPENHO
 
-function Set-PerformanceTheme {
-    Write-Log "Aplicando configurações de desempenho no tema do Windows..." Yellow
-    try {
-        # Desativa animações, transparências e efeitos
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f | Out-Null
-        reg.exe add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\DWM" /v ColorPrevalence /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\DWM" /v EnableBlurBehind /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Software\Microsoft\Windows\DWM" /v EnableTransparency /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d 0 /f | Out-Null
-        reg.exe add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f | Out-Null
-        reg.exe add "HKCU\Control Panel\Desktop" /v FontSmoothing /t REG_SZ /d 2 /f | Out-Null
-        reg.exe add "HKCU\Control Panel\Desktop" /v FontSmoothingType /t REG_DWORD /d 1 /f | Out-Null
-        reg.exe add "HKCU\Control Panel\Desktop" /v FontSmoothingGamma /t REG_DWORD /d 0 /f | Out-Null
-        reg.exe add "HKCU\Control Panel\Desktop" /v FontSmoothingOrientation /t REG_DWORD /d 0 /f | Out-Null
-        Write-Log "Configurações de desempenho aplicadas ao tema do Windows." Green
-    } 
-    catch {
-        Write-Log "Erro ao aplicar tema de desempenho: $_" Red
-    }
-}
 
 function Optimize-ExplorerPerformance {
-    Write-Log "Otimizando Windows Explorer para desempenho..." Yellow
+    Write-Log "Otimizando Windows Explorer para desempenho..." -Type Warning
     try {
         # Sempre mostrar ícones, nunca miniaturas
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v IconsOnly /t REG_DWORD /d 1 /f | Out-Null
@@ -3829,26 +3863,26 @@ function Optimize-ExplorerPerformance {
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ListviewAlphaSelect /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ListviewShadow /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarAnimations /t REG_DWORD /d 0 /f | Out-Null
-        Write-Log "Windows Explorer otimizado para desempenho." Green
+        Write-Log "Windows Explorer otimizado para desempenho." -Type Success
     } 
     catch {
-        Write-Log "Erro ao otimizar o Explorer: $_" Red
+        Write-Log "Erro ao otimizar o Explorer: $_" -Type Error
     }
 }
 
 function New-SystemRestorePoint {
-    Write-Log "Criando ponto de restauração do sistema..." Yellow
+    Write-Log "Criando ponto de restauração do sistema..." -Type Warning
     try {
         Checkpoint-Computer -Description "Antes da manutenção Windows" -RestorePointType "MODIFY_SETTINGS"
-        Write-Log "Ponto de restauração criado com sucesso." Green
+        Write-Log "Ponto de restauração criado com sucesso." -Type Success
     } 
     catch {
-        Write-Log "Erro ao criar ponto de restauração: $_" Red
+        Write-Log "Erro ao criar ponto de restauração: $_" -Type Error
     }
 }
 
 function Enable-WindowsHardening {
-    Write-Log "Aplicando hardening de segurança..." Yellow
+    Write-Log "Aplicando hardening de segurança..." -Type Warning
     try {
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
         Set-MpPreference -DisableRealtimeMonitoring $false
@@ -3864,15 +3898,15 @@ function Enable-WindowsHardening {
         Disable-PSRemoting -Force
         net user guest /active:no
         Set-ProcessMitigation -System -Enable DEP,SEHOP,ASLR,BottomUp,HighEntropy
-        Write-Log "Hardening de segurança aplicado." Green
+        Write-Log "Hardening de segurança aplicado." -Type Success
     } 
     catch {
-        Write-Log "Erro ao aplicar hardening: $_" Red
+        Write-Log "Erro ao aplicar hardening: $_" -Type Error
     }
 }
 
 function Disable-UnnecessaryServices {
-    Write-Log "Desativando serviços desnecessários..." Yellow
+    Write-Log "Desativando serviços desnecessários..." -Type Warning
     $services = @(
         'DiagTrack',            # Telemetria
         'dmwappushservice',     # Telemetria
@@ -3919,35 +3953,35 @@ function Disable-UnnecessaryServices {
         try {
             Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
             Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
-            Write-Log "Serviço ${svc} desativado." Green
+            Write-Log "Serviço ${svc} desativado." -Type Success
         } 
         catch {
-            Write-Log "Erro ao desativar serviço ${svc}: $_" Red
+            Write-Log "Erro ao desativar serviço ${svc}: $_" -Type Error
         }
     }
-    Write-Log "Desativação de serviços concluída." Green
+    Write-Log "Desativação de serviços concluída." -Type Success
 }
 
 function Update-WindowsAndDrivers {
-    Write-Log "Verificando e instalando atualizações do Windows..." Yellow
+    Write-Log "Verificando e instalando atualizações do Windows..." -Type Warning
     try {
         # Atualizações do Windows
         Install-Module PSWindowsUpdate -Force -Scope CurrentUser -ErrorAction SilentlyContinue
         Import-Module PSWindowsUpdate
         Get-WindowsUpdate -AcceptAll -Install -AutoReboot
-        Write-Log "Atualizações do Windows concluídas." Green
+        Write-Log "Atualizações do Windows concluídas." -Type Success
     } 
     catch {
-        Write-Log "Erro ao atualizar o Windows: $_" Red
+        Write-Log "Erro ao atualizar o Windows: $_" -Type Error
     }
     try {
         # Atualização de drivers via winget (opcional, depende do suporte do fabricante)
-        Write-Log "Verificando atualizações de drivers via winget..." Yellow
+        Write-Log "Verificando atualizações de drivers via winget..." -Type Warning
         winget upgrade --all --accept-package-agreements --accept-source-agreements
-        Write-Log "Atualização de drivers via winget concluída." Green
+        Write-Log "Atualização de drivers via winget concluída." -Type Success
     } 
     catch {
-        Write-Log "Erro ao atualizar drivers via winget: $_" Red
+        Write-Log "Erro ao atualizar drivers via winget: $_" -Type Error
     }
 }
 
@@ -4009,7 +4043,8 @@ function Enable-PowerOptions {
 Write-Log "Configurações aplicadas com sucesso!" -Type Success
 Write-Log "`nResumo das configurações:" -Type Info
 Write-Log " - Tela (AC/DC): $($config.TempoTelaAC)min / $($config.TempoTelaBateria)min"
-Write-Log " - Hibernação (AC/DC): $($config.TempoHibernarAC == 0 ? 'Nunca' : $config.TempoHibernarAC+'min') / $($config.TempoHibernarBateria)min"
+$hibernacaoAC = if ($config.TempoHibernarAC -eq 0) { 'Nunca' } else { "$($config.TempoHibernarAC)min" }
+Write-Log " - Hibernação (AC/DC): $hibernacaoAC / $($config.TempoHibernarBateria)min"
 Write-Log " - Tampa (AC/DC): $($config.ComportamentoTampaAC) / $($config.ComportamentoTampaBateria)"
 Write-Log " - Botão Energia (AC/DC): $($config.BotaoEnergiaAC) / $($config.BotaoEnergiaBateria)"
 Write-Log "   - Nível ativação: $($config.NivelAtivacaoEconomia)%"
@@ -4019,56 +4054,56 @@ Write-Log "   - Nível ativação: $($config.NivelAtivacaoEconomia)%"
 }
 
 function Enable-DarkTheme {
-    Write-Log "Ativando tema escuro..." Yellow
+    Write-Log "Ativando tema escuro..." -Type Warning
     try {
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v AppsUseLightTheme /t REG_DWORD /d 0 /f | Out-Null
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v SystemUsesLightTheme /t REG_DWORD /d 0 /f | Out-Null
-        Write-Log "Tema escuro ativado." Green
+        Write-Log "Tema escuro ativado." -Type Success
     } 
     catch {
-        Write-Log "Erro ao ativar tema escuro: $_" Red
+        Write-Log "Erro ao ativar tema escuro: $_" -Type Error
     }
 }
 
 function Enable-ClipboardHistory {
-    Write-Log "Ativando histórico da área de transferência..." Yellow
+    Write-Log "Ativando histórico da área de transferência..." -Type Warning
     try {
         reg.exe add "HKCU\Software\Microsoft\Clipboard" /v EnableClipboardHistory /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "Histórico da área de transferência ativado." Green
+        Write-Log "Histórico da área de transferência ativado." -Type Success
     } 
     catch {
-        Write-Log "Erro ao ativar histórico da área de transferência: $_" Red
+        Write-Log "Erro ao ativar histórico da área de transferência: $_" -Type Error
     }
 }
 
 function Enable-WindowsUpdateFast {
-    Write-Log "Ativando atualizações antecipadas do Windows Update..." Yellow
+    Write-Log "Ativando atualizações antecipadas do Windows Update..." -Type Warning
     try {
         reg.exe add "HKLM\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" /v IsContinuousInnovationOptedIn /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "Atualizações antecipadas ativadas." Green
+        Write-Log "Atualizações antecipadas ativadas." -Type Success
     } 
     catch {
-        Write-Log "Erro ao ativar atualizações antecipadas: $_" Red
+        Write-Log "Erro ao ativar atualizações antecipadas: $_" -Type Error
     }
 }
 
 function Enable-RestartAppsAfterReboot {
-    Write-Log "Ativando restauração de apps após reinicialização..." Yellow
+    Write-Log "Ativando restauração de apps após reinicialização..." -Type Warning
     try {
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RestartApps" /v RestartApps /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "Restauração de apps ativada." Green
+        Write-Log "Restauração de apps ativada." -Type Success
     } catch {
-        Write-Log "Erro ao ativar restauração de apps: $_" Red
+        Write-Log "Erro ao ativar restauração de apps: $_" -Type Error
     }
 }
 
 function Enable-OtherMicrosoftUpdates {
-    Write-Log "Ativando updates para outros produtos Microsoft..." Yellow
+    Write-Log "Ativando updates para outros produtos Microsoft..." -Type Warning
     try {
         reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update" /v EnableFeaturedSoftware /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "Updates para outros produtos Microsoft ativados." Green
+        Write-Log "Updates para outros produtos Microsoft ativados." -Type Success
     } catch {
-        Write-Log "Erro ao ativar updates para outros produtos Microsoft: $_" Red
+        Write-Log "Erro ao ativar updates para outros produtos Microsoft: $_" -Type Error
     }
 }
 
@@ -4086,30 +4121,30 @@ Write-Log "❌ Não foi possível habilitar o sudo. $_" -Type Error
 function Enable-TaskbarEndTask {
     $build = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").CurrentBuild
     if ([int]$build -lt 23430) {
-        Write-Log "Este recurso exige o Windows 11 build 23430 ou superior." Red
+        Write-Log "Este recurso exige o Windows 11 build 23430 ou superior." -Type Error
         return
     }
 
     try {
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings" /v TaskbarEndTask /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "'Finalizar tarefa' ativado no menu da barra de tarefas." Green
+        Write-Log "'Finalizar tarefa' ativado no menu da barra de tarefas." -Type Success
     } catch {
-        Write-Log "Erro ao configurar TaskbarEndTask: $_" Red
+        Write-Log "Erro ao configurar TaskbarEndTask: $_" -Type Error
     }
 }
 
 function Enable-TaskbarSeconds {
-    Write-Log "Ativando segundos no relógio da barra de tarefas..." Yellow
+    Write-Log "Ativando segundos no relógio da barra de tarefas..." -Type Warning
     try {
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowSecondsInSystemClock /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "Segundos ativados no relógio da barra de tarefas." Green
+        Write-Log "Segundos ativados no relógio da barra de tarefas." -Type Success
     } catch {
-        Write-Log "Erro ao ativar segundos no relógio: $_" Red
+        Write-Log "Erro ao ativar segundos no relógio: $_" -Type Error
     }
 }
 
 function Rename-Notebook {
-    Write-Log "Deseja renomear este notebook? (S/N)" Yellow
+    Write-Log "Deseja renomear este notebook? (S/N)" -Type Warning
     $timeout = 15
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $input = $null
@@ -4123,21 +4158,21 @@ Write-Log "Digite o novo nome do notebook e pressione ENTER (ou aguarde $timeout
     }
     $sw.Stop()
     if ([string]::IsNullOrWhiteSpace($input)) {
-        Write-Log "Tempo esgotado. Renomeação cancelada." Red
+        Write-Log "Tempo esgotado. Renomeação cancelada." -Type Error
         Start-Sleep -Seconds 2
         return
     }
     try {
         Rename-Computer -NewName $input -Force
-        Write-Log "Nome do notebook alterado para: $input. Reinicie para aplicar." Green
+        Write-Log "Nome do notebook alterado para: $input. Reinicie para aplicar." -Type Success
     } catch {
-        Write-Log "Erro ao renomear o notebook: $_" Red
+        Write-Log "Erro ao renomear o notebook: $_" -Type Error
     }
     Start-Sleep -Seconds 2
 }
 
 function Grant-ControlPanelTweaks {
-    Write-Log "Aplicando tweaks no Painel de Controle e Explorer..." Yellow
+    Write-Log "Aplicando tweaks no Painel de Controle e Explorer..." -Type Warning
 
     $registryChanges = @{
         # Ocultar itens no Painel de Controle
@@ -4183,23 +4218,23 @@ function Grant-ControlPanelTweaks {
             # Certifica-se de que o caminho existe antes de tentar definir as propriedades
             if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
                 New-Item -Path $path -Force -ErrorAction SilentlyContinue | Out-Null
-                Write-Log "Caminho de registro criado: $path" Cyan
+                Write-Log "Caminho de registro criado: $path" -Type Info
             }
 
             foreach ($name in $registryChanges.$path.Keys) {
                 $value = $registryChanges.$path.$name
-                Write-Log "Configurando registro: $path - $name = $value" Cyan
+                Write-Log "Configurando registro: $path - $name = $value" -Type Info
                 Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
             }
         }
-        Write-Log "Tweaks no Painel de Controle e Explorer aplicados com sucesso." Green
+        Write-Log "Tweaks no Painel de Controle e Explorer aplicados com sucesso." -Type Success
     } catch {
-        Write-Log "Erro ao aplicar tweaks no Painel de Controle e Explorer: $_" Red
+        Write-Log "Erro ao aplicar tweaks no Painel de Controle e Explorer: $_" -Type Error
     }
 }
 
 function Grant-ExtraTweaks {
-    Write-Log "Aplicando tweaks extras para otimização e segurança..." Yellow
+    Write-Log "Aplicando tweaks extras para otimização e segurança..." -Type Warning
 
     # Dicionário de alterações de registro para tweaks extras
     $registryChanges = @{
@@ -4300,23 +4335,23 @@ function Grant-ExtraTweaks {
         foreach ($path in $registryChanges.Keys) {
             if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
                 New-Item -Path $path -Force -ErrorAction SilentlyContinue | Out-Null
-                Write-Log "Caminho de registro criado: $path" Cyan
+                Write-Log "Caminho de registro criado: $path" -Type Info
             }
 
             foreach ($name in $registryChanges.$path.Keys) {
                 $value = $registryChanges.$path.$name
-                Write-Log "Configurando registro: $path - $name = $value" Cyan
+                Write-Log "Configurando registro: $path - $name = $value" -Type Info
                 Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
             }
         }
-        Write-Log "Tweaks extras aplicados com sucesso." Green
+        Write-Log "Tweaks extras aplicados com sucesso." -Type Success
     } catch {
-        Write-Log "Erro ao aplicar tweaks extras: $_" Red
+        Write-Log "Erro ao aplicar tweaks extras: $_" -Type Error
     }
 }
 
 function Grant-HardenOfficeMacros {
-    Write-Log "Desabilitando macros perigosos do Office..." Yellow
+    Write-Log "Desabilitando macros perigosos do Office..." -Type Warning
     try {
         $officePaths = @(
         "HKCU\Software\Microsoft\Office\16.0\Word\Security",
@@ -4329,15 +4364,15 @@ function Grant-HardenOfficeMacros {
             New-Item -Path $path -Force | Out-Null
             Set-ItemProperty -Path $path -Name "VBAWarnings" -Value 4
             Set-ItemProperty -Path $path -Name "AccessVBOM" -Value 0
-            Write-Log "Macros desativadas em: $path" Green
+            Write-Log "Macros desativadas em: $path" -Type Success
         } 
         catch {
-            Write-Log "Erro ao ajustar segurança em ${path}: $_" Yellow
+            Write-Log "Erro ao ajustar segurança em ${path}: $_" -Type Warning
         }
     }
     }
     catch {
-        Write-Log "Erro ao desabilitar macros perigosos do Office: $_" Red
+        Write-Log "Erro ao desabilitar macros perigosos do Office: $_" -Type Error
     }
 }
 
@@ -4383,13 +4418,13 @@ Write-Log "ERRO ao configurar o plano de energia: $($_.Exception.Message)" -Type
 #endregion
 
 function Remove-OneDrive-AndRestoreFolders {
-    Write-Log "Removendo OneDrive e restaurando pastas padrão..." Yellow
+    Write-Log "Removendo OneDrive e restaurando pastas padrão..." -Type Warning
     try {
         taskkill.exe /F /IM "OneDrive.exe"
         taskkill.exe /F /IM "explorer.exe"
     } 
     catch {
-        Write-Log "Erro ao remover OneDrive: $_" Red
+        Write-Log "Erro ao remover OneDrive: $_" -Type Error
     }
 Write-Output "Remove OneDrive"
 if (Test-Path "$env:systemroot\System32\OneDriveSetup.exe") {
@@ -4440,15 +4475,15 @@ Start-Sleep 10
 }
 
 function Backup-Registry {
-    Write-Log "Fazendo backup do registro (SOFTWARE, SYSTEM, HKCU)..." Yellow
+    Write-Log "Fazendo backup do registro (SOFTWARE, SYSTEM, HKCU)..." -Type Warning
     try {
         $bkpPath = "$env:USERPROFILE\Desktop\reg_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
         New-Item -Path $bkpPath -ItemType Directory | Out-Null
         reg.exe save HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" /y | Out-Null
         reg.exe save HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" /y | Out-Null
         reg.exe save HKCU "$bkpPath\HKCU.reg" /y | Out-Null
-        Write-Log "Backup do registro salvo em: $bkpPath" Green
-    } catch { Write-Log "Erro ao fazer backup do registro: $_" Red }
+        Write-Log "Backup do registro salvo em: $bkpPath" -Type Success
+    } catch { Write-Log "Erro ao fazer backup do registro: $_" -Type Error }
 }
 
 function Restore-Registry {
@@ -4458,8 +4493,8 @@ Write-Log "Digite o caminho da pasta onde está o backup do registro:" -Type Inf
         reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
         reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
         reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
-        Write-Log "Registro restaurado a partir de $bkpPath." Green
-    } catch { Write-Log "Erro ao restaurar o registro: $_" Red }
+        Write-Log "Registro restaurado a partir de $bkpPath." -Type Success
+    } catch { Write-Log "Erro ao restaurar o registro: $_" -Type Error }
 }
 
 function Invoke-ExternalDebloaters {
@@ -4467,7 +4502,7 @@ function Invoke-ExternalDebloaters {
     foreach ($scr in $scripts) {
         $path = Join-Path $PSScriptRoot $scr
         if (Test-Path $path) {
-            Write-Log "Executando $scr..." Yellow
+            Write-Log "Executando $scr..." -Type Warning
             if ($scr -like "*.ps1") {
                 powershell.exe -ExecutionPolicy Bypass -File $path
             } elseif ($scr -like "*.exe") {
@@ -4475,9 +4510,9 @@ function Invoke-ExternalDebloaters {
             } elseif ($scr -like "*.bat") {
                 Start-Process "cmd.exe" -ArgumentList "/c `"$path`"" -Wait
             }
-            Write-Log "$scr executado." Green
+            Write-Log "$scr executado." -Type Success
         } else {
-            Write-Log "$scr não encontrado, pulando." Cyan
+            Write-Log "$scr não encontrado, pulando." -Type Info
         }
     }
 }
@@ -4488,9 +4523,9 @@ Write-Log "==== ATIVAÇÃO DO WINDOWS ====" -Type Info
 Write-Log "Executando script de ativação oficial (get.activated.win)..." -Type Warning
     try {
         irm https://get.activated.win | iex
-        Write-Log "Script de ativação executado com sucesso." Green
+        Write-Log "Script de ativação executado com sucesso." -Type Success
     } catch {
-        Write-Log "Erro ao executar o script de ativação: $_" Red
+        Write-Log "Erro ao executar o script de ativação: $_" -Type Error
     }
     
 }
@@ -4501,9 +4536,9 @@ Write-Log "==== CHRIS TITUS TOOLBOX ====" -Type Info
 Write-Log "Executando toolbox oficial do site christitus.com..." -Type Warning
     try {
         irm christitus.com/win | iex
-        Write-Log "Chris Titus Toolbox executado com sucesso." Green
+        Write-Log "Chris Titus Toolbox executado com sucesso." -Type Success
     } catch {
-        Write-Log "Erro ao executar o script do Chris Titus: $_" Red
+        Write-Log "Erro ao executar o script do Chris Titus: $_" -Type Error
     }
 }
 
@@ -4514,18 +4549,18 @@ Write-Log "ATUALIZANDO SCRIPT..." -Type Info
 Write-Log "=======================" -Type Info
 
     try {
-        Write-Log "Verificando conexão com servidor..." Yellow
+        Write-Log "Verificando conexão com servidor..." -Type Warning
         if (-not (Test-Connection -ComputerName "script.colegiomundodosaber.com.br" -Count 1 -Quiet)) {
-            Write-Log "❌ Sem conexão. Atualização abortada." Red
+            Write-Log "❌ Sem conexão. Atualização abortada." -Type Error
             return
         }
 
-        Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." Yellow
+        Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." -Type Warning
         irm script.colegiomundodosaber.com.br | iex
-        Write-Log "✅ Script atualizado com sucesso!" Green
+        Write-Log "✅ Script atualizado com sucesso!" -Type Success
         Show-SuccessMessage
     } catch {
-        Write-Log "❌ Falha ao atualizar script: $_" Red
+        Write-Log "❌ Falha ao atualizar script: $_" -Type Error
         Show-SuccessMessage
     }
 }
@@ -4542,8 +4577,8 @@ Write-Log "=== Configurar Autologin ===" -Type Info
         Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultUserName" -Value $username
         Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultDomainName" -Value $domain
         Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultPassword" -Value $passwordPlain
-        Write-Log "Autologin configurado para o usuário $username." Green
-    } catch { Write-Log "Erro ao configurar autologin: $_" Red }
+        Write-Log "Autologin configurado para o usuário $username." -Type Success
+    } catch { Write-Log "Erro ao configurar autologin: $_" -Type Error }
     Show-SuccessMessage
 }
 
@@ -4552,7 +4587,7 @@ Write-Log "=== Configurar Autologin ===" -Type Info
 #region → FUNÇÕES DE RESTAURAÇÃO E UNDO
 
 function Restore-DefaultUAC {
-    Write-Log "Tentando restaurar as configurações padrão do UAC..." Yellow
+    Write-Log "Tentando restaurar as configurações padrão do UAC..." -Type Warning
 
     try {
         # Define EnableLUA para 1 para ativar o UAC
@@ -4560,20 +4595,20 @@ function Restore-DefaultUAC {
         # Define ConsentPromptBehaviorAdmin para 5 (padrão) para o prompt de consentimento para administradores
         Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "ConsentPromptBehaviorAdmin" -Value 5 -Force -ErrorAction Stop | Out-Null
 
-        Write-Log "UAC restaurado para as configurações padrão com sucesso. Será necessário reiniciar para que as alterações tenham efeito completo." Green
+        Write-Log "UAC restaurado para as configurações padrão com sucesso. Será necessário reiniciar para que as alterações tenham efeito completo." -Type Success
 Write-Log "UAC restaurado. Reinicie o computador para aplicar as alterações." -Type Success
     } catch {
-        Write-Log "Erro ao restaurar o UAC: $_" Red
+        Write-Log "Erro ao restaurar o UAC: $_" -Type Error
 Write-Log "Erro ao restaurar o UAC. Verifique o log." -Type Error
     }
 }
 
 function Restore-DefaultIPv6 {
-    Write-Log "Reabilitando IPv6..." Yellow
+    Write-Log "Reabilitando IPv6..." -Type Warning
     try {
         Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Name "DisabledComponents" -ErrorAction SilentlyContinue
-        Write-Log "IPv6 reabilitado." Green
-    } catch { Write-Log "Erro ao reabilitar IPv6: $_" Red }
+        Write-Log "IPv6 reabilitado." -Type Success
+    } catch { Write-Log "Erro ao reabilitar IPv6: $_" -Type Error }
 }
 
 function Restore-Registry-FromBackup {
@@ -4583,128 +4618,128 @@ Write-Log "Digite o caminho do backup do registro para restaurar (pasta):" -Type
         reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
         reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
         reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
-        Write-Log "Registro restaurado a partir de $bkpPath." Green
-    } catch { Write-Log "Erro ao restaurar o registro: $_" Red }
+        Write-Log "Registro restaurado a partir de $bkpPath." -Type Success
+    } catch { Write-Log "Erro ao restaurar o registro: $_" -Type Error }
 }
 
 function Undo-PrivacyHardening {
-    Write-Log "Desfazendo ajustes de privacidade agressivos..." Yellow
+    Write-Log "Desfazendo ajustes de privacidade agressivos..." -Type Warning
     try {
         reg.exe delete "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /f | Out-Null
         reg.exe delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /f | Out-Null
         reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /f | Out-Null
         reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /f | Out-Null
         reg.exe delete "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /f | Out-Null
-        Write-Log "Ajustes de privacidade revertidos." Green
-    } catch { Write-Log "Erro ao desfazer privacidade: $_" Red }
+        Write-Log "Ajustes de privacidade revertidos." -Type Success
+    } catch { Write-Log "Erro ao desfazer privacidade: $_" -Type Error }
 }
 
 function Restore-VisualPerformanceDefault {
-    Write-Log "Restaurando configurações visuais para o padrão..." Yellow
+    Write-Log "Restaurando configurações visuais para o padrão..." -Type Warning
     try {
         reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 0 /f | Out-Null
-        Write-Log "Configurações visuais restauradas." Green
-    } catch { Write-Log "Erro ao restaurar visual: $_" Red }
+        Write-Log "Configurações visuais restauradas." -Type Success
+    } catch { Write-Log "Erro ao restaurar visual: $_" -Type Error }
 }
 
 function Grant-ActionCenter-Notifications {
-    Write-Log "Reabilitando Action Center e notificações..." Yellow
+    Write-Log "Reabilitando Action Center e notificações..." -Type Warning
     try {
         reg.exe delete "HKCU\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /f | Out-Null
         reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 1 /f | Out-Null
         reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 0 /f | Out-Null
-        Write-Log "Action Center e notificações reabilitados." Green
-    } catch { Write-Log "Erro ao reabilitar Action Center: $_" Red }
+        Write-Log "Action Center e notificações reabilitados." -Type Success
+    } catch { Write-Log "Erro ao reabilitar Action Center: $_" -Type Error }
 }
 
 function Enable-SMBv1 {
-    Write-Log "Tentando ativar o SMBv1..." Yellow
+    Write-Log "Tentando ativar o SMBv1..." -Type Warning
 Write-Log "Ativando o SMBv1..." -Type Warning
 Write-Log "ATENÇÃO: Ativar o SMBv1 pode expor o sistema a vulnerabilidades de segurança mais antigas. Prossiga com cautela." -Type Warning
     Start-Sleep -Seconds 2
 
     try {
         # Habilitar o componente SMBv1 via PowerShell
-        Write-Log "Habilitando o recurso SMB1Protocol..." Cyan
+        Write-Log "Habilitando o recurso SMB1Protocol..." -Type Info
         Enable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart -ErrorAction Stop | Out-Null
 
         # Ativar o driver do serviço SMBv1
-        Write-Log "Configurando o serviço MRxSmb10 para iniciar automaticamente (2)..." Cyan
+        Write-Log "Configurando o serviço MRxSmb10 para iniciar automaticamente (2)..." -Type Info
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" -Name "Start" -Value 2 -Force -ErrorAction Stop | Out-Null
 
         # Ativar o LanmanServer para usar SMB1
-        Write-Log "Configurando o serviço LanmanServer para usar SMB1..." Cyan
+        Write-Log "Configurando o serviço LanmanServer para usar SMB1..." -Type Info
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Name "SMB1" -Value 1 -Force -ErrorAction Stop | Out-Null
 
         # Iniciar os serviços se não estiverem rodando
-        Write-Log "Iniciando serviços relacionados ao SMBv1..." Cyan
+        Write-Log "Iniciando serviços relacionados ao SMBv1..." -Type Info
         Get-Service -Name "LanmanServer" -ErrorAction SilentlyContinue | Where-Object {$_.Status -ne 'Running'} | Start-Service -ErrorAction SilentlyContinue | Out-Null
         Get-Service -Name "MRxSmb10" -ErrorAction SilentlyContinue | Where-Object {$_.Status -ne 'Running'} | Start-Service -ErrorAction SilentlyContinue | Out-Null
 
-        Write-Log "SMBv1 ativado com sucesso. Reinicialização pode ser necessária para que todas as alterações tenham efeito." Green
+        Write-Log "SMBv1 ativado com sucesso. Reinicialização pode ser necessária para que todas as alterações tenham efeito." -Type Success
 Write-Log "SMBv1 ativado. Reinicialização recomendada." -Type Success
     } catch {
-        Write-Log "Erro ao ativar o SMBv1: $_" Red
+        Write-Log "Erro ao ativar o SMBv1: $_" -Type Error
 Write-Log "Erro ao ativar o SMBv1. Verifique o log." -Type Error
     }
 }
 
 function Disable-SMBv1 {
-    Write-Log "Tentando desativar o SMBv1..." Yellow
+    Write-Log "Tentando desativar o SMBv1..." -Type Warning
 Write-Log "Desativando o SMBv1..." -Type Warning
 
     try {
         # Desabilitar o componente SMBv1 via PowerShell (equivalente a Remove-WindowsFeature)
         # Verifica se o recurso SMB1-Protocol existe antes de tentar removê-lo
         if (Get-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -ErrorAction SilentlyContinue) {
-            Write-Log "Desabilitando o recurso SMB1Protocol..." Cyan
+            Write-Log "Desabilitando o recurso SMB1Protocol..." -Type Info
             Disable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart -ErrorAction Stop | Out-Null
         } else {
-            Write-Log "Recurso SMB1Protocol não encontrado ou já desabilitado." Yellow
+            Write-Log "Recurso SMB1Protocol não encontrado ou já desabilitado." -Type Warning
         }
 
         # Desativar o driver do serviço SMBv1
-        Write-Log "Configurando o serviço MRxSmb10 para iniciar desativado (4)..." Cyan
+        Write-Log "Configurando o serviço MRxSmb10 para iniciar desativado (4)..." -Type Info
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" -Name "Start" -Value 4 -Force -ErrorAction Stop | Out-Null
 
         # Desativar o LanmanServer para não usar SMB1
-        Write-Log "Configurando o serviço LanmanServer para não usar SMB1..." Cyan
+        Write-Log "Configurando o serviço LanmanServer para não usar SMB1..." -Type Info
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Name "SMB1" -Value 0 -Force -ErrorAction Stop | Out-Null
 
         # Parar os serviços se estiverem rodando
-        Write-Log "Parando serviços relacionados ao SMBv1 se estiverem rodando..." Cyan
+        Write-Log "Parando serviços relacionados ao SMBv1 se estiverem rodando..." -Type Info
         Get-Service -Name "LanmanServer" -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq 'Running'} | Stop-Service -Force -ErrorAction SilentlyContinue | Out-Null
         Get-Service -Name "MRxSmb10" -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq 'Running'} | Stop-Service -Force -ErrorAction SilentlyContinue | Out-Null
 
-        Write-Log "SMBv1 desativado com sucesso. Reinicialização pode ser necessária para que todas as alterações tenham efeito." Green
+        Write-Log "SMBv1 desativado com sucesso. Reinicialização pode ser necessária para que todas as alterações tenham efeito." -Type Success
 Write-Log "SMBv1 desativado. Reinicialização recomendada." -Type Success
     } catch {
-        Write-Log "Erro ao desativar o SMBv1: $_" Red
+        Write-Log "Erro ao desativar o SMBv1: $_" -Type Error
 Write-Log "Erro ao desativar o SMBv1. Verifique o log." -Type Error
     }
 }
 
 function Restore-OfficeMacros {
-    Write-Log "Restaurando comportamento padrão de macros do Office..." Yellow
+    Write-Log "Restaurando comportamento padrão de macros do Office..." -Type Warning
     try {
         reg.exe delete "HKCU\Software\Microsoft\Office\16.0\Word\Security" /v VBAWarnings /f | Out-Null
         reg.exe delete "HKCU\Software\Microsoft\Office\16.0\Excel\Security" /v VBAWarnings /f | Out-Null
-        Write-Log "Macros do Office retornaram ao padrão." Green
-    } catch { Write-Log "Erro ao restaurar macros: $_" Red }
+        Write-Log "Macros do Office retornaram ao padrão." -Type Success
+    } catch { Write-Log "Erro ao restaurar macros: $_" -Type Error }
 }
 
 function Restore-OneDrive {
     $onedriveSetup = "$env:SystemRoot\SysWOW64\OneDriveSetup.exe"
     if (Test-Path $onedriveSetup) {
         Start-Process $onedriveSetup
-        Write-Log "OneDrive reinstalado." Green
+        Write-Log "OneDrive reinstalado." -Type Success
     } else {
-        Write-Log "OneDriveSetup.exe não encontrado!" Red
+        Write-Log "OneDriveSetup.exe não encontrado!" -Type Error
     }
 }
 
 function Restore-BloatwareSafe {
-    Write-Log "Reinstalando aplicativos essenciais..." Yellow
+    Write-Log "Reinstalando aplicativos essenciais..." -Type Warning
     $apps = @(
         "Microsoft.WindowsCalculator",
         "Microsoft.WindowsNotepad",
@@ -4723,15 +4758,15 @@ function Restore-BloatwareSafe {
                 $manifest = Join-Path $pkg.InstallLocation "AppxManifest.xml"
                 if (Test-Path $manifest) {
                     Add-AppxPackage -DisableDevelopmentMode -Register $manifest
-                    Write-Log "$app reinstalado com sucesso." Green
+                    Write-Log "$app reinstalado com sucesso." -Type Success
                 } else {
-                    Write-Log "AppxManifest não encontrado para $app." Red
+                    Write-Log "AppxManifest não encontrado para $app." -Type Error
                 }
             } else {
-                Write-Log "$app não está instalado. Pulando." Yellow
+                Write-Log "$app não está instalado. Pulando." -Type Warning
             }
         } catch {
-            Write-Log "❌ Erro ao reinstalar $(app): $_" Red
+            Write-Log "❌ Erro ao reinstalar $(app): $_" -Type Error
         }
     }
 
@@ -4739,7 +4774,7 @@ function Restore-BloatwareSafe {
 }
 
 function Restore-ControlPanelTweaks {
-    Write-Log "Restaurando configurações do Painel de Controle e comportamento do sistema para o padrão..." Yellow
+    Write-Log "Restaurando configurações do Painel de Controle e comportamento do sistema para o padrão..." -Type Warning
 
     # Dicionário de alterações de registro para restaurar padrões
     $registryChanges = @{
@@ -4849,18 +4884,18 @@ function Restore-ControlPanelTweaks {
             # Certifica-se de que o caminho existe antes de tentar definir as propriedades
             if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
                 New-Item -Path $path -Force -ErrorAction SilentlyContinue | Out-Null
-                Write-Log "Caminho de registro criado: $path" Cyan
+                Write-Log "Caminho de registro criado: $path" -Type Info
             }
 
             foreach ($name in $registryChanges.$path.Keys) {
                 $value = $registryChanges.$path.$name
-                Write-Log "Configurando registro: $path - $name = $value" Cyan
+                Write-Log "Configurando registro: $path - $name = $value" -Type Info
                 Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue | Out-Null
             }
         }
-        Write-Log "Configurações do Painel de Controle e comportamento do sistema restauradas com sucesso." Green
+        Write-Log "Configurações do Painel de Controle e comportamento do sistema restauradas com sucesso." -Type Success
     } catch {
-        Write-Log "Erro ao restaurar configurações do Painel de Controle: $_" Red
+        Write-Log "Erro ao restaurar configurações do Painel de Controle: $_" -Type Error
     }
 }
 #endregion
@@ -4868,34 +4903,34 @@ function Restore-ControlPanelTweaks {
 #region → EXECUÇÃO PRINCIPAL
 try {
     if ($WhatIf) {
-        [cite_start]Write-Log -Message "=== MODO SIMULAÇÃO (WhatIf) ATIVADO ===" -Type Warning [cite: 8]
+        Write-Log -Message "=== MODO SIMULAÇÃO (WhatIf) ATIVADO ===" -Type Warning
     }
 
     # 2) Criar ponto de restauração (se solicitado)
     if ($CreateRestorePoint) {
-        [cite_start]Write-Log -Message "Iniciando criação do Restore Point..." -Type Info [cite: 8]
+        Write-Log -Message "Iniciando criação do Restore Point..." -Type Info
 
         $cpParams = @{
-            [cite_start]Description      = "Antes do Script Supremo" [cite: 16]
-            [cite_start]RestorePointType = "MODIFY_SETTINGS" [cite: 16]
+            Description      = "Antes do Script Supremo" 
+            RestorePointType = "MODIFY_SETTINGS" 
         }
-        [cite_start]if ($WhatIf) { $cpParams['WhatIf'] = $true } [cite: 16]
+        if ($WhatIf) { $cpParams['WhatIf'] = $true } 
 
-        [cite_start]Checkpoint-Computer @cpParams [cite: 16]
+        Checkpoint-Computer @cpParams 
 
-        Write-Log -Message "Ponto de restauração solicitado." [cite_start]-Type Success [cite: 17]
+        Write-Log -Message "Ponto de restauração solicitado." -Type Success
     }
 
     # 3) Rodar remoção de bloatware
     if ($RunBloatwareRemoval -or $RunAllCleanup) {
-        [cite_start]Write-Log -Message "Iniciando remoção de bloatware..." -Type Info [cite: 17]
-        [cite_start]Invoke-RemoveAllBloatware @($WhatIf ? @{WhatIf=$true} : @{}) [cite: 17]
+        Write-Log -Message "Iniciando remoção de bloatware..." -Type Info 
+        Invoke-RemoveAllBloatware @($WhatIf ? @{WhatIf=$true} : @{}) 
     }
 
     # 4) Rodar ajustes de privacidade
     if ($RunPrivacyTweaks -or $RunAllCleanup) {
-        [cite_start]Write-Log -Message "Aplicando tweaks de privacidade..." -Type Info [cite: 18]
-        [cite_start]Invoke-PrivacyTweaks @($WhatIf ? @{WhatIf=$true} : @{}) [cite: 18]
+        Write-Log -Message "Aplicando tweaks de privacidade..." -Type Info 
+        Invoke-PrivacyTweaks @($WhatIf ? @{WhatIf=$true} : @{}) 
     }
 
     # 5) Rodar otimização de rede
@@ -4941,7 +4976,7 @@ try {
         Set-OptimizedPowerPlan @($WhatIf ? @{WhatIf=$true} : @{})
     }
 
-    Write-Log -Message "Script concluído com sucesso." [cite_start]-Type Success [cite: 19]
+    Write-Log -Message "Script concluído com sucesso." -Type Success
 }
 catch {
     $msg = $_.Exception.Message
@@ -4973,7 +5008,7 @@ function Show-FullMaintenance {
 Write-Log "=============================================" -Type Info
 Write-Log "        INICIANDO MANUTENÇÃO COMPLETA        " -Type Info
 Write-Log "=============================================" -Type Info
-    Write-Log "Iniciando Manutenção Completa..." Yellow
+    Write-Log "Iniciando Manutenção Completa..." -Type Warning
 
     # Sequência lógica de chamadas aos novos menus e funções
     # A maioria dos menus já tem sua própria opção de "Executar Todos" (Opção 1)
@@ -5002,7 +5037,7 @@ Write-Log "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as 
 
 Write-Log "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -Type Success
     # Chamando as funções que estão dentro de Show-UtilitiesMenu opção 1
-    Remove-Bloatware
+    Remove-AppxBloatware
     Remove-OneDrive-AndRestoreFolders
     Cleanup-System
     Optimize-Drives
@@ -5030,7 +5065,7 @@ Write-Log "Executando: Menu de Scripts Externos e Ativadores (Opção 1 - Todos 
 Write-Log "=============================================" -Type Info
 Write-Log "        MANUTENÇÃO COMPLETA CONCLUÍDA!       " -Type Info
 Write-Log "=============================================" -Type Info
-    Write-Log "Manutenção Completa Concluída." Green
+    Write-Log "Manutenção Completa Concluída." -Type Success
     Show-SuccessMessage
     [Console]::ReadKey($true) | Out-Null
 }
@@ -5256,7 +5291,7 @@ Write-Log "=============================================" -Type Info
         switch ($key) {
             'A' {
 Write-Log "Executando: Todas as Tarefas de Otimização..." -Type Warning
-                Remove-Bloatware
+                Remove-AppxBloatware
                 Remove-OneDrive-AndRestoreFolders
                 Cleanup-System
                 Optimize-Drives
@@ -5288,12 +5323,12 @@ Write-Log "=============================================" -Type Info
                     switch ($subChoice) {
                         'A' {
 Write-Log "Executando: Remover Bloatware (Todos em sequência)..." -Type Warning
-                            Remove-Bloatware
+                            Remove-AppxBloatware
                             Remove-OneDrive-AndRestoreFolders
 Write-Log "Remoção de Bloatware Concluída!" -Type Success
                             [Console]::ReadKey($true) | Out-Null
                         }
-                        'B' { Remove-Bloatware; Show-SuccessMessage }
+                        'B' { Remove-AppxBloatware; Show-SuccessMessage }
                         'C' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
                         'x' { return }
                         'X' { return }
@@ -5430,7 +5465,7 @@ function Show-BloatwareMenu {
         Write-Host " X) Voltar"
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Remove-Bloatware }
+            'A' { Remove-AppxBloatware }
             'B' { Disable-BloatwareScheduledTasks }
             'C' { Stop-BloatwareProcesses }
             'D' { Remove-StartAndTaskbarPins }
@@ -5548,6 +5583,38 @@ function Start-ScriptSupremo {
     } catch {
         Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Error
     }
+}
+
+# -------------------------------------------------------------------------
+# 🔧 FUNÇÕES AUXILIARES FALTANTES
+# -------------------------------------------------------------------------
+
+function Restart-Explorer {
+    Write-Log "Reiniciando Windows Explorer..." -Type Info
+    try {
+        Stop-Process -Name "explorer" -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        Start-Process -FilePath "explorer.exe" -ErrorAction SilentlyContinue
+        Write-Log "Windows Explorer reiniciado." -Type Success
+    } catch {
+        Write-Log "Erro ao reiniciar Explorer: $($_.Exception.Message)" -Type Error
+    }
+}
+
+function New-FolderForced {
+    param([string]$Path)
+    try {
+        if (-not (Test-Path $Path)) {
+            New-Item -Path $Path -ItemType Directory -Force | Out-Null
+        }
+    } catch {
+        Write-Log "Erro ao criar pasta $Path: $($_.Exception.Message)" -Type Error
+    }
+}
+
+function Test-CommandExists {
+    param([string]$Command)
+    return (Get-Command $Command -ErrorAction SilentlyContinue) -ne $null
 }
 
 # -------------------------------------------------------------------------
