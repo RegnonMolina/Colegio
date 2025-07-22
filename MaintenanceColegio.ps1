@@ -5244,11 +5244,13 @@ function Show-NetworkMenu {
 function Show-ExternalScriptsMenu {
     do {
         Clear-Host
+		Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host "`n[SCRIPTS EXTERNOS]" -ForegroundColor Cyan
+		Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " A) Rodar Ativador get.activated.win"
         Write-Host " B) Executar Chris Titus Toolbox"
         Write-Host " C) Atualizar Script Supremo pela URL"
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Red
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-WindowsActivator }
@@ -5263,7 +5265,9 @@ function Show-ExternalScriptsMenu {
 function Show-RestoreMenu {
     do {
         Clear-Host
+		Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host "`n[RESTAURAR / BACKUP]" -ForegroundColor Cyan
+		Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " A) Criar ponto de restauração"
         Write-Host " B) Backup do Registro"
         Write-Host " C) Restaurar Registro (pasta)"
@@ -5275,7 +5279,7 @@ function Show-RestoreMenu {
         Write-Host " I) Restaurar macros Office"
         Write-Host " J) Restaurar IPv6"
         Write-Host " K) Reabilitar notificações Action Center"
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Red
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { New-SystemRestorePoint }
