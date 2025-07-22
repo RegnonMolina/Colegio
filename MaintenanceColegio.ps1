@@ -4459,26 +4459,6 @@ Write-Log "Digite o caminho da pasta onde está o backup do registro:" -Type Inf
     } catch { Write-Log "Erro ao restaurar o registro: $_" -Type Error }
 }
 
-function Invoke-ExternalDebloaters {
-    $scripts = @("Win11Debloat.ps1", "WinUtil.ps1", "OOSU10.exe", "OpenShellSetup.exe", "SpeedyFox.exe", "_Win10-BlackViper.bat")
-    foreach ($scr in $scripts) {
-        $path = Join-Path $PSScriptRoot $scr
-        if (Test-Path $path) {
-            Write-Log "Executando $scr..." -Type Warning
-            if ($scr -like "*.ps1") {
-                powershell.exe -ExecutionPolicy Bypass -File $path
-            } elseif ($scr -like "*.exe") {
-                Start-Process $path -Wait
-            } elseif ($scr -like "*.bat") {
-                Start-Process "cmd.exe" -ArgumentList "/c `"$path`"" -Wait
-            }
-            Write-Log "$scr executado." -Type Success
-        } else {
-            Write-Log "$scr não encontrado, pulando." -Type Info
-        }
-    }
-}
-
 function Invoke-WindowsActivator {
     Clear-Host
 Write-Log "==== ATIVAÇÃO DO WINDOWS ====" -Type Info
@@ -5267,15 +5247,13 @@ function Show-ExternalScriptsMenu {
         Write-Host "`n[SCRIPTS EXTERNOS]" -ForegroundColor Cyan
         Write-Host " A) Rodar Ativador get.activated.win"
         Write-Host " B) Executar Chris Titus Toolbox"
-        Write-Host " C) Rodar WinUtil, SpeedyFox, etc."
-        Write-Host " D) Atualizar Script Supremo pela URL"
+        Write-Host " C) Atualizar Script Supremo pela URL"
         Write-Host " X) Voltar"
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-WindowsActivator }
             'B' { Invoke-ChrisTitusToolbox }
-            'C' { Invoke-ExternalDebloaters }
-            'D' { Update-ScriptFromCloud }
+            'C' { Update-ScriptFromCloud }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5536,7 +5514,6 @@ function Show-BloatwareMenu {
         Write-Host " H) Remover Pastas de Bloatware Seguras"
         Write-Host " I) Parar Processos de Bloatware em Execução"
         Write-Host " J) Aplicar Prevenção de Bloatware e Privacidade"
-        Write-Host " K) Invocar Debloaters Externos (se configurado)"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5553,7 +5530,6 @@ function Show-BloatwareMenu {
             'H' { Restore-BloatwareSafe; Show-SuccessMessage } # Assumindo que esta remove pastas seguras
             'I' { Stop-BloatwareProcesses; Show-SuccessMessage }
             'J' { Apply-PrivacyAndBloatwarePrevention; Show-SuccessMessage }
-            'K' { Invoke-ExternalDebloaters; Show-SuccessMessage }
             'Z' { Invoke-Bloatware; Show-SuccessMessage } # Chama o orquestrador de Bloatware
             'X' { return }
             default {
@@ -5628,6 +5604,7 @@ function Show-MainMenu {
         Write-Host " C) Privacidade e Segurança" -ForegroundColor Yellow
         Write-Host " D) Rede e Outros" -ForegroundColor Yellow
         Write-Host " E) Sistema e Desempenho" -ForegroundColor Yellow
+		Write-Host " F) Scripts Externos" -ForegroundColor Yellow
         Write-Host " R) Reiniciar" -ForegroundColor Green
         Write-Host " S) Desligar" -ForegroundColor Green
         Write-Host " X) Sair" -ForegroundColor Red
@@ -5640,6 +5617,7 @@ function Show-MainMenu {
             'C' { Show-BloatwareMenu } # Mapeado para o antigo "Remoção de Bloatware"
             'D' { Show-NetworkMenu } # Mapeado para o antigo "Rede e Impressoras"
             'E' { Show-SystemPerformanceMenu } # Mapeado para a função de desempenho
+			'F' { Show-ExternalScriptsMenu }
             'R' {
                 Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
                 Restart-Computer -Force
