@@ -461,10 +461,7 @@ function Invoke-All-DiagnosticsAdvanced {
 
 function Clear-TemporaryFiles {
     [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+    param()
     Write-Log "Iniciando limpeza de arquivos temporários (usuário e sistema)..." -Type Info
     $activity = "Limpeza de Arquivos Temporários"
     $currentStep = 1
@@ -516,8 +513,7 @@ function Clear-TemporaryFiles {
 function Clear-WUCache {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
+       
     )
     Write-Log "Iniciando limpeza de cache do Windows Update..." -Type Info
     $activity = "Limpeza de Cache do Windows Update"
@@ -565,8 +561,7 @@ function Clear-WUCache {
 function Clear-DNS {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
+     
     )
     Write-Log "Iniciando limpeza de cache DNS..." -Type Info
     $activity = "Limpeza de Cache DNS"
@@ -598,8 +593,7 @@ function Clear-DNS {
 function Optimize-Volumes {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
+     
     )
     Write-Log "Iniciando otimização de volumes (desfragmentação/retrim)..." -Type Info
     $activity = "Otimização de Volumes"
@@ -646,9 +640,8 @@ function Optimize-Volumes {
 function Clear-WinSxS {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando limpeza de WinSxS (Limpeza de Componentes com ResetBase)..." -Type Info
     $activity = "Limpeza de WinSxS"
 
@@ -682,9 +675,8 @@ function Clear-WinSxS {
 function New-ChkDsk {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Agendando chkdsk /f /r no próximo reboot para o disco do sistema ($env:SystemDrive)..." -Type Info
     $activity = "Agendamento de ChkDsk"
 
@@ -725,9 +717,8 @@ function New-ChkDsk {
 function Remove-WindowsOld {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando remoção da pasta Windows.old..." -Type Info
     $activity = "Remoção de Windows.old"
 
@@ -759,9 +750,8 @@ function Remove-WindowsOld {
 function Clear-DeepSystemCleanup {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando limpeza profunda do sistema (logs, etc.)..." -Type Info
     $activity = "Limpeza Profunda do Sistema"
     $currentStep = 1
@@ -811,9 +801,8 @@ function Clear-DeepSystemCleanup {
 function Clear-PrintSpooler {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando limpeza do spooler de impressão..." -Type Info
     $activity = "Limpeza do Spooler de Impressão"
     $currentStep = 1
@@ -860,9 +849,8 @@ function Clear-PrintSpooler {
 function Clear-Prefetch {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando limpeza de Prefetch..." -Type Info
     $activity = "Limpeza de Prefetch"
 
@@ -893,9 +881,8 @@ function Clear-Prefetch {
 function Clear-ARP {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando limpeza de cache ARP..." -Type Info
     $activity = "Limpeza de Cache ARP"
 
@@ -936,9 +923,8 @@ function Manage-WindowsUpdates {
     #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando o gerenciamento de atualizações do Windows." -Type Info
     $activity = "Gerenciamento de Atualizações do Windows"
 
@@ -1034,9 +1020,8 @@ function Manage-WindowsUpdates {
 function Perform-Cleanup {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Executando rotinas de limpeza do sistema (agrupadas)..." -Type Info
     $activity = "Rotinas de Limpeza e Otimização"
     $totalFunctions = 11 # Número total de funções chamadas (excluindo Manage-WindowsUpdates se for interativa)
@@ -1205,9 +1190,8 @@ function Force-RemoveOneDrive {
     #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando remoção completa do OneDrive..." -Type Info
     $activity = "Remoção Completa do OneDrive"
     $currentStep = 1
@@ -1325,9 +1309,8 @@ function Force-RemoveOneDrive {
 function Remove-AppxBloatware {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando a remoção de Bloatware (AppX packages)..." -Type Info
     $activity = "Remoção de Bloatware (AppX)"
     $packagesToProcess = @()
@@ -1389,9 +1372,8 @@ function Remove-AppxBloatware {
 function Disable-BloatwareScheduledTasks {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Desativando tarefas agendadas de bloatware e telemetria..." -Type Info
     $activity = "Desativação de Tarefas Agendadas"
     $tasks = @(
@@ -1445,9 +1427,8 @@ function Disable-BloatwareScheduledTasks {
 function Stop-BloatwareProcesses {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Encerrando processos dispensáveis em segundo plano..." -Type Info
     $activity = "Encerramento de Processos"
     $processes = @(
@@ -1492,9 +1473,8 @@ function Stop-BloatwareProcesses {
 function Remove-StartAndTaskbarPins {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Removendo pins do Menu Iniciar e Barra de Tarefas..." -Type Info
     $activity = "Remoção de Pins"
 
@@ -1525,9 +1505,8 @@ function Remove-StartAndTaskbarPins {
 function Remove-ScheduledTasksAggressive {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Removendo tarefas agendadas de bloatware/telemetria (modo agressivo)..." -Type Info
     $activity = "Remoção Agressiva de Tarefas Agendadas"
     $tasks = @(
@@ -1586,9 +1565,8 @@ function Remove-ScheduledTasksAggressive {
 function Enable-ClassicContextMenu {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Restaurando menu de contexto clássico (Windows 11)..." -Type Info
     $activity = "Habilitar Menu de Contexto Clássico"
 
@@ -1625,9 +1603,8 @@ function Remove-WindowsCopilot {
     #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando remoção e desativação do Windows Copilot." -Type Info
     $activity = "Remoção e Desativação do Copilot"
     $currentStep = 1
@@ -1697,9 +1674,8 @@ function Disable-WindowsRecall {
     #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando desativação do Windows Recall." -Type Info
     $activity = "Desativação do Windows Recall"
 
@@ -1739,9 +1715,8 @@ function Disable-WindowsRecall {
 function Remove-AppxBloatwares { # Esta é a função orquestradora
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando as rotinas de remoção de Bloatware e recursos indesejados..." -Type Info
     $activity = "Remoção de Bloatware (Orquestrador)"
     $totalFunctions = 7 # Contagem das funções a serem chamadas aqui
@@ -1827,9 +1802,8 @@ function Remove-AppxBloatwares { # Esta é a função orquestradora
 function Install-Applications {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando instalação de aplicativos..." -Type Info
     $activity = "Instalação de Aplicativos via Winget"
 
@@ -1906,9 +1880,8 @@ function Install-Applications {
 function Update-PowerShell {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando instalação/atualização do PowerShell..." -Type Info
     $activity = "Atualização do PowerShell"
 
@@ -1953,9 +1926,8 @@ function Update-PowerShell {
 function Add-WiFiNetwork {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando configuração da rede Wi-Fi 'VemProMundo - Adm'..." -Type Info
     $activity = "Configuração de Rede Wi-Fi"
     $ssid = "VemProMundo - Adm"
@@ -2038,9 +2010,8 @@ function Add-WiFiNetwork {
 function Install-NetworkPrinters {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando instalação de impressoras e drivers de rede..." -Type Info
     $activity = "Instalação de Impressoras de Rede"
 
@@ -2067,7 +2038,7 @@ function Install-NetworkPrinters {
                                 Write-Log "Falha ao instalar $driverName (código: $LASTEXITCODE)" -Type Warning
                             }
                         } catch {
-                            Write-Log "Erro ao instalar $driverName: $($_.Exception.Message)" -Type Warning
+                            Write-Log "Erro ao instalar ${driverName}: $($_.Exception.Message)" -Type Warning
                         }
                     } else {
                         Write-Log "Driver não encontrado: $driverPath" -Type Warning
@@ -2180,9 +2151,8 @@ function Install-NetworkPrinters {
 function Invoke-All-NetworkAdvanced {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando todas as otimizações e configurações de rede avançadas..." -Type Info
     $activity = "Otimizações de Rede Avançadas"
 
@@ -2215,9 +2185,8 @@ function Invoke-All-NetworkAdvanced {
 function Set-DnsGoogleCloudflare {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Configurando DNS para Cloudflare (1.1.1.1) e Google (8.8.8.8)..." -Type Info
     $activity = "Configuração de DNS"
 
@@ -2264,9 +2233,8 @@ function Set-DnsGoogleCloudflare {
 function Test-InternetSpeed {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando teste de velocidade de internet..." -Type Info
     $activity = "Teste de Velocidade de Internet"
 
@@ -2313,9 +2281,8 @@ function Test-InternetSpeed {
 function Optimize-NetworkPerformance {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando a otimização do desempenho da rede..." -Type Info
     $activity = "Otimização de Rede"
 
@@ -2491,9 +2458,8 @@ function Optimize-NetworkPerformance {
 function Disable-IPv6 {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando desabilitação do IPv6..." -Type Info
     $activity = "Desabilitar IPv6"
 
@@ -2526,9 +2492,8 @@ function Disable-IPv6 {
 function Show-SystemInfo {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Exibindo informações do sistema..." -Type Info
     $activity = "Coletando Informações do Sistema"
 
@@ -2553,9 +2518,8 @@ function Show-SystemInfo {
 function Show-DiskUsage {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Exibindo uso do disco..." -Type Info
     $activity = "Coletando Uso do Disco"
 
@@ -2580,9 +2544,8 @@ function Show-DiskUsage {
 function Show-NetworkInfo {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Exibindo informações de rede..." -Type Info
     $activity = "Coletando Informações de Rede"
 
@@ -2617,9 +2580,8 @@ function Show-NetworkInfo {
 function Invoke-All-DiagnosticsAdvanced {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando todas as funções avançadas de diagnóstico e informações..." -Type Info
     $activity = "Diagnóstico Avançado"
     $totalSteps = 7 # Número de funções chamadas
@@ -2668,9 +2630,8 @@ function Invoke-All-DiagnosticsAdvanced {
 function Invoke-SFC-Scan {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando verificação SFC (System File Checker)..." -Type Info
     $activity = "Verificação SFC"
 
@@ -2699,9 +2660,8 @@ function Invoke-SFC-Scan {
 function Invoke-DISM-Scan {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando verificação DISM (Deployment Image Servicing and Management)..." -Type Info
     $activity = "Verificação DISM"
 
@@ -2730,9 +2690,8 @@ function Invoke-DISM-Scan {
 function Test-SMART-Drives {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Verificando saúde dos discos (SMART)..." -Type Info
     $activity = "Teste de Saúde SMART dos Discos"
 
@@ -2774,9 +2733,8 @@ function Test-SMART-Drives {
 function Test-Memory {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando agendamento de teste de memória..." -Type Info
     $activity = "Agendamento de Teste de Memória"
 
@@ -2810,9 +2768,8 @@ function Test-Memory {
 function Grant-PrivacyTweaks {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando aplicação de tweaks de privacidade e desabilitação de funcionalidades desnecessárias..." -Type Info
 
     # Dicionário de alterações de registro para privacidade e desativações
@@ -2966,9 +2923,8 @@ function Grant-PrivacyTweaks {
 function Enable-PrivacyHardening {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando aplicação de privacidade agressiva..." -Type Info
     $activity = "Aplicando Endurecimento de Privacidade"
 
@@ -3005,9 +2961,8 @@ function Enable-PrivacyHardening {
 function Disable-Cortana-AndSearch {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando desativação de Cortana, Windows Search, Telemetria e Relatórios de Erro..." -Type Info
     $activity = "Desativando Cortana e Busca"
 
@@ -3049,9 +3004,8 @@ function Disable-Cortana-AndSearch {
 function Disable-UAC {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando desativação do UAC (User Account Control)..." -Type Info
     Write-Log "ATENÇÃO: Desativar o UAC reduz SIGNIFICATIVAMENTE a segurança do sistema. Prossiga com extrema cautela e apenas se for estritamente necessário em um ambiente controlado." -Type Warning
     Start-Sleep -Seconds 2
@@ -3083,9 +3037,8 @@ function Disable-UAC {
 function Disable-ActionCenter-Notifications {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando desabilitação do Action Center e notificações..." -Type Info
     $activity = "Desativando Notificações e Action Center"
 
@@ -3116,9 +3069,8 @@ function Disable-ActionCenter-Notifications {
 function Set-VisualPerformance {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
     Write-Log "Iniciando ajuste visual para melhor performance..." -Type Info
     $activity = "Ajuste de Performance Visual"
 
@@ -3154,9 +3106,8 @@ function Perform-SystemOptimizations {
     #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
 
     $activity = "Otimizações de Sistema"
 
@@ -3273,9 +3224,8 @@ function Apply-PrivacyAndBloatwarePrevention {
     #>
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [Parameter()]
-        [switch]$WhatIf
-    )
+       
+            )
 
     $activity = "Ajustes de Privacidade e Prevenção de Bloatware"
 
@@ -5552,7 +5502,8 @@ function Show-MainMenu {
         Write-Host " H) Remoção de Bloatware"
         Write-Host " I) Restaurar / Backup"
         Write-Host " J) Scripts Externos"
-        Write-Host " 0) Sair"
+        Write-Host " R) Reiniciar" -ForegroundColor Green
+        Write-Host " S) Desligar" -ForegroundColor Green
         Write-Host "==============================================="
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -5562,16 +5513,28 @@ function Show-MainMenu {
             'C' { Show-PersonalizationMenu }
             'D' { Show-DiagnosticsMenu }
             'E' { Show-CleanupMenu }
-            'F' { Show-NetworkPrinterMenu }
+            'F' { Show-NetworkMenu }
             'G' { Show-WindowsFeaturesMenu }
             'H' { Show-BloatwareMenu }
             'I' { Show-RestoreMenu }
             'J' { Show-ExternalScriptsMenu }
-            '0' { break }
+            'R' {
+                Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
+                Restart-Computer -Force
+                # O script será encerrado aqui, pois o computador será reiniciado.
+            }
+            'S' {
+                Write-Host 'Desligando o sistema...' -ForegroundColor Cyan
+                Stop-Computer -Force
+                # O script será encerrado aqui, pois o computador será desligado.
+            }
+            default {
+                Write-Host 'Opção inválida. Pressione qualquer tecla para continuar...' -ForegroundColor Yellow
+                $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") # Espera por qualquer tecla
+            }
         }
-    } while ($true)
+    } while ($true) # O loop continuará até que R ou S seja selecionado (e reinicie/desligue) ou o script seja fechado manualmente.
 }
-
 # -------------------------------------------------------------------------
 # 🔧 Função principal: ponto de entrada do script
 function Start-ScriptSupremo {
@@ -5608,7 +5571,7 @@ function New-FolderForced {
             New-Item -Path $Path -ItemType Directory -Force | Out-Null
         }
     } catch {
-        Write-Log "Erro ao criar pasta $Path: $($_.Exception.Message)" -Type Error
+	Write-Log "Erro ao criar pasta ${Path}: $($_.Exception.Message)" -Type Error
     }
 }
 
