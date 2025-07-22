@@ -3088,23 +3088,9 @@ function Set-VisualPerformance {
             Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
         }
     }
-	# Declara o import da API
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class Wallpaper {
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern bool SystemParametersInfo(
-        int uAction, int uParam, string lpvParam, int fuWinIni);
-}
-"@
-
-# Caminho completo da imagem
-$img = 'G:\Drives compartilhados\MundoCOC\Wallpaper\wallpaper.jpg'
-
-# Ação 20 = SPI_SETDESKWALLPAPER, e 3 = SPIF_UPDATEINIFILE|SPIF_SENDWININICHANGE
-[Wallpaper]::SystemParametersInfo(20, 0, $img, 3) | Out-Null
-
+	$wallpaperPath = "G:\Drives compartilhados\MundoCOC\Wallpaper\wallpaper.jpg"
+	Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop\' -Name Wallpaper -Value $wallpaperPath
+	RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
 }
 
 function Perform-SystemOptimizations {
