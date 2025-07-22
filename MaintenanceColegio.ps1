@@ -5569,7 +5569,7 @@ function Show-SystemPerformanceMenu {
             'C' { Set-VisualPerformance; Show-SuccessMessage }
             'D' { Perform-SystemOptimizations; Show-SuccessMessage }
             'E' { New-SystemRestorePoint; Show-SuccessMessage }
-            'Z' { Invoke-SystemPerformance; Show-SuccessMessage } # Chama o orquestrador
+            'Z' { Invoke-Tweaks; Show-SuccessMessage } # Chama o orquestrador
             'X' { return }
             default {
                 Write-Host 'Opção inválida. Pressione qualquer tecla para continuar...' -ForegroundColor Yellow
