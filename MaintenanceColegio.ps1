@@ -5668,8 +5668,9 @@ function Show-MainMenu {
         Write-Host " D) Rede e Outros" -ForegroundColor Yellow
         Write-Host " E) Sistema e Desempenho" -ForegroundColor Yellow
 		Write-Host " F) Scripts Externos" -ForegroundColor Yellow
-        Write-Host " R) Reiniciar" -ForegroundColor Green
-        Write-Host " S) Desligar" -ForegroundColor Green
+        Write-Host " G) Rotina Colégio" -ForegroundColor Green
+		Write-Host " R) Reiniciar" -ForegroundColor Blue
+        Write-Host " S) Desligar" -ForegroundColor Blue
         Write-Host " X) Sair" -ForegroundColor Red
         Write-Host "==============================================="
 
@@ -5681,6 +5682,7 @@ function Show-MainMenu {
             'D' { Show-NetworkMenu } # Mapeado para o antigo "Rede e Impressoras"
             'E' { Show-SystemPerformanceMenu } # Mapeado para a função de desempenho
 			'F' { Show-ExternalScriptsMenu }
+			'G' { Invoke-Colegio }
             'R' {
                 Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
                 Restart-Computer -Force
