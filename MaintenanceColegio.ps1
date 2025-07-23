@@ -3857,6 +3857,24 @@ function New-SystemRestorePoint {
 function Enable-WindowsHardening {
     Write-Log "Aplicando hardening de segurança..." -Type Warning
     try {
+		Set-MpPreference -AttackSurfaceReductionRules_Ids "BE9BA2D9-53EA-4CDC-84E5-9B1EEEE46550" -AttackSurfaceReductionRules_Actions Enabled
+		Set-MpPreference -CloudBlockLevel High
+		Set-MpPreference -CloudExtendedTimeout 50
+		Set-MpPreference -EnableControlledFolderAccess Enabled
+		Set-MpPreference -EnableNetworkProtection Enabled 
+		Set-MpPreference -MAPSReporting Advanced 
+		Set-MpPreference -PUAProtection Enabled
+		Set-MpPreference -ScanScheduleDay Everyday Set-MpPreference -ScanScheduleTime 02:00 Set-MpPreference -ScanParameters FullScan
+		Set-NetFirewallProfile -Profile Domain,Public,Private -AllowInboundRules "BlockInboundAlways"
+		Set-NetFirewallProfile -Profile Domain,Public,Private -AllowLocalFirewallRules "False"
+		Set-NetFirewallProfile -Profile Domain,Public,Private -AllowLocalIPsecRules "False"
+		Set-NetFirewallProfile -Profile Domain,Public,Private -DefaultInboundAction Block
+		Set-NetFirewallProfile -Profile Domain,Public,Private -DefaultOutboundAction Allow
+		Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
+		Set-NetFirewallProfile -Profile Domain,Public,Private -LogAllowed True
+		Set-NetFirewallProfile -Profile Domain,Public,Private -LogBlocked True
+		Set-NetFirewallProfile -Profile Domain,Public,Private -LogFileName "%SystemRoot%\System32\LogFiles\Firewall\pfirewall.log"
+		Set-NetFirewallProfile -Profile Domain,Public,Private -LogMaxSizeKilobytes 32767
         Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
         Set-MpPreference -DisableRealtimeMonitoring $false
         Set-Service -Name RemoteRegistry -StartupType Disabled -ErrorAction SilentlyContinue
