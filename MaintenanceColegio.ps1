@@ -436,67 +436,66 @@ function Invoke-All-DiagnosticsAdvanced {
 function Invoke-Colegio {
 	Write-Log "Iniciando rotina completa de manutenção do Colégio..." -Type Info
     try {
-		Clear-DeepSystemCleanup
-		Clear-Prefetch
-		Clear-PrintSpooler
-		Clear-TemporaryFiles
-		Clear-WUCache
-		Clear-WinSxS
-		Remove-WindowsOld
+	Clear-DeepSystemCleanup
+	Clear-Prefetch
+	Clear-PrintSpooler
+	Clear-WUCache
+	Clear-WinSxS
+	Remove-WindowsOld
         Backup-Registry
         Clear-TemporaryFiles
         Disable-SMBv1
-		Apply-PrivacyAndBloatwarePrevention
-		Disable-BloatwareScheduledTasks
-		Disable-UnnecessaryServices
-		Disable-WindowsRecall
-		Force-RemoveOneDrive
-		Invoke-ExternalDebloaters
-		Remove-AppxBloatware
-		Remove-WindowsCopilot
-		Remove-OneDrive-AndRestoreFolders
-		Remove-ScheduledTasksAggressive
-		Remove-StartAndTaskbarPins
-		Remove-WindowsCopilot
-		Remove-WindowsOld
-		Stop-BloatwareProcesses
-		Apply-GPORegistrySettings
-		Apply-UITweaks
-		Disable-ActionCenter-Notifications
-		Disable-UAC
-		Enable-ClassicContextMenu
-		Enable-ClipboardHistory
-		Enable-DarkTheme
-		Enable-OtherMicrosoftUpdates
-		Enable-PowerOptions
-		Enable-PrivacyHardening
-		Enable-RestartAppsAfterReboot
-		Enable-SMBv1
-		Enable-Sudo
-		Enable-TaskbarEndTask
-		Enable-TaskbarSeconds
-		Enable-WindowsHardening
-		Enable-WindowsUpdateFast
-		Grant-ControlPanelTweaks
-		Grant-ExtraTweaks
-		Grant-HardenOfficeMacros
-		Grant-PrivacyTweaks
-		Manage-WindowsUpdates
-		New-FolderForced
-		New-SystemRestorePoint
-		Optimize-ExplorerPerformance
-		Optimize-NetworkPerformance
-		Perform-SystemOptimizations
-		Set-OptimizedPowerPlan
-		Set-PerformanceTheme
-		Set-VisualPerformance
-		Add-WiFiNetwork
-		Clear-ARP
-		Clear-DNS
-		Clear-PrintSpooler
-		Disable-IPv6
-		Install-NetworkPrinters
-		Set-DnsGoogleCloudflare
+	Apply-PrivacyAndBloatwarePrevention
+	Disable-BloatwareScheduledTasks
+	Disable-UnnecessaryServices
+	Disable-WindowsRecall
+	Force-RemoveOneDrive
+	Invoke-ExternalDebloaters
+	Remove-AppxBloatware
+	Remove-WindowsCopilot
+	Remove-OneDrive-AndRestoreFolders
+	Remove-ScheduledTasksAggressive
+	Remove-StartAndTaskbarPins
+	Remove-WindowsCopilot
+	Remove-WindowsOld
+	Stop-BloatwareProcesses
+	Apply-GPORegistrySettings
+	Apply-UITweaks
+	Disable-ActionCenter-Notifications
+	Disable-UAC
+	Enable-ClassicContextMenu
+	Enable-ClipboardHistory
+	Enable-DarkTheme
+	Enable-OtherMicrosoftUpdates
+	Enable-PowerOptions
+	Enable-PrivacyHardening
+	Enable-RestartAppsAfterReboot
+	Enable-SMBv1
+	Enable-Sudo
+	Enable-TaskbarEndTask
+	Enable-TaskbarSeconds
+	Enable-WindowsHardening
+	Enable-WindowsUpdateFast
+	Grant-ControlPanelTweaks
+	Grant-ExtraTweaks
+	Grant-HardenOfficeMacros
+	Grant-PrivacyTweaks
+	Manage-WindowsUpdates
+	New-FolderForced
+	New-SystemRestorePoint
+	Optimize-ExplorerPerformance
+	Optimize-NetworkPerformance
+	Perform-SystemOptimizations
+	Set-OptimizedPowerPlan
+	Set-PerformanceTheme
+	Set-VisualPerformance
+	Add-WiFiNetwork
+	Clear-ARP
+	Clear-DNS
+	Clear-PrintSpooler
+	Disable-IPv6
+	Install-NetworkPrinters
+	Set-DnsGoogleCloudflare
 
 		Write-Log "Todas as rotinas de manutenção do Colégio foram concluídas." -Type Success
     } catch {
@@ -5667,9 +5666,9 @@ function Show-MainMenu {
         Write-Host " C) Privacidade e Segurança" -ForegroundColor Yellow
         Write-Host " D) Rede e Outros" -ForegroundColor Yellow
         Write-Host " E) Sistema e Desempenho" -ForegroundColor Yellow
-		Write-Host " F) Scripts Externos" -ForegroundColor Yellow
+	Write-Host " F) Scripts Externos" -ForegroundColor Yellow
         Write-Host " G) Rotina Colégio" -ForegroundColor Green
-		Write-Host " R) Reiniciar" -ForegroundColor Blue
+	Write-Host " R) Reiniciar" -ForegroundColor Blue
         Write-Host " S) Desligar" -ForegroundColor Blue
         Write-Host " X) Sair" -ForegroundColor Red
         Write-Host "==============================================="
@@ -5681,8 +5680,8 @@ function Show-MainMenu {
             'C' { Show-BloatwareMenu } # Mapeado para o antigo "Remoção de Bloatware"
             'D' { Show-NetworkMenu } # Mapeado para o antigo "Rede e Impressoras"
             'E' { Show-SystemPerformanceMenu } # Mapeado para a função de desempenho
-			'F' { Show-ExternalScriptsMenu }
-			'G' { Invoke-Colegio }
+	    'F' { Show-ExternalScriptsMenu }
+	    'G' { Invoke-Colegio }
             'R' {
                 Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
                 Restart-Computer -Force
