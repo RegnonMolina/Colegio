@@ -296,7 +296,6 @@ function Invoke-Bloatware {
 		Disable-UnnecessaryServices
 		Disable-WindowsRecall
 		Force-RemoveOneDrive
-		Invoke-ExternalDebloaters
 		Remove-AppxBloatware
 		Remove-WindowsCopilot
 		Remove-OneDrive-AndRestoreFolders
@@ -436,66 +435,61 @@ function Invoke-All-DiagnosticsAdvanced {
 function Invoke-Colegio {
 	Write-Log "Iniciando rotina completa de manutenção do Colégio..." -Type Info
     try {
-	Clear-DeepSystemCleanup
-	Clear-Prefetch
-	Clear-PrintSpooler
-	Clear-WUCache
-	Clear-WinSxS
-	Remove-WindowsOld
-        Backup-Registry
-        Clear-TemporaryFiles
-        Disable-SMBv1
-	Apply-PrivacyAndBloatwarePrevention
-	Disable-BloatwareScheduledTasks
-	Disable-UnnecessaryServices
-	Disable-WindowsRecall
-	Force-RemoveOneDrive
-	Invoke-ExternalDebloaters
-	Remove-AppxBloatware
-	Remove-WindowsCopilot
-	Remove-OneDrive-AndRestoreFolders
-	Remove-ScheduledTasksAggressive
-	Remove-StartAndTaskbarPins
-	Remove-WindowsCopilot
-	Remove-WindowsOld
-	Stop-BloatwareProcesses
-	Apply-GPORegistrySettings
-	Apply-UITweaks
-	Disable-ActionCenter-Notifications
-	Disable-UAC
-	Enable-ClassicContextMenu
-	Enable-ClipboardHistory
-	Enable-DarkTheme
-	Enable-OtherMicrosoftUpdates
-	Enable-PowerOptions
-	Enable-PrivacyHardening
-	Enable-RestartAppsAfterReboot
-	Enable-SMBv1
-	Enable-Sudo
-	Enable-TaskbarEndTask
-	Enable-TaskbarSeconds
-	Enable-WindowsHardening
-	Enable-WindowsUpdateFast
-	Grant-ControlPanelTweaks
-	Grant-ExtraTweaks
-	Grant-HardenOfficeMacros
-	Grant-PrivacyTweaks
-	Manage-WindowsUpdates
-	New-FolderForced
-	New-SystemRestorePoint
-	Optimize-ExplorerPerformance
-	Optimize-NetworkPerformance
-	Perform-SystemOptimizations
-	Set-OptimizedPowerPlan
-	Set-PerformanceTheme
-	Set-VisualPerformance
-	Add-WiFiNetwork
-	Clear-ARP
-	Clear-DNS
-	Clear-PrintSpooler
-	Disable-IPv6
-	Install-NetworkPrinters
-	Set-DnsGoogleCloudflare
+			Add-WiFiNetwork
+			Apply-GPORegistrySettings
+			Apply-PrivacyAndBloatwarePrevention
+			Apply-UITweaks
+			Backup-Registry
+			Clear-ARP
+			Clear-DNS
+			Clear-DeepSystemCleanup
+			Clear-Prefetch
+			Clear-PrintSpooler
+			Clear-WUCache
+			Clear-WinSxS
+			Disable-ActionCenter-Notifications
+			Disable-BloatwareScheduledTasks
+			Disable-IPv6
+			Disable-SMBv1
+			Disable-UAC
+			Disable-UnnecessaryServices
+			Disable-WindowsRecall
+			Enable-ClassicContextMenu
+			Enable-ClipboardHistory
+			Enable-DarkTheme
+			Enable-OtherMicrosoftUpdates
+			Enable-PowerOptions
+			Enable-PrivacyHardening
+			Enable-RestartAppsAfterReboot
+			Enable-SMBv1
+			Enable-Sudo
+			Enable-TaskbarEndTask
+			Enable-TaskbarSeconds
+			Enable-WindowsHardening
+			Enable-WindowsUpdateFast
+			Force-RemoveOneDrive
+			Grant-ControlPanelTweaks
+			Grant-ExtraTweaks
+			Grant-HardenOfficeMacros
+			Grant-PrivacyTweaks
+			Install-NetworkPrinters
+			Manage-WindowsUpdates
+			New-FolderForced
+			New-SystemRestorePoint
+			Optimize-ExplorerPerformance
+			Optimize-NetworkPerformance
+			Perform-SystemOptimizations
+			Remove-AppxBloatware
+			Remove-OneDrive-AndRestoreFolders
+			Remove-ScheduledTasksAggressive
+			Remove-StartAndTaskbarPins
+			Remove-WindowsCopilot
+			Remove-WindowsOld
+			Set-DnsGoogleCloudflare
+			Set-OptimizedPowerPlan
+			Set-PerformanceTheme
+			Set-VisualPerformance
+			Stop-BloatwareProcesses
 
 		Write-Log "Todas as rotinas de manutenção do Colégio foram concluídas." -Type Success
     } catch {
@@ -508,31 +502,6 @@ function Invoke-Colegio {
 #endregion
 
 #region → FUNÇÕES DE LIMPEZA E OTIMIZAÇÃO (AJUSTADAS)
-
-# IMPORTANTE: Esta revisão assume que você tem uma função Write-Log definida que suporta o parâmetro -Type (ex: -Type Info, -Type Success, -Type Error).
-# Exemplo de como sua função Write-Log poderia ser (se ainda não tiver):
-# function Write-Log {
-#     param(
-#         [Parameter(Mandatory=$true)]
-#         [string]$Message,
-#         [Parameter(Mandatory=$false)]
-#         [ValidateSet('Info', 'Warning', 'Success', 'Error', 'Debug')]
-#         [string]$Type = 'Info'
-#     )
-#     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-#     $logEntry = "[$timestamp] [$Type] $Message"
-#     
-#     switch ($Type) {
-#         'Info' { Write-Host $logEntry -ForegroundColor Cyan }
-#         'Warning' { Write-Host $logEntry -ForegroundColor Yellow }
-#         'Success' { Write-Host $logEntry -ForegroundColor Green }
-#         'Error' { Write-Host $logEntry -ForegroundColor Red }
-#         'Debug' { Write-Host $logEntry -ForegroundColor DarkGray }
-#     }
-#     # Opcional: Adicionar lógica para escrever em um arquivo de log
-#     # Add-Content -Path "C:\Logs\SeuScript.log" -Value $logEntry
-# }
-
 
 function Clear-TemporaryFiles {
     [CmdletBinding(SupportsShouldProcess=$true)]
@@ -2019,7 +1988,6 @@ function Install-NetworkPrinters {
         try {
             Write-Progress -Activity $activity -Status "Instalando drivers de impressora via pnputil..." -PercentComplete 5
             Write-Log "Tentando instalar drivers: ssn3m.inf e E_WF1YWE.INF." -Type Info
-            # Atenção: Caminhos de driver em disco G:\ compartilhados. Verifique acessibilidade.
             if (-not $WhatIf) {
                 # Lista de caminhos de drivers para tentar
                 $driverPaths = @(
@@ -5050,14 +5018,6 @@ Write-Log "Executando: Menu de Diagnóstico e Informações (Opção 1 - Todas a
     Dism /Online /Cleanup-Image /RestoreHealth
     # Chkdsk é omitido aqui por requerer reboot
     Start-Sleep 2
-
-Write-Log "Executando: Menu de Scripts Externos e Ativadores (Opção 1 - Todos os Scripts)..." -Type Success
-    # Chame aqui as funções ou comandos para seus scripts externos,
-    # como você os configurou na opção 1 de Show-ExternalScriptsMenu
-    # Exemplo: & "$PSScriptRoot\ExternalScripts\ScriptExterno1.ps1"
-    # Exemplo: Start-Process "C:\Caminho\Para\SeuAtivador.exe" -Wait
-    Start-Sleep 2
-
 
 Write-Log "=============================================" -Type Info
 Write-Log "        MANUTENÇÃO COMPLETA CONCLUÍDA!       " -Type Info
