@@ -68,7 +68,7 @@ $global:DebugPreference = 'SilentlyContinue'   # Alterado para SilentlyContinue
 $ScriptConfig = @{
     LogFilePath              = Join-Path $PSScriptRoot "ScriptSupremo.log" 
     ConfirmBeforeDestructive = $true # Usado na função Force-RemoveOneDrive
-    
+
     Cleanup = @{
         CleanTemporaryFiles = $true
         CleanWUCache = $true
@@ -116,6 +116,7 @@ $ScriptConfig = @{
         HideOneDriveFolder = $true
     }
 }
+Set-Content -Path $LogFilePath -Value "" -Encoding UTF8 -ErrorAction SilentlyContinue | Out-Null
 
 # Garante que o PowerShell esteja usando o TLS 1.2 para downloads seguros
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 
@@ -265,239 +266,223 @@ function Test-RequiredFunctions {
 
 function Invoke-Cleanup {
     Write-Log "Iniciando o orquestrador de Limpeza e Manutenção Completa..." -Type Info
-    try {
-		Clear-DeepSystemCleanup
-		Clear-Prefetch
-		Clear-PrintSpooler
-		Clear-TemporaryFiles
-		Clear-WUCache
-		Clear-WinSxS
-		Perform-Cleanup
-		Remove-WindowsOld
-        Backup-Registry
-        Clear-TemporaryFiles
-        Disable-SMBv1
-        Invoke-DISM-Scan
-        Invoke-SFC-Scan
-        New-ChkDsk
 
-        Write-Log "Todas as rotinas de limpeza e manutenção foram concluídas pelo orquestrador." -Type Success
-    } catch {
-        Write-Log "ERRO crítico no orquestrador de limpeza e manutenção: $($_.Exception.Message)" -Type Error
-    }
+    # Chame cada função dentro de seu próprio try/catch
+    try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $($_.Exception.Message)" -Type Error }
+    try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $($_.Exception.Message)" -Type Error }
+    try { Clear-PrintSpooler -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-PrintSpooler: $($_.Exception.Message)" -Type Error }
+    try { Clear-TemporaryFiles -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-TemporaryFiles: $($_.Exception.Message)" -Type Error }
+    try { Clear-WUCache -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WUCache: $($_.Exception.Message)" -Type Error }
+    try { Clear-WinSxS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WinSxS: $($_.Exception.Message)" -Type Error }
+    try { Perform-Cleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Perform-Cleanup: $($_.Exception.Message)" -Type Error }
+    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $($_.Exception.Message)" -Type Error }
+    try { Backup-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Backup-Registry: $($_.Exception.Message)" -Type Error }
+    try { Clear-TemporaryFiles -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-TemporaryFiles: $($_.Exception.Message)" -Type Error } # Duplicado, verificar
+    try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $($_.Exception.Message)" -Type Error }
+    try { Invoke-DISM-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-DISM-Scan: $($_.Exception.Message)" -Type Error }
+    try { Invoke-SFC-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-SFC-Scan: $($_.Exception.Message)" -Type Error }
+    try { New-ChkDsk -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-ChkDsk: $($_.Exception.Message)" -Type Error }
+
+    Write-Log "Todas as rotinas de limpeza e manutenção foram concluídas pelo orquestrador." -Type Success
+    
     Suspend-Script # Pausa para o usuário ver o resultado final antes de retornar ao menu
 }
 
 function Invoke-Bloatware {
 	Write-Log "Iniciando o orquestrador de Bloatwares..." -Type Info
-    try {
-		Apply-PrivacyAndBloatwarePrevention
-		Disable-BloatwareScheduledTasks
-		Disable-UnnecessaryServices
-		Disable-WindowsRecall
-		Force-RemoveOneDrive
-		Remove-AppxBloatware
-		Remove-WindowsCopilot
-		Remove-OneDrive-AndRestoreFolders
-		Remove-ScheduledTasksAggressive
-		Remove-StartAndTaskbarPins
-		Remove-WindowsCopilot
-		Remove-WindowsOld
-		Restore-BloatwareSafe
-		Stop-BloatwareProcesses
+    
+    try { Apply-PrivacyAndBloatwarePrevention -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Apply-PrivacyAndBloatwarePrevention: $($_.Exception.Message)" -Type Error }
+    try { Disable-BloatwareScheduledTasks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-BloatwareScheduledTasks: $($_.Exception.Message)" -Type Error }
+    try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $($_.Exception.Message)" -Type Error }
+    try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $($_.Exception.Message)" -Type Error }
+    try { Force-RemoveOneDrive -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Force-RemoveOneDrive: $($_.Exception.Message)" -Type Error }
+    try { Remove-AppxBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-AppxBloatware: $($_.Exception.Message)" -Type Error }
+    try { Remove-WindowsCopilot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsCopilot: $($_.Exception.Message)" -Type Error } # Duplicado, verificar
+    try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $($_.Exception.Message)" -Type Error }
+    try { Remove-ScheduledTasksAggressive -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-ScheduledTasksAggressive: $($_.Exception.Message)" -Type Error }
+    try { Remove-StartAndTaskbarPins -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-StartAndTaskbarPins: $($_.Exception.Message)" -Type Error }
+    try { Remove-WindowsCopilot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsCopilot: $($_.Exception.Message)" -Type Error } # Duplicado, verificar
+    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $($_.Exception.Message)" -Type Error } # Duplicado, verificar
+    try { Restore-BloatwareSafe -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-BloatwareSafe: $($_.Exception.Message)" -Type Error }
+    try { Stop-BloatwareProcesses -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Stop-BloatwareProcesses: $($_.Exception.Message)" -Type Error }
 		
 	Write-Log "Todas as rotinas de bloatware foram concluídas pelo orquestrador." -Type Success
-    } catch {
-        Write-Log "ERRO crítico no orquestrador de bloatware: $($_.Exception.Message)" -Type Error
-    }
+    
     Suspend-Script # Pausa para o usuário ver o resultado final antes de retornar ao menu
 }
 
 function Invoke-Diagnose {
 	Write-Log "Iniciando o orquestrador de Diagnósticos..." -Type Info
-    try {
-		Invoke-All-DiagnosticsAdvanced
-		Show-DiskUsage
-		Show-SystemInfo
-		Test-Memory
+    
+    try { Invoke-All-DiagnosticsAdvanced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-All-DiagnosticsAdvanced: $($_.Exception.Message)" -Type Error }
+    try { Show-DiskUsage -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-DiskUsage: $($_.Exception.Message)" -Type Error }
+    try { Show-SystemInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-SystemInfo: $($_.Exception.Message)" -Type Error }
+    try { Test-Memory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Test-Memory: $($_.Exception.Message)" -Type Error }
 		
 	Write-Log "Todas as rotinas de diagnósticos foram concluídas pelo orquestrador." -Type Success
-    } catch {
-        Write-Log "ERRO crítico no orquestrador de diagnósticos: $($_.Exception.Message)" -Type Error
-    }
+    
     Suspend-Script # Pausa para o usuário ver o resultado final antes de retornar ao menu
 }
 
 function Invoke-Tweaks {
 	Write-Log "Iniciando o orquestrador de Tweaks..." -Type Info
-    try {
-		Apply-GPORegistrySettings
-		Apply-UITweaks
-		Disable-ActionCenter-Notifications
-		Disable-UAC
-		Enable-ClassicContextMenu
-		Enable-ClipboardHistory
-		Enable-DarkTheme
-		Enable-OtherMicrosoftUpdates
-		Enable-PowerOptions
-		Enable-PrivacyHardening
-		Enable-RestartAppsAfterReboot
-		Enable-SMBv1
-		Enable-Sudo
-		Enable-TaskbarEndTask
-		Enable-TaskbarSeconds
-		Enable-WindowsHardening
-		Enable-WindowsUpdateFast
-		Grant-ControlPanelTweaks
-		Grant-ExtraTweaks
-		Grant-HardenOfficeMacros
-		Grant-PrivacyTweaks
-		Manage-WindowsUpdates
-		New-FolderForced
-		New-SystemRestorePoint
-		Optimize-ExplorerPerformance
-		Optimize-NetworkPerformance
-		Optimize-Volumes
-		Perform-SystemOptimizations
-		Rename-Notebook
-		Set-OptimizedPowerPlan
-		Set-PerformanceTheme
-		Set-VisualPerformance
-		Show-AutoLoginMenu
+    
+    try { Apply-GPORegistrySettings -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Apply-GPORegistrySettings: $($_.Exception.Message)" -Type Error }
+    try { Apply-UITweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Apply-UITweaks: $($_.Exception.Message)" -Type Error }
+    try { Disable-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-ActionCenter-Notifications: $($_.Exception.Message)" -Type Error }
+    try { Disable-UAC -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UAC: $($_.Exception.Message)" -Type Error }
+    try { Enable-ClassicContextMenu -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClassicContextMenu: $($_.Exception.Message)" -Type Error }
+    try { Enable-ClipboardHistory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClipboardHistory: $($_.Exception.Message)" -Type Error }
+    try { Enable-DarkTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-DarkTheme: $($_.Exception.Message)" -Type Error }
+    try { Enable-OtherMicrosoftUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-OtherMicrosoftUpdates: $($_.Exception.Message)" -Type Error }
+    try { Enable-PowerOptions -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PowerOptions: $($_.Exception.Message)" -Type Error }
+    try { Enable-PrivacyHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PrivacyHardening: $($_.Exception.Message)" -Type Error }
+    try { Enable-RestartAppsAfterReboot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-RestartAppsAfterReboot: $($_.Exception.Message)" -Type Error }
+    try { Enable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-SMBv1: $($_.Exception.Message)" -Type Error }
+    try { Enable-Sudo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-Sudo: $($_.Exception.Message)" -Type Error }
+    try { Enable-TaskbarEndTask -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarEndTask: $($_.Exception.Message)" -Type Error }
+    try { Enable-TaskbarSeconds -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarSeconds: $($_.Exception.Message)" -Type Error }
+    try { Enable-WindowsHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsHardening: $($_.Exception.Message)" -Type Error }
+    try { Enable-WindowsUpdateFast -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsUpdateFast: $($_.Exception.Message)" -Type Error }
+    try { Grant-ControlPanelTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ControlPanelTweaks: $($_.Exception.Message)" -Type Error }
+    try { Grant-ExtraTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ExtraTweaks: $($_.Exception.Message)" -Type Error }
+    try { Grant-HardenOfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-HardenOfficeMacros: $($_.Exception.Message)" -Type Error }
+    try { Grant-PrivacyTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyTweaks: $($_.Exception.Message)" -Type Error }
+    try { Manage-WindowsUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Manage-WindowsUpdates: $($_.Exception.Message)" -Type Error }
+    try { New-FolderForced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $($_.Exception.Message)" -Type Error }
+    try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $($_.Exception.Message)" -Type Error }
+    try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $($_.Exception.Message)" -Type Error }
+    try { Optimize-NetworkPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-NetworkPerformance: $($_.Exception.Message)" -Type Error }
+    try { Optimize-Volumes -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-Volumes: $($_.Exception.Message)" -Type Error }
+    try { Perform-SystemOptimizations -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Perform-SystemOptimizations: $($_.Exception.Message)" -Type Error }
+    try { Rename-Notebook -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Rename-Notebook: $($_.Exception.Message)" -Type Error }
+    try { Set-OptimizedPowerPlan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-OptimizedPowerPlan: $($_.Exception.Message)" -Type Error }
+    try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $($_.Exception.Message)" -Type Error }
+    try { Set-VisualPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-VisualPerformance: $($_.Exception.Message)" -Type Error }
+    try { Show-AutoLoginMenu -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-AutoLoginMenu: $($_.Exception.Message)" -Type Error }
 		
 	Write-Log "Todas as rotinas de tweaks foram concluídas pelo orquestrador." -Type Success
-    } catch {
-        Write-Log "ERRO crítico no orquestrador de tweaks: $($_.Exception.Message)" -Type Error
-    }
+    
     Suspend-Script # Pausa para o usuário ver o resultado final antes de retornar ao menu
 }
 
 function Invoke-NetworkUtilities {
 	Write-Log "Iniciando o orquestrador de Redes..." -Type Info
-    try {
-		Add-WiFiNetwork
-		Clear-ARP
-		Clear-DNS
-		Clear-PrintSpooler
-		Disable-IPv6
-		Install-NetworkPrinters
-		Invoke-All-NetworkAdvanced
-		Set-DnsGoogleCloudflare
-		Show-NetworkInfo
-		Test-InternetSpeed
+    
+    try { Add-WiFiNetwork -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Add-WiFiNetwork: $($_.Exception.Message)" -Type Error }
+    try { Clear-ARP -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-ARP: $($_.Exception.Message)" -Type Error }
+    try { Clear-DNS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DNS: $($_.Exception.Message)" -Type Error }
+    try { Clear-PrintSpooler -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-PrintSpooler: $($_.Exception.Message)" -Type Error } # Duplicado, verificar
+    try { Disable-IPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-IPv6: $($_.Exception.Message)" -Type Error }
+    try { Install-NetworkPrinters -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Install-NetworkPrinters: $($_.Exception.Message)" -Type Error }
+    try { Invoke-All-NetworkAdvanced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-All-NetworkAdvanced: $($_.Exception.Message)" -Type Error }
+    try { Set-DnsGoogleCloudflare -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-DnsGoogleCloudflare: $($_.Exception.Message)" -Type Error }
+    try { Show-NetworkInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-NetworkInfo: $($_.Exception.Message)" -Type Error }
+    try { Test-InternetSpeed -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Test-InternetSpeed: $($_.Exception.Message)" -Type Error }
 		
 	Write-Log "Todas as rotinas de redes foram concluídas pelo orquestrador." -Type Success
-    } catch {
-        Write-Log "ERRO crítico no orquestrador de redes: $($_.Exception.Message)" -Type Error
-    }
+    
     Suspend-Script # Pausa para o usuário ver o resultado final antes de retornar ao menu
 }
 
 function Invoke-Undo {
 	Write-Log "Iniciando o orquestrador de Restauração..." -Type Info
-    try {
-		Grant-ActionCenter-Notifications
-		Restore-ControlPanelTweaks
-		Restore-DefaultIPv6
-		Restore-DefaultUAC
-		Restore-OfficeMacros
-		Restore-OneDrive
-		Restore-Registry
-		Restore-Registry-FromBackup
-		Restore-VisualPerformanceDefault
+    
+    try { Grant-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ActionCenter-Notifications: $($_.Exception.Message)" -Type Error }
+    try { Restore-ControlPanelTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-ControlPanelTweaks: $($_.Exception.Message)" -Type Error }
+    try { Restore-DefaultIPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-DefaultIPv6: $($_.Exception.Message)" -Type Error }
+    try { Restore-DefaultUAC -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-DefaultUAC: $($_.Exception.Message)" -Type Error }
+    try { Restore-OfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-OfficeMacros: $($_.Exception.Message)" -Type Error }
+    try { Restore-OneDrive -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-OneDrive: $($_.Exception.Message)" -Type Error }
+    try { Restore-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-Registry: $($_.Exception.Message)" -Type Error }
+    try { Restore-Registry-FromBackup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-Registry-FromBackup: $($_.Exception.Message)" -Type Error }
+    try { Restore-VisualPerformanceDefault -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-VisualPerformanceDefault: $($_.Exception.Message)" -Type Error }
 		
 	Write-Log "Todas as rotinas de restauração foram concluídas pelo orquestrador." -Type Success
-    } catch {
-        Write-Log "ERRO crítico no orquestrador de restauração: $($_.Exception.Message)" -Type Error
-    }
+    
     Suspend-Script # Pausa para o usuário ver o resultado final antes de retornar ao menu
 }
 
 function Invoke-All-DiagnosticsAdvanced {
     Write-Log "Iniciando orquestrador de Diagnósticos Avançados..." -Type Info
-    try {
-        Show-SystemInfo
-        Show-DiskUsage
-        Show-NetworkInfo
-        Invoke-SFC-Scan
-        Invoke-DISM-Scan
-        Test-SMART-Drives
-        Test-Memory
-        Show-SuccessMessage # Função que você chamou e agora está definida
+    
+    try { Show-SystemInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-SystemInfo: $($_.Exception.Message)" -Type Error }
+    try { Show-DiskUsage -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-DiskUsage: $($_.Exception.Message)" -Type Error }
+    try { Show-NetworkInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-NetworkInfo: $($_.Exception.Message)" -Type Error }
+    try { Invoke-SFC-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-SFC-Scan: $($_.Exception.Message)" -Type Error }
+    try { Invoke-DISM-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-DISM-Scan: $($_.Exception.Message)" -Type Error }
+    try { Test-SMART-Drives -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Test-SMART-Drives: $($_.Exception.Message)" -Type Error }
+    try { Test-Memory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Test-Memory: $($_.Exception.Message)" -Type Error }
+    try { Show-SuccessMessage -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-SuccessMessage: $($_.Exception.Message)" -Type Error } # Função que você chamou e agora está definida
 
-        Write-Log "Todas as rotinas de diagnósticos avançados foram concluídas." -Type Success
-    } catch {
-        Write-Log "ERRO crítico no orquestrador de diagnósticos avançados: $($_.Exception.Message)" -Type Error
-    }
+    Write-Log "Todas as rotinas de diagnósticos avançados foram concluídas." -Type Success
+    
     Suspend-Script # Pausa para o usuário ver o resultado final
 }
 
 function Invoke-Colegio {
 	Write-Log "Iniciando rotina completa de manutenção do Colégio..." -Type Info
-    try {
-			Add-WiFiNetwork
-			Apply-GPORegistrySettings
-			Apply-PrivacyAndBloatwarePrevention
-			Apply-UITweaks
-			Backup-Registry
-			Clear-ARP
-			Clear-DNS
-			Clear-DeepSystemCleanup
-			Clear-Prefetch
-			Clear-PrintSpooler
-			Clear-WUCache
-			Clear-WinSxS
-			Disable-ActionCenter-Notifications
-			Disable-BloatwareScheduledTasks
-			Disable-IPv6
-			Disable-SMBv1
-			Disable-UAC
-			Disable-UnnecessaryServices
-			Disable-WindowsRecall
-			Enable-ClassicContextMenu
-			Enable-ClipboardHistory
-			Enable-DarkTheme
-			Enable-OtherMicrosoftUpdates
-			Enable-PowerOptions
-			Enable-PrivacyHardening
-			Enable-RestartAppsAfterReboot
-			Enable-SMBv1
-			Enable-Sudo
-			Enable-TaskbarEndTask
-			Enable-TaskbarSeconds
-			Enable-WindowsHardening
-			Enable-WindowsUpdateFast
-			Force-RemoveOneDrive
-			Grant-ControlPanelTweaks
-			Grant-ExtraTweaks
-			Grant-HardenOfficeMacros
-			Grant-PrivacyTweaks
-			Install-NetworkPrinters
-			Manage-WindowsUpdates
-			New-FolderForced
-			New-SystemRestorePoint
-			Optimize-ExplorerPerformance
-			Optimize-NetworkPerformance
-			Perform-SystemOptimizations
-			Remove-AppxBloatware
-			Remove-OneDrive-AndRestoreFolders
-			Remove-ScheduledTasksAggressive
-			Remove-StartAndTaskbarPins
-			Remove-WindowsCopilot
-			Remove-WindowsOld
-			Set-DnsGoogleCloudflare
-			Set-OptimizedPowerPlan
-			Set-PerformanceTheme
-			Set-VisualPerformance
-			Stop-BloatwareProcesses
+    
+    try { Add-WiFiNetwork -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Add-WiFiNetwork: $($_.Exception.Message)" -Type Error }
+    try { Apply-GPORegistrySettings -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Apply-GPORegistrySettings: $($_.Exception.Message)" -Type Error }
+    try { Apply-PrivacyAndBloatwarePrevention -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Apply-PrivacyAndBloatwarePrevention: $($_.Exception.Message)" -Type Error }
+    try { Apply-UITweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Apply-UITweaks: $($_.Exception.Message)" -Type Error }
+    try { Backup-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Backup-Registry: $($_.Exception.Message)" -Type Error }
+    try { Clear-ARP -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-ARP: $($_.Exception.Message)" -Type Error }
+    try { Clear-DNS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DNS: $($_.Exception.Message)" -Type Error }
+    try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $($_.Exception.Message)" -Type Error }
+    try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $($_.Exception.Message)" -Type Error }
+    try { Clear-PrintSpooler -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-PrintSpooler: $($_.Exception.Message)" -Type Error }
+    try { Clear-WUCache -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WUCache: $($_.Exception.Message)" -Type Error }
+    try { Clear-WinSxS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WinSxS: $($_.Exception.Message)" -Type Error }
+    try { Disable-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-ActionCenter-Notifications: $($_.Exception.Message)" -Type Error }
+    try { Disable-BloatwareScheduledTasks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-BloatwareScheduledTasks: $($_.Exception.Message)" -Type Error }
+    try { Disable-IPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-IPv6: $($_.Exception.Message)" -Type Error }
+    try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $($_.Exception.Message)" -Type Error }
+    try { Disable-UAC -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UAC: $($_.Exception.Message)" -Type Error }
+    try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $($_.Exception.Message)" -Type Error }
+    try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $($_.Exception.Message)" -Type Error }
+    try { Enable-ClassicContextMenu -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClassicContextMenu: $($_.Exception.Message)" -Type Error }
+    try { Enable-ClipboardHistory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClipboardHistory: $($_.Exception.Message)" -Type Error }
+    try { Enable-DarkTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-DarkTheme: $($_.Exception.Message)" -Type Error }
+    try { Enable-OtherMicrosoftUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-OtherMicrosoftUpdates: $($_.Exception.Message)" -Type Error }
+    try { Enable-PowerOptions -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PowerOptions: $($_.Exception.Message)" -Type Error }
+    try { Enable-PrivacyHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PrivacyHardening: $($_.Exception.Message)" -Type Error }
+    try { Enable-RestartAppsAfterReboot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-RestartAppsAfterReboot: $($_.Exception.Message)" -Type Error }
+    try { Enable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-SMBv1: $($_.Exception.Message)" -Type Error }
+    try { Enable-Sudo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-Sudo: $($_.Exception.Message)" -Type Error }
+    try { Enable-TaskbarEndTask -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarEndTask: $($_.Exception.Message)" -Type Error }
+    try { Enable-TaskbarSeconds -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarSeconds: $($_.Exception.Message)" -Type Error }
+    try { Enable-WindowsHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsHardening: $($_.Exception.Message)" -Type Error }
+    try { Enable-WindowsUpdateFast -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsUpdateFast: $($_.Exception.Message)" -Type Error }
+    try { Force-RemoveOneDrive -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Force-RemoveOneDrive: $($_.Exception.Message)" -Type Error }
+    try { Grant-ControlPanelTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ControlPanelTweaks: $($_.Exception.Message)" -Type Error }
+    try { Grant-ExtraTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ExtraTweaks: $($_.Exception.Message)" -Type Error }
+    try { Grant-HardenOfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-HardenOfficeMacros: $($_.Exception.Message)" -Type Error }
+    try { Grant-PrivacyTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyTweaks: $($_.Exception.Message)" -Type Error }
+    try { Install-NetworkPrinters -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Install-NetworkPrinters: $($_.Exception.Message)" -Type Error }
+    try { Manage-WindowsUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Manage-WindowsUpdates: $($_.Exception.Message)" -Type Error }
+    try { New-FolderForced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $($_.Exception.Message)" -Type Error }
+    try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $($_.Exception.Message)" -Type Error }
+    try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $($_.Exception.Message)" -Type Error }
+    try { Optimize-NetworkPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-NetworkPerformance: $($_.Exception.Message)" -Type Error }
+    try { Perform-SystemOptimizations -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Perform-SystemOptimizations: $($_.Exception.Message)" -Type Error }
+    try { Remove-AppxBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-AppxBloatware: $($_.Exception.Message)" -Type Error }
+    try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $($_.Exception.Message)" -Type Error }
+    try { Remove-ScheduledTasksAggressive -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-ScheduledTasksAggressive: $($_.Exception.Message)" -Type Error }
+    try { Remove-StartAndTaskbarPins -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-StartAndTaskbarPins: $($_.Exception.Message)" -Type Error }
+    try { Remove-WindowsCopilot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsCopilot: $($_.Exception.Message)" -Type Error }
+    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $($_.Exception.Message)" -Type Error }
+    try { Set-DnsGoogleCloudflare -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-DnsGoogleCloudflare: $($_.Exception.Message)" -Type Error }
+    try { Set-OptimizedPowerPlan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-OptimizedPowerPlan: $($_.Exception.Message)" -Type Error }
+    try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $($_.Exception.Message)" -Type Error }
+    try { Set-VisualPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-VisualPerformance: $($_.Exception.Message)" -Type Error }
+    try { Stop-BloatwareProcesses -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Stop-BloatwareProcesses: $($_.Exception.Message)" -Type Error }
 
 		Write-Log "Todas as rotinas de manutenção do Colégio foram concluídas." -Type Success
-    } catch {
-        Write-Log "ERRO crítico nas rotinas de manutenção do Colégio: $($_.Exception.Message)" -Type Error
-    }
+    
     Suspend-Script # Pausa para o usuário ver o resultado final
 }
-
 
 #endregion
 
