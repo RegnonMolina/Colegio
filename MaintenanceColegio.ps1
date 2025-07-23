@@ -433,6 +433,79 @@ function Invoke-All-DiagnosticsAdvanced {
     Suspend-Script # Pausa para o usuário ver o resultado final
 }
 
+function Invoke-Colegio {
+	Write-Log "Iniciando rotina completa de manutenção do Colégio..." -Type Info
+    try {
+		Clear-DeepSystemCleanup
+		Clear-Prefetch
+		Clear-PrintSpooler
+		Clear-TemporaryFiles
+		Clear-WUCache
+		Clear-WinSxS
+		Remove-WindowsOld
+        Backup-Registry
+        Clear-TemporaryFiles
+        Disable-SMBv1
+		Apply-PrivacyAndBloatwarePrevention
+		Disable-BloatwareScheduledTasks
+		Disable-UnnecessaryServices
+		Disable-WindowsRecall
+		Force-RemoveOneDrive
+		Invoke-ExternalDebloaters
+		Remove-AppxBloatware
+		Remove-WindowsCopilot
+		Remove-OneDrive-AndRestoreFolders
+		Remove-ScheduledTasksAggressive
+		Remove-StartAndTaskbarPins
+		Remove-WindowsCopilot
+		Remove-WindowsOld
+		Stop-BloatwareProcesses
+		Apply-GPORegistrySettings
+		Apply-UITweaks
+		Disable-ActionCenter-Notifications
+		Disable-UAC
+		Enable-ClassicContextMenu
+		Enable-ClipboardHistory
+		Enable-DarkTheme
+		Enable-OtherMicrosoftUpdates
+		Enable-PowerOptions
+		Enable-PrivacyHardening
+		Enable-RestartAppsAfterReboot
+		Enable-SMBv1
+		Enable-Sudo
+		Enable-TaskbarEndTask
+		Enable-TaskbarSeconds
+		Enable-WindowsHardening
+		Enable-WindowsUpdateFast
+		Grant-ControlPanelTweaks
+		Grant-ExtraTweaks
+		Grant-HardenOfficeMacros
+		Grant-PrivacyTweaks
+		Manage-WindowsUpdates
+		New-FolderForced
+		New-SystemRestorePoint
+		Optimize-ExplorerPerformance
+		Optimize-NetworkPerformance
+		Perform-SystemOptimizations
+		Set-OptimizedPowerPlan
+		Set-PerformanceTheme
+		Set-VisualPerformance
+		Add-WiFiNetwork
+		Clear-ARP
+		Clear-DNS
+		Clear-PrintSpooler
+		Disable-IPv6
+		Install-NetworkPrinters
+		Set-DnsGoogleCloudflare
+
+		Write-Log "Todas as rotinas de manutenção do Colégio foram concluídas." -Type Success
+    } catch {
+        Write-Log "ERRO crítico nas rotinas de manutenção do Colégio: $($_.Exception.Message)" -Type Error
+    }
+    Suspend-Script # Pausa para o usuário ver o resultado final
+}
+
+
 #endregion
 
 #region → FUNÇÕES DE LIMPEZA E OTIMIZAÇÃO (AJUSTADAS)
