@@ -434,7 +434,6 @@ function Invoke-Colegio {
     try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $($_.Exception.Message)" -Type Error }
     try { Clear-PrintSpooler -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-PrintSpooler: $($_.Exception.Message)" -Type Error }
     try { Clear-WUCache -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WUCache: $($_.Exception.Message)" -Type Error }
-    try { Clear-WinSxS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WinSxS: $($_.Exception.Message)" -Type Error }
     try { Disable-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-ActionCenter-Notifications: $($_.Exception.Message)" -Type Error }
     try { Disable-BloatwareScheduledTasks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-BloatwareScheduledTasks: $($_.Exception.Message)" -Type Error }
     try { Disable-IPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-IPv6: $($_.Exception.Message)" -Type Error }
