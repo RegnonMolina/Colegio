@@ -1,3 +1,8 @@
+# Script Supremo de Manutenção 🛠️
+# Descrição: Script para otimização, limpeza e configuração de sistemas Windows no ambiente do Colégio Mundo do Saber.
+# Requisitos: PowerShell 5.1 ou superior, privilégios administrativos, cleanmgr configurado com /sageset:1.
+# Iniciado em: $(Get-Date)
+
 #region → PARÂMETROS DE EXECUÇÃO
 [CmdletBinding()]
 param (
@@ -56,19 +61,18 @@ Write-Host "--------------------------------------------------------------------
 # ⚙️ CONFIGURAÇÕES GLOBAIS E VARIÁVEIS INICIAIS
 # =========================================================================
 
-# Variáveis globais para controle de preferências
-$global:ConfirmPreference = 'None' 
-$global:ProgressPreference = 'SilentlyContinue' 
-$global:ErrorActionPreference = 'Continue' 
-$global:WarningPreference = 'Continue' 
-$global:VerbosePreference = 'SilentlyContinue' # Alterado para SilentlyContinue 
-$global:DebugPreference = 'SilentlyContinue'   # Alterado para SilentlyContinue 
+# Configurações globais do PowerShell
+$global:ConfirmPreference = 'None'
+$global:ProgressPreference = 'SilentlyContinue'
+$global:ErrorActionPreference = 'Continue'
+$global:WarningPreference = 'Continue'
+$global:VerbosePreference = 'SilentlyContinue'
+$global:DebugPreference = 'SilentlyContinue'
 
-# Configurações gerais do script
+# Configurações do script
 $ScriptConfig = @{
-    LogFilePath              = Join-Path $PSScriptRoot "ScriptSupremo.log" 
-    ConfirmBeforeDestructive = $true # Usado na função Force-RemoveOneDrive
-
+    LogFilePath = Join-Path $PSScriptRoot "ScriptSupremo.log"
+    ConfirmBeforeDestructive = $true
     Cleanup = @{
         CleanTemporaryFiles = $true
         CleanWUCache = $true
@@ -77,7 +81,6 @@ $ScriptConfig = @{
         ClearDNSCache = $true
         DisableMemoryDumps = $true
     }
-    
     PrivacyTweaks = @{
         DisableTelemetry = $true
         DisableDiagnosticData = $true
@@ -93,7 +96,6 @@ $ScriptConfig = @{
         DisableWidgets = $true
         DisableNewsAndInterests = $true
     }
-    
     GPORegistrySettings = @{
         EnableUpdateManagement = $true
         DisableAutoReboot = $true
@@ -103,7 +105,6 @@ $ScriptConfig = @{
         ConfigureChrome = $true
         DisableWindowsTips = $true
     }
-    
     UITweaks = @{
         EnableDarkMode = $true
         DisableTransparency = $true
@@ -116,19 +117,22 @@ $ScriptConfig = @{
         HideOneDriveFolder = $true
     }
 }
-Set-Content -Path $LogFilePath -Value "" -Encoding UTF8 -ErrorAction SilentlyContinue | Out-Null
 
-# Garante que o PowerShell esteja usando o TLS 1.2 para downloads seguros
-[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 
+# Inicializa o arquivo de log
+Set-Content -Path $ScriptConfig.LogFilePath -Value "" -Encoding UTF8 -ErrorAction SilentlyContinue | Out-Null
 
-# Cores padrão para cada tipo de log (movido para o escopo global)
+# Configura TLS 1.2 para downloads seguros
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+# Cores para logs
 $global:defaultColors = @{
-    'Info'    = 'Cyan'
+    'Info' = 'Cyan'
     'Success' = 'Green'
     'Warning' = 'Yellow'
-    'Error'   = 'Red'
-    'Debug'   = 'DarkGray'
+    'Error' = 'Red'
+    'Debug' = 'DarkGray'
     'Verbose' = 'Gray'
+    'Critical' = 'Magenta' # Novo nível para erros graves
 }
 
 # Listas globais para remoção de bloatware (movido e definido globalmente)
@@ -137,41 +141,44 @@ $global:bloatwareToRemove = @(
     "*SkypeApp*", "*SolitaireCollection*", "*StickyNotes*", "*Wallet*", "*YourPhone*",
     "*WindowsFeedback*", "*Xbox*", "*ZuneMusic*", "*ZuneVideo*", "*AppInstaller*",
     "*VP9VideoExtensions*", "*WebMediaExtensions*", "*HEVCVideoExtension*",
-    "*MSN.", "*OfficeHub*", "*OneNote*", "*Paint3D*", "*People*", "*Photos*",
-    "*Print3D*", "*ScreenSketch*", "*SoundRecorder*", "*MixedRealityPortal*",
+    "*MSN.", "*OfficeHub*", "*OneNote*", "*Paint3D*", "*People*",
+    "*Print3D*", "*ScreenSketch*", "*MixedRealityPortal*",
     "*ConnectivityStore*", "*DolbyAccess*", "*DolbyLaboratories.DolbyAccess*",
     "*Netflix*", "*Spotify*", "*TikTok*", "*Instagram*", "*Facebook*", "*Twitter*",
-    "*Microsoft.StorePurchaseApp*", "*WindowsCalculator*", "*AlarmsAndClock*", 
-    "*WindowsCamera*", "*WindowsDefaultLockScreen*", "*WindowsMaps*", "*WindowsMail*",
-    "*Microsoft.GamingApp*", # App Xbox principal
-    "*GamingServices*", # Serviços relacionados a jogos
-    "*Windows.ContactSupport*", # Obter Ajuda
-    "*Microsoft.Windows.Photos.Addon*" # Complemento do aplicativo Fotos
+    "*Microsoft.StorePurchaseApp*", "*WindowsDefaultLockScreen*", "*WindowsMaps*",
+    "*WindowsMail*", "*Microsoft.GamingApp*", "*GamingServices*",
+    "*Windows.ContactSupport*", "*Microsoft.Windows.Photos.Addon*",
+    "*LinkedIn*", "*OutlookForWindows*" # Adicionados para LinkedIn e Novo Outlook
 )
+
 
 $global:whitelist = @(
-    "Microsoft.DesktopAppInstaller", # winget 
-    "Microsoft.Store", # Loja da Microsoft
+    # Componentes críticos do sistema
+    "Microsoft.DesktopAppInstaller",           # Instalador de aplicativos via winget
+    "Microsoft.Store",                         # Microsoft Store para atualizações e apps educacionais
     "Microsoft.Windows.StartMenuExperienceHost", # Menu Iniciar
-    "Microsoft.Windows.ShellExperienceHost", # Shell
-    "Microsoft.UI.Xaml.2.X", # Componentes da UI
-    "Microsoft.VCLibs.140.00", # Bibliotecas essenciais
-    "Microsoft.NET.Native.Framework.X.X", # Bibliotecas .NET
-    "Microsoft.NET.Native.Runtime.X.X", # Bibliotecas .NET
-    "Microsoft.Services.Store.Engagement", # Loja
-    "Microsoft.Xbox.TCUI", # Componentes Xbox (se necessário) 
-    "Microsoft.XboxGameCallableUI", # Componentes Xbox (se necessário)
-    "Microsoft.AccountsControl",
-    "Microsoft.LockApp",
-    "Microsoft.Windows.SecHealthUI", # Segurança do Windows
-    "Microsoft.ScreenCapture" # Ferramenta de Captura
+    "Microsoft.Windows.ShellExperienceHost",   # Shell do Windows (barra de tarefas, área de trabalho)
+    "Microsoft.UI.Xaml.2.X",                   # Framework UWP
+    "Microsoft.VCLibs.140.00",                 # Biblioteca C++ para UWP
+    "Microsoft.NET.Native.Framework.X.X",      # Framework .NET para UWP
+    "Microsoft.NET.Native.Runtime.X.X",        # Runtime .NET para UWP
+    "Microsoft.LockApp",                       # Tela de bloqueio
+    "Microsoft.Windows.SecHealthUI",           # Interface do Windows Security
+
+    # Aplicativos essenciais para o colégio
+    "Microsoft.WindowsCalculator",             # Calculadora
+    "Microsoft.WindowsNotepad",                # Bloco de Notas
+    "Microsoft.Windows.Photos",                # Visualizador de fotos
+    "Microsoft.WindowsCamera",                 # Câmera para videoconferências
+    "Microsoft.WindowsSoundRecorder",          # Gravador de som
+    "Microsoft.WindowsAlarms",                 # Alarmes e relógio
+    "Microsoft.Paint",                         # Paint para edição de imagens
+    "Microsoft.WindowsTerminal"               # Terminal para administradores ou alunos de TI
 )
 
-# =========================================================================
-# ✅ VERIFICAÇÃO INICIAL: Administrador
-# =========================================================================
+# Verifica privilégios administrativos
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "Este script precisa ser executado como Administrador. Por favor, feche e execute o PowerShell como Administrador." -ForegroundColor Red 
+    Write-Log "Este script precisa ser executado como Administrador. Feche e execute o PowerShell como Administrador." -Type Error
     Start-Sleep 5
     exit
 }
@@ -179,61 +186,61 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 # =========================================================================
 # 📦 FUNÇÕES DE UTILIDADE E AUXILIARES (FUNDAMENTAL: Write-Log)
 # =========================================================================
-# 📝 Função de Log Personalizada (MANTENHA ESTA AQUI!)
+# 📝 Função de Log Personalizada 
+
 function Write-Log {
     param(
-        [Parameter(Mandatory,Position=0)]
+        [Parameter(Mandatory, Position=0)]
         [object]$Message = '',
 
         [Parameter(Position=1)]
-        [ValidateSet('Info','Success','Warning','Error','Debug','Verbose')]
+        [ValidateSet('Info', 'Success', 'Warning', 'Error', 'Debug', 'Verbose', 'Critical')]
         [string]$Type = 'Info'
     )
 
-    # Garante texto e converte arrays para string
-    if ($null -eq $Message) { $Message = '' } 
+    if ($null -eq $Message) { $Message = '' }
     $text = if ($Message -is [array]) {
         ($Message | ForEach-Object { ($_ -ne $null) ? $_.ToString() : '' }) -join ' '
     } else {
         $Message.ToString()
     }
 
-    $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') 
-    $entry     = "[$timestamp] [$Type] $text" 
-    $color     = $global:defaultColors[$Type] # Acessa cores do escopo global 
+    $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    $entry = "[$timestamp] [$Type] $text"
+    $color = $global:defaultColors[$Type]
 
-    Write-Host $entry -ForegroundColor $color 
+    Write-Host $entry -ForegroundColor $color
 
-    $logPath = $script:ScriptConfig.LogFilePath 
-    if (-not $logPath) { $logPath = Join-Path $env:TEMP 'ScriptSupremo.log' } 
+    $logPath = $ScriptConfig.LogFilePath
+    if (-not $logPath) { $logPath = Join-Path $env:TEMP 'ScriptSupremo.log' }
 
-    # Certifica-se de que o diretório de log existe (movido para dentro da função Write-Log)
     $logDir = Split-Path -Path $logPath -Parent
     if (-not (Test-Path $logDir)) {
         try {
-            New-Item -Path $logDir -ItemType Directory -Force | Out-Null 
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
         } catch {
             Write-Host "ERRO: Não foi possível criar o diretório de log '$logDir'. Mensagem: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
 
     try {
-        $entry | Out-File -FilePath $logPath -Append -Encoding UTF8 
+        $entry | Out-File -FilePath $logPath -Append -Encoding UTF8
     } catch {
-        Write-Host "ERRO ao gravar log: $($_.Exception.Message)" -ForegroundColor Red 
+        Write-Host "ERRO ao gravar log: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
 # --- Funções Auxiliares de Interação ---
+
 function Suspend-Script {
-    Write-Log "`nPressione ENTER para continuar..." -Type Info
+    Write-Log "Pressione ENTER para continuar..." -Type Info
     do {
         $key = [System.Console]::ReadKey($true)
     } until ($key.Key -eq 'Enter')
 }
 
 function Show-SuccessMessage {
-    Write-Log "`n✅ Tarefa concluída com sucesso!" -Type Success
+    Write-Log "✅ Tarefa concluída com sucesso!" -Type Success
 }
 
 # --- Funções Auxiliares de Verificação ---
@@ -437,7 +444,6 @@ function Invoke-Colegio {
     try { Disable-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-ActionCenter-Notifications: $($_.Exception.Message)" -Type Error }
     try { Disable-BloatwareScheduledTasks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-BloatwareScheduledTasks: $($_.Exception.Message)" -Type Error }
     try { Disable-IPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-IPv6: $($_.Exception.Message)" -Type Error }
-    try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $($_.Exception.Message)" -Type Error }
     try { Disable-UAC -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UAC: $($_.Exception.Message)" -Type Error }
     try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $($_.Exception.Message)" -Type Error }
     try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $($_.Exception.Message)" -Type Error }
@@ -490,19 +496,24 @@ function Invoke-Colegio {
 function Clear-TemporaryFiles {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param()
-    Write-Log "Iniciando limpeza de arquivos temporários (usuário e sistema)..." -Type Info
+    Write-Log "Iniciando limpeza de arquivos temporários..." -Type Info
     $activity = "Limpeza de Arquivos Temporários"
     $currentStep = 1
     $totalSteps = 2
 
     if ($PSCmdlet.ShouldProcess("arquivos temporários", "limpar")) {
         try {
-            Write-Progress -Activity $activity -Status "Executando Limpeza de Disco (cleanmgr /sagerun:1)..." -PercentComplete (($currentStep / $totalSteps) * 100)
-            Write-Log "Executando Limpeza de Disco (cleanmgr /sagerun:1)..." -Type Info
+            Write-Progress -Activity $activity -Status "Verificando configuração do cleanmgr..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            Write-Log "Verificando configuração do cleanmgr /sageset:1..." -Type Info
             if (-not $WhatIf) {
-                # O sagerun:1 deve ser configurado previamente com cleanmgr /sageset:1
+                # Verifica se o perfil 1 existe, senão configura
+                $cleanMgrReg = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
+                if (-not (Test-Path "$cleanMgrReg\Temporary Files\LastActiveSetup")) {
+                    Write-Log "Configurando cleanmgr /sageset:1..." -Type Warning
+                    Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sageset:1" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
+                }
+                Write-Log "Executando cleanmgr /sagerun:1..." -Type Info
                 Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
-                # Note: Start-Process não lança erro que try/catch pega diretamente. O ErrorAction é para o próprio Start-Process.
             } else {
                 Write-Log "Modo WhatIf: cleanmgr /sagerun:1 seria executado." -Type Debug
             }
@@ -511,27 +522,22 @@ function Clear-TemporaryFiles {
             Write-Progress -Activity $activity -Status "Removendo arquivos temporários adicionais..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Removendo arquivos temporários adicionais..." -Type Info
             $tempPaths = @(
-                "$env:TEMP\*" # Geralmente aponta para %LOCALAPPDATA%\Temp para o usuário logado
+                "$env:TEMP\*",
                 "$env:SystemRoot\Temp\*"
-                "$env:UserProfile\AppData\Local\Temp\*" # Incluído para clareza, pode ser redundante
             )
             foreach ($path in $tempPaths) {
                 if (Test-Path $path) {
-                    Write-Log "Tentando remover itens em $path" -Type Debug
+                    Write-Log "Removendo itens em $path" -Type Debug
                     if (-not $WhatIf) {
                         Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
                     } else {
                         Write-Log "Modo WhatIf: Itens em $path seriam removidos." -Type Debug
                     }
-                } else {
-                    Write-Log "Caminho não encontrado: $path. Pulando." -Type Debug
                 }
             }
             Write-Log "Limpeza de temporários concluída." -Type Success
-
         } catch {
             Write-Log "ERRO ao limpar arquivos temporários: $($_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
         } finally {
             Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
         }
@@ -1052,68 +1058,6 @@ function Perform-Cleanup {
 
 #region → FUNÇÕES DE REMOÇÃO DE BLOATWARE (AJUSTADAS)
 
-# IMPORTANTE: Esta revisão assume que você tem uma função Write-Log definida que suporta o parâmetro -Type (ex: -Type Info, -Type Success, -Type Error).
-# Exemplo de como sua função Write-Log poderia ser (se ainda não tiver):
-# function Write-Log {
-#     param(
-#         [Parameter(Mandatory=$true)]
-#         [string]$Message,
-#         [Parameter(Mandatory=$false)]
-#         [ValidateSet('Info', 'Warning', 'Success', 'Error', 'Debug')]
-#         [string]$Type = 'Info'
-#     )
-#     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-#     $logEntry = "[$timestamp] [$Type] $Message"
-#     
-#     switch ($Type) {
-#         'Info' { Write-Host $logEntry -ForegroundColor Cyan }
-#         'Warning' { Write-Host $logEntry -ForegroundColor Yellow }
-#         'Success' { Write-Host $logEntry -ForegroundColor Green }
-#         'Error' { Write-Host $logEntry -ForegroundColor Red }
-#         'Debug' { Write-Host $logEntry -ForegroundColor DarkGray }
-#     }
-#     # Opcional: Adicionar lógica para escrever em um arquivo de log
-#     # Add-Content -Path "C:\Logs\SeuScript.log" -Value $logEntry
-# }
-
-# Variáveis globais para listas de bloatware e whitelist, acessadas por Test-ShouldRemovePackage
-# ATENÇÃO: Adicione ou remova itens conforme sua necessidade e cuidado ao remover pacotes essenciais!
-$global:bloatwareToRemove = @(
-    "*Bing*", "*Edge*", "*News*", "*Weather*", "*GetHelp*", "*GetStarted*", "*Maps*",
-    "*SkypeApp*", "*SolitaireCollection*", "*StickyNotes*", "*Wallet*", "*YourPhone*",
-    "*WindowsFeedback*", "*Xbox*", "*ZuneMusic*", "*ZuneVideo*", "*AppInstaller*",
-    "*VP9VideoExtensions*", "*WebMediaExtensions*", "*HEVCVideoExtension*",
-    "*MSN.", "*OfficeHub*", "*OneNote*", "*Paint3D*", "*People*", "*Photos*",
-    "*Print3D*", "*ScreenSketch*", "*SoundRecorder*", "*MixedRealityPortal*",
-    "*ConnectivityStore*", "*DolbyAccess*", "*DolbyLaboratories.DolbyAccess*",
-    "*Netflix*", "*Spotify*", "*TikTok*", "*Instagram*", "*Facebook*", "*Twitter*",
-    "*Microsoft.StorePurchaseApp*", "*WindowsCalculator*", "*AlarmsAndClock*",
-    "*WindowsCamera*", "*WindowsDefaultLockScreen*", "*WindowsMaps*", "*WindowsMail*",
-    "*Microsoft.GamingApp*", # App Xbox principal
-    "*GamingServices*", # Serviços relacionados a jogos
-    "*Windows.ContactSupport*", # Obter Ajuda
-    "*Microsoft.Windows.Photos.Addon*", # Complemento do aplicativo Fotos
-    "*Microsoft.549981C3F5F10*" # Copilot, se for tratado como AppX separado do Windows Copilot completo
-)
-
-$global:whitelist = @(
-    "Microsoft.DesktopAppInstaller", # winget
-    "Microsoft.Store", # Loja da Microsoft
-    "Microsoft.Windows.StartMenuExperienceHost", # Menu Iniciar
-    "Microsoft.Windows.ShellExperienceHost", # Shell
-    "Microsoft.UI.Xaml.2.X", # Componentes da UI (usar wildcard para versões: Microsoft.UI.Xaml.2.*)
-    "Microsoft.VCLibs.140.00", # Bibliotecas essenciais
-    "Microsoft.NET.Native.Framework.*", # Bibliotecas .NET
-    "Microsoft.NET.Native.Runtime.*", # Bibliotecas .NET
-    "Microsoft.Services.Store.Engagement", # Loja
-    "Microsoft.Xbox.TCUI", # Componentes Xbox (se necessário)
-    "Microsoft.XboxGameCallableUI", # Componentes Xbox (se necessário)
-    "Microsoft.AccountsControl",
-    "Microsoft.LockApp",
-    "Microsoft.Windows.SecHealthUI", # Segurança do Windows
-    "Microsoft.ScreenCapture" # Ferramenta de Captura
-)
-
 # Helper function para verificar se um pacote deve ser removido
 function Test-ShouldRemovePackage {
     param (
@@ -1219,8 +1163,8 @@ function Force-RemoveOneDrive {
             Write-Progress -Activity $activity -Status "Limpando entradas de registro do OneDrive..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Limpando registro do OneDrive e desativando início automático." -Type Info
             $regPaths = @(
-                "HKCR:\CLSID\{018D5C66-4533-4307-9B53-2ad65C87B14B}", # OneDrive no painel de navegação
-                "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-2ad65C87B14B}",
+                "HKLM:\SOFTWARE\Classes\CLSID\{018D5C66-4533-4307-9B53-2ad65C87B14B}", # OneDrive no painel de navegação
+                "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-2ad65C87B14B}",
                 "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FolderDescriptions\{A52BBA46-A28D-493B-B034-2AFB6F3AD90C}",
                 "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager\OneDrive!*"
             )
@@ -1261,61 +1205,43 @@ function Force-RemoveOneDrive {
 
 function Remove-AppxBloatware {
     [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-       
-            )
-    Write-Log "Iniciando a remoção de Bloatware (AppX packages)..." -Type Info
-    $activity = "Remoção de Bloatware (AppX)"
-    $packagesToProcess = @()
+    param()
+    Write-Log "Iniciando remoção de bloatware..." -Type Info
+    $activity = "Remoção de Bloatware"
+    $currentStep = 1
+    $totalSteps = 2
 
-    if ($PSCmdlet.ShouldProcess("Bloatware (AppX packages)", "remover")) {
+    if ($PSCmdlet.ShouldProcess("aplicativos bloatware", "remover")) {
         try {
-            # Coleta de pacotes provisionados
-            Write-Progress -Activity $activity -Status "Identificando pacotes provisionados para remoção..." -PercentComplete 10
-            $provisionedPackages = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object { Test-ShouldRemovePackage -PackageName $_.PackageName }
-            if ($provisionedPackages) { $packagesToProcess += $provisionedPackages }
-
-            # Coleta de pacotes instalados por usuário
-            Write-Progress -Activity $activity -Status "Identificando pacotes instalados por usuário para remoção..." -PercentComplete 20
-            $userPackages = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue | Where-Object { Test-ShouldRemovePackage -PackageName $_.Name }
-            if ($userPackages) { $packagesToProcess += $userPackages }
-            
-            $totalPackages = $packagesToProcess.Count
-            $removedCount = 0
-
-            if ($totalPackages -eq 0) {
-                Write-Log "Nenhum bloatware AppX identificado para remoção." -Type Info
-                return
-            }
-
-            foreach ($pkg in $packagesToProcess) {
-                $removedCount++
-                $percentComplete = ($removedCount / $totalPackages) * 100
-                $statusMessage = "Removendo $($pkg.Name)"
-
-                Write-Progress -Activity $activity -Status $statusMessage -CurrentOperation "Pacote: $($pkg.Name)" -PercentComplete $percentComplete
-                
-                if ($pkg.GetType().Name -eq "AppxProvisionedPackage") {
-                    Write-Log "Removendo provisionamento de $($pkg.PackageName)..." -Type Info
-                    if (-not $WhatIf) {
-                        Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName -ErrorAction SilentlyContinue
-                    } else {
-                        Write-Log "Modo WhatIf: Provisionamento de $($pkg.PackageName) seria removido." -Type Debug
-                    }
-                } else { # É um AppxPackage para usuário
-                    Write-Log "Removendo $($pkg.Name) para o usuário $($pkg.User.Name)..." -Type Info
-                    if (-not $WhatIf) {
-                        Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue
-                    } else {
-                        Write-Log "Modo WhatIf: $($pkg.Name) seria removido para $($pkg.User.Name)." -Type Debug
+            Write-Progress -Activity $activity -Status "Removendo aplicativos UWP..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            foreach ($app in $global:bloatwareToRemove) {
+                if ($global:whitelist -notcontains $app) {
+                    $packages = Get-AppxPackage -AllUsers -Name $app -ErrorAction SilentlyContinue
+                    foreach ($pkg in $packages) {
+                        Write-Log "Removendo $($pkg.Name)..." -Type Info
+                        if (-not $WhatIf) {
+                            Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue
+                        }
                     }
                 }
             }
-            Write-Log "Remoção de Bloatware (AppX packages) concluída." -Type Success
+            $currentStep++
 
+            Write-Progress -Activity $activity -Status "Removendo provisionamento de pacotes..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            foreach ($app in $global:bloatwareToRemove) {
+                if ($global:whitelist -notcontains $app) {
+                    $provisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object DisplayName -like $app
+                    foreach ($prov in $provisioned) {
+                        Write-Log "Removendo provisionamento $($prov.DisplayName)..." -Type Info
+                        if (-not $WhatIf) {
+                            Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction SilentlyContinue
+                        }
+                    }
+                }
+            }
+            Write-Log "Remoção de bloatware concluída." -Type Success
         } catch {
-            Write-Log "ERRO durante a remoção de Bloatware (AppX packages): $($_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+            Write-Log "ERRO ao remover bloatware: $($_.Exception.Message)" -Type Error
         } finally {
             Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
         }
@@ -1728,30 +1654,6 @@ function Remove-AppxBloatwares { # Esta é a função orquestradora
 
 #region → FUNÇÕES DE INSTALAÇÃO DE APLICATIVOS (AJUSTADAS)
 
-# IMPORTANTE: Esta revisão assume que você tem uma função Write-Log definida que suporta o parâmetro -Type (ex: -Type Info, -Type Success, -Type Error).
-# Exemplo de como sua função Write-Log poderia ser (se ainda não tiver):
-# function Write-Log {
-#     param(
-#         [Parameter(Mandatory=$true)]
-#         [string]$Message,
-#         [Parameter(Mandatory=$false)]
-#         [ValidateSet('Info', 'Warning', 'Success', 'Error', 'Debug')]
-#         [string]$Type = 'Info'
-#     )
-#     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-#     $logEntry = "[$timestamp] [$Type] $Message"
-#     
-#     switch ($Type) {
-#         'Info' { Write-Host $logEntry -ForegroundColor Cyan }
-#         'Warning' { Write-Host $logEntry -ForegroundColor Yellow }
-#         'Success' { Write-Host $logEntry -ForegroundColor Green }
-#         'Error' { Write-Host $logEntry -ForegroundColor Red }
-#         'Debug' { Write-Host $logEntry -ForegroundColor DarkGray }
-#     }
-#     # Opcional: Adicionar lógica para escrever em um arquivo de log
-#     # Add-Content -Path "C:\Logs\SeuScript.log" -Value $logEntry
-# }
-
 function Install-Applications {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
@@ -1779,7 +1681,6 @@ function Install-Applications {
                 @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
                 @{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
                 @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
-                @{ Id = "ShareX.ShareX" ; Name = "ShareX" },
                 @{Name = "7-Zip"; Id = "7zip.7zip"}
             )
             $totalApps = $apps.Count
@@ -1961,141 +1862,52 @@ function Add-WiFiNetwork {
 }
 
 function Install-NetworkPrinters {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-       
-            )
+   [CmdletBinding(SupportsShouldProcess=$true)]
+    param()
     Write-Log "Iniciando instalação de impressoras e drivers de rede..." -Type Info
-    $activity = "Instalação de Impressoras de Rede"
+    $drivers = @(
+        @{Name="Samsung Universal Print Driver"; InfPath="G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\ssn3m.inf"},
+        @{Name="Epson L3250 Series"; InfPath="G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\E_WF1YWE.INF"}
+    )
+    $printers = @(
+        @{Name="Samsung Mundo1"; IP="172.16.40.40"; Driver="Samsung Universal Print Driver"},
+        @{Name="Samsung Mundo2"; IP="172.17.40.25"; Driver="Samsung Universal Print Driver"},
+        @{Name="EpsonMundo1 (L3250 Series)"; IP="172.16.40.37"; Driver="Epson L3250 Series"},
+        @{Name="EpsonMundo2 (L3250 Series)"; IP="172.17.40.72"; Driver="Epson L3250 Series"}
+    )
 
-    if ($PSCmdlet.ShouldProcess("impressoras de rede", "instalar")) {
-        try {
-            Write-Progress -Activity $activity -Status "Instalando drivers de impressora via pnputil..." -PercentComplete 5
-            Write-Log "Tentando instalar drivers: ssn3m.inf e E_WF1YWE.INF." -Type Info
-            if (-not $WhatIf) {
-                # Lista de caminhos de drivers para tentar
-                $driverPaths = @(
-                    "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\ssn3m.inf",
-                    "G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\E_WF1YWE.INF"
-                )
-                
-                foreach ($driverPath in $driverPaths) {
-                    $driverName = Split-Path $driverPath -Leaf
-                    if (Test-Path $driverPath) {
-                        try {
-                            pnputil /add-driver $driverPath /install | Out-Null
-                            if ($LASTEXITCODE -eq 0) {
-                                Write-Log "Driver $driverName instalado com sucesso." -Type Success
-                            } else {
-                                Write-Log "Falha ao instalar $driverName (código: $LASTEXITCODE)" -Type Warning
-                            }
-                        } catch {
-                            Write-Log "Erro ao instalar ${driverName}: $($_.Exception.Message)" -Type Warning
-                        }
-                    } else {
-                        Write-Log "Driver não encontrado: $driverPath" -Type Warning
-                    }
-                }
-            } else {
-                Write-Log "Modo WhatIf: Drivers ssn3m.inf e E_WF1YWE.INF seriam instalados." -Type Debug
-            }
-
-            $printers = @(
-                @{Name = "Samsung Mundo1"; IP = "172.16.40.40"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
-                @{Name = "Samsung Mundo2"; IP = "172.17.40.25"; Driver = "Samsung M337x 387x 407x Series PCL6 Class Driver"},
-                @{Name = "EpsonMundo1 (L3250 Series)"; IP = "172.16.40.37"; Driver = "EPSON L3250 Series"},
-                @{Name = "EpsonMundo2 (L3250 Series)"; IP = "172.17.40.72"; Driver = "EPSON L3250 Series"}
-            )
-            $totalPrinters = $printers.Count
-            $currentPrinter = 0
-
-            foreach ($printer in $printers) {
-                $currentPrinter++
-                $percentComplete = 5 + (($currentPrinter / $totalPrinters) * 60) # 5% para drivers, 60% para impressoras
-                $ip = $printer.IP
-                $name = $printer.Name
-                $driver = $printer.Driver
-                $portName = "IP_$($ip.Replace('.','_'))"
-
-                Write-Progress -Activity $activity -Status "Processando impressora: $name ($ip)..." -CurrentOperation "Instalando: $name" -PercentComplete $percentComplete
-                Write-Log "Processando impressora $name ($ip)." -Type Info
-
+    foreach ($driver in $drivers) {
+        if (Test-Path $driver.InfPath) {
+            if ($PSCmdlet.ShouldProcess($driver.Name, "instalar driver")) {
                 try {
-                    if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
-                        Write-Log "Porta '$portName' para $ip não encontrada. Criando..." -Type Info
-                        if (-not $WhatIf) {
-                            Add-PrinterPort -Name $portName -PrinterHostAddress $ip -ErrorAction Stop
-                            Write-Log "Porta $portName criada para $ip." -Type Success
-                        } else {
-                            Write-Log "Modo WhatIf: Porta $portName seria criada para $ip." -Type Debug
-                        }
-                    } else {
-                        Write-Log "Porta '$portName' para $ip já existe." -Type Info
-                    }
-
-                    if (-not (Get-Printer -Name $name -ErrorAction SilentlyContinue)) {
-                        Write-Log "Impressora '$name' não encontrada. Instalando..." -Type Info
-                        if (-not $WhatIf) {
-                            Add-Printer -Name $name -DriverName $driver -PortName $portName -ErrorAction Stop
-                            Write-Log "Impressora $name ($ip) instalada." -Type Success
-                        } else {
-                            Write-Log "Modo WhatIf: Impressora $name ($ip) seria instalada." -Type Debug
-                        }
-                    } else {
-                        Write-Log "Impressora $name ($ip) já está instalada." -Type Info
-                    }
+                    Add-PrinterDriver -Name $driver.Name -InfPath $driver.InfPath -ErrorAction Stop
+                    Write-Log "Driver $($driver.Name) instalado." -Type Success
                 } catch {
-                    Write-Log "ERRO ao processar impressora $name ($ip): $($_.Exception.Message)" -Type Error
-                    Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+                    Write-Log "Erro ao instalar driver $($driver.Name): $($_.Exception.Message)" -Type Error
                 }
             }
+        } else {
+            Write-Log "Driver $($driver.InfPath) não encontrado." -Type Warning
+        }
+    }
 
-            # Remover impressora OneNote Desktop se existir
-            Write-Progress -Activity $activity -Status "Verificando e removendo impressora 'OneNote (Desktop)'..." -PercentComplete 80
-            Write-Log "Verificando se a impressora 'OneNote (Desktop)' está instalada para remoção." -Type Info
-            $oneNotePrinter = Get-Printer -Name "OneNote (Desktop)" -ErrorAction SilentlyContinue
-
-            if ($null -ne $oneNotePrinter) {
-                Write-Log "A impressora 'OneNote (Desktop)' foi encontrada. Removendo..." -Type Warning
+    foreach ($printer in $printers) {
+        $portName = "IP_$($printer.IP -replace '\.','_')"
+        if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
+            if ($PSCmdlet.ShouldProcess($portName, "criar porta")) {
+                Add-PrinterPort -Name $portName -PrinterHostAddress $printer.IP
+                Write-Log "Porta $portName criada para $($printer.IP)." -Type Success
+            }
+        }
+        if (-not (Get-Printer -Name $printer.Name -ErrorAction SilentlyContinue)) {
+            if ($PSCmdlet.ShouldProcess($printer.Name, "instalar impressora")) {
                 try {
-                    if ($PSCmdlet.ShouldProcess("impressora 'OneNote (Desktop)'", "remover")) {
-                        if (-not $WhatIf) {
-                            Remove-Printer -Name "OneNote (Desktop)" -ErrorAction Stop
-                            Write-Log "Impressora 'OneNote (Desktop)' removida com sucesso." -Type Success
-
-                            # Tentar remover o driver (se houver um nome genérico como "Microsoft XPS Document Writer")
-                            # Cuidado ao remover drivers genéricos, pois podem afetar outras impressoras.
-                            $driver = Get-PrinterDriver -Name "Microsoft XPS Document Writer*" -ErrorAction SilentlyContinue
-                            if ($null -ne $driver) {
-                                Write-Log "Removendo driver associado à impressora 'OneNote (Desktop)' (se genérico)." -Type Debug
-                                Remove-PrinterDriver -Name $driver.Name -ErrorAction SilentlyContinue | Out-Null
-                            }
-
-                            # Remover portas associadas (se houver)
-                            $ports = Get-PrinterPort -Name "OneNote*" -ErrorAction SilentlyContinue
-                            foreach ($port in $ports) {
-                                Write-Log "Removendo porta associada: $($port.Name)." -Type Debug
-                                Remove-PrinterPort -Name $port.Name -ErrorAction SilentlyContinue | Out-Null
-                            }
-                        } else {
-                            Write-Log "Modo WhatIf: Impressora 'OneNote (Desktop)', seu driver e portas seriam removidos." -Type Debug
-                        }
-                    }
+                    Add-Printer -Name $printer.Name -DriverName $printer.Driver -PortName $portName -ErrorAction Stop
+                    Write-Log "Impressora $($printer.Name) instalada." -Type Success
                 } catch {
-                    Write-Log "ERRO ao remover a impressora 'OneNote (Desktop)': $($_.Exception.Message)" -Type Error
-                    Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+                    Write-Log "Erro ao instalar impressora $($printer.Name): $($_.Exception.Message)" -Type Error
                 }
-            } else {
-                Write-Log "A impressora 'OneNote (Desktop)' não está instalada. Nenhuma ação necessária." -Type Info
             }
-
-            Write-Log "Instalação e configuração de impressoras concluídas." -Type Success
-
-        } catch {
-            Write-Log "ERRO GERAL durante a instalação de impressoras de rede: $($_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-        } finally {
-            Write-Progress -Activity $activity -Status "Concluído" -PercentComplete 100 -Completed
         }
     }
 }
@@ -2883,8 +2695,8 @@ function Grant-PrivacyTweaks {
         "HKCU:\SOFTWARE\Microsoft\GameBar" = @{AllowGameBar = 0; UseNexusForGameBar = 0; ShowStartupPanel = 0};
 
         # Desabilitar OneDrive na barra lateral do Explorador de Arquivos (Consolidado)
-        "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
-        "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
+        "HKLM:\SOFTWARE\Classes\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
+        "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
     }
 
     $totalChanges = ($registryChanges.Keys | Measure-Object).Count
@@ -3724,11 +3536,11 @@ function Apply-UITweaks {
             # Se a intenção é ocultar outras unidades duplicadas (ex: dispositivos móveis), CLSIDs adicionais podem ser necessários.
             # Esta configuração é mais eficaz para o OneDrive.
             $oneDriveCLSID = "{018D5C66-4533-4307-9B53-2ad65C87B14B}"
-            if (Test-Path "HKCR:\CLSID\$oneDriveCLSID") {
-                Set-ItemProperty -Path "HKCR:\CLSID\$oneDriveCLSID" -Name "System.IsPinnedToNameSpaceTree" -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
+            if (Test-Path "HKLM:\SOFTWARE\Classes\CLSID\$oneDriveCLSID") {
+                Set-ItemProperty -Path "HKLM:\SOFTWARE\Classes\CLSID\$oneDriveCLSID" -Name "System.IsPinnedToNameSpaceTree" -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
             }
-            if (Test-Path "HKCR:\Wow6432Node\CLSID\$oneDriveCLSID") {
-                Set-ItemProperty -Path "HKCR:\Wow6432Node\CLSID\$oneDriveCLSID" -Name "System.IsPinnedToNameSpaceTree" -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
+            if (Test-Path "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\$oneDriveCLSID") {
+                Set-ItemProperty -Path "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\$oneDriveCLSID" -Name "System.IsPinnedToNameSpaceTree" -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
             }
             Write-Log "Entradas de drives duplicadas ocultas (principalmente OneDrive, se aplicável)." -Type Success
         } catch { Write-Log "Falha ao ocultar entradas de drives duplicadas: $($_.Exception.Message)" -Type Warning }
@@ -3754,11 +3566,11 @@ function Apply-UITweaks {
             # Este é o mesmo CLSID que o OneDrive usa para aparecer nos drives duplicados.
             # Use esta opção apenas se você *não* pretende remover o OneDrive, mas apenas ocultá-lo do painel de navegação.
             $oneDriveCLSID = "{018D5C66-4533-4307-9B53-2ad65C87B14B}"
-            if (Test-Path "HKCR:\CLSID\$oneDriveCLSID") {
-                Set-ItemProperty -Path "HKCR:\CLSID\$oneDriveCLSID" -Name "System.IsPinnedToNameSpaceTree" -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
+            if (Test-Path "HKLM:\SOFTWARE\Classes\CLSID\$oneDriveCLSID") {
+                Set-ItemProperty -Path "HKLM:\SOFTWARE\Classes\CLSID\$oneDriveCLSID" -Name "System.IsPinnedToNameSpaceTree" -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
             }
-            if (Test-Path "HKCR:\Wow6432Node\CLSID\$oneDriveCLSID") {
-                Set-ItemProperty -Path "HKCR:\Wow6432Node\CLSID\$oneDriveCLSID" -Name "System.IsPinnedToNameSpaceTree" -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
+            if (Test-Path "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\$oneDriveCLSID") {
+                Set-ItemProperty -Path "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\$oneDriveCLSID" -Name "System.IsPinnedToNameSpaceTree" -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null
             }
             Write-Log "Pasta 'OneDrive' oculta do painel de navegação." -Type Success
         } catch { Write-Log "Falha ao ocultar pasta OneDrive: $($_.Exception.Message)" -Type Warning }
@@ -4379,30 +4191,12 @@ function Set-OptimizedPowerPlan {
     Write-Log "Iniciando a configuração do plano de energia otimizado (Alto Desempenho)." -Type Info
 Write-Log "Configurando o plano de energia para 'Alto Desempenho'..."
 
-    try {
-        # GUID para o plano de "Alto Desempenho"
-        # Você pode obter outros GUIDs usando: powercfg /list
-        $highPerformanceGuid = "8c5e90a0-be2a-4935-8482-5c260a2b1232"
-
-        # Tentar definir o plano como ativo
-        powercfg /setactive $highPerformanceGuid | Out-Null
-        
-        # Verificar se o plano foi realmente ativado
-        $currentPlan = (powercfg /getactivescheme | Select-String -Pattern "GUID do esquema de energia:").ToString().Split(':')[1].Trim()
-        
-        if ($currentPlan -eq $highPerformanceGuid) {
-            Write-Log "Plano de energia 'Alto Desempenho' ativado com sucesso." -Type Success
-Write-Log "Plano de energia 'Alto Desempenho' ativado com sucesso!" -Type Success
-        } else {
-            Write-Log "Falha ao ativar o plano de energia 'Alto Desempenho'. O plano atual é: $currentPlan" -Type Error
-Write-Log "ERRO: Não foi possível ativar o plano de energia 'Alto Desempenho'." -Type Error
-        }
-
-    } catch {
-        Write-Log "Ocorreu um erro ao configurar o plano de energia: $($_.Exception.Message)" -Type Error
-Write-Log "ERRO ao configurar o plano de energia: $($_.Exception.Message)" -Type Error
-    }
-    Start-Sleep -Seconds 2
+    $plan = powercfg /list | Select-String "Alto desempenho"
+if ($plan) {
+    powercfg /setactive "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+} else {
+    Write-Log "Plano 'Alto Desempenho' não encontrado." -Type Warning
+}
 }
 
 #endregion
@@ -4439,10 +4233,10 @@ Set-ItemProperty -Path "HKLM:\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\On
 
 Write-Output "Remove Onedrive from explorer sidebar"
 New-PSDrive -PSProvider "Registry" -Root "HKEY_CLASSES_ROOT" -Name "HKCR"
-mkdir -Force "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}"
-Set-ItemProperty -Path "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" "System.IsPinnedToNameSpaceTree" 0
-mkdir -Force "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}"
-Set-ItemProperty -Path "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" "System.IsPinnedToNameSpaceTree" 0
+mkdir -Force "HKLM:\SOFTWARE\Classes\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}"
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Classes\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" "System.IsPinnedToNameSpaceTree" 0
+mkdir -Force "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}"
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" "System.IsPinnedToNameSpaceTree" 0
 Remove-PSDrive "HKCR"
 
 # Thank you Matthew Israelsson
@@ -4716,8 +4510,6 @@ function Restore-BloatwareSafe {
         "Microsoft.ScreenSketch",           # Ferramenta de Captura
         "Microsoft.WindowsSoundRecorder",   # Gravador de Voz
         "Microsoft.WindowsCamera",
-        "Microsoft.OutlookForWindows",      # Outlook novo
-        "Microsoft.Outlook",                # Outlook clássico
         "Microsoft.Linkedin"
     )
 
@@ -4842,8 +4634,8 @@ function Restore-ControlPanelTweaks {
         };
 
         # Reabilitar OneDrive na barra lateral do Explorador de Arquivos (Consolidado)
-        "HKCR:\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 1};
-        "HKCR:\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 1};
+        "HKLM:\SOFTWARE\Classes\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 1};
+        "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 1};
 
         # Reabilitar Game Bar
         "HKCU:\SOFTWARE\Microsoft\GameBar" = @{AllowGameBar = 1; UseNexusForGameBar = 1; ShowStartupPanel = 1};
@@ -4894,13 +4686,13 @@ try {
     # 3) Rodar remoção de bloatware
     if ($RunBloatwareRemoval -or $RunAllCleanup) {
         Write-Log -Message "Iniciando remoção de bloatware..." -Type Info 
-        Invoke-RemoveAllBloatware @($WhatIf ? @{WhatIf=$true} : @{}) 
+        Invoke-Bloatware @($WhatIf ? @{WhatIf=$true} : @{}) 
     }
 
     # 4) Rodar ajustes de privacidade
     if ($RunPrivacyTweaks -or $RunAllCleanup) {
         Write-Log -Message "Aplicando tweaks de privacidade..." -Type Info 
-        Invoke-PrivacyTweaks @($WhatIf ? @{WhatIf=$true} : @{}) 
+        Grant-PrivacyTweaks @($WhatIf ? @{WhatIf=$true} : @{}) 
     }
 
     # 5) Rodar otimização de rede
@@ -5004,10 +4796,10 @@ Write-Log "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as 
 
 Write-Log "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -Type Success
     # Chamando as funções que estão dentro de Show-UtilitiesMenu opção 1
-    Remove-Bloatware
+    Remove-AppxBloatware
     Remove-OneDrive-AndRestoreFolders
-    Cleanup-System
-    Optimize-Drives
+    Invoke-Cleanup
+    
     Grant-PrivacyTweaks
     Grant-ControlPanelTweaks
     Grant-ExtraTweaks
@@ -5341,10 +5133,10 @@ Write-Log "=============================================" -Type Info
         switch ($key) {
             'A' {
 Write-Log "Executando: Todas as Tarefas de Otimização..." -Type Warning
-                Remove-Bloatware
+                Remove-AppxBloatware
                 Remove-OneDrive-AndRestoreFolders
-                Cleanup-System
-                Optimize-Drives
+                Invoke-Cleanup
+                
                 Grant-PrivacyTweaks
                 Grant-ControlPanelTweaks
                 Grant-ExtraTweaks
@@ -5373,12 +5165,12 @@ Write-Log "=============================================" -Type Info
                     switch ($subChoice) {
                         'A' {
 Write-Log "Executando: Remover Bloatware (Todos em sequência)..." -Type Warning
-                            Remove-Bloatware
+                            Remove-AppxBloatware
                             Remove-OneDrive-AndRestoreFolders
 Write-Log "Remoção de Bloatware Concluída!" -Type Success
                             [Console]::ReadKey($true) | Out-Null
                         }
-                        'B' { Remove-Bloatware; Show-SuccessMessage }
+                        'B' { Remove-AppxBloatware; Show-SuccessMessage }
                         'C' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
                         'x' { return }
                         'X' { return }
@@ -5409,13 +5201,13 @@ Write-Log "=============================================" -Type Info
                     switch ($subChoice) {
                         'A' {
 Write-Log "Executando: Todas as Tarefas de Limpeza e Otimização..." -Type Warning
-                            Cleanup-System
-                            Optimize-Drives
+                            Invoke-Cleanup
+                            
 Write-Log "Limpeza e Otimização Concluídas!" -Type Success
                             [Console]::ReadKey($true) | Out-Null
                         }
-                        'B' { Cleanup-System; Show-SuccessMessage }
-                        'C' { Optimize-Drives; Show-SuccessMessage }
+                        'B' { Invoke-Cleanup; Show-SuccessMessage }
+                        'C' { ; Show-SuccessMessage }
                         'x' { return }
                         'X' { return }
                         default {
