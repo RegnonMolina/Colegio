@@ -155,22 +155,25 @@ function Write-Log {
         [string]$Type = "Info" # Pode ser Info, Error, Success, Warning, Debug, Critical
     )
 
-    # Definir o diretório e o caminho do arquivo de log
-    # Por favor, ajuste este caminho para o local desejado em seu sistema.
-    # Exemplo: "$env:TEMP\MeuScriptLog.log" para a pasta temporária do usuário
-    # Exemplo: "C:\LogsDoMeuScript\ScriptLog.log" para uma pasta específica no C:
-    $logDirectory = "C:\LogsDoMeuScript" # <--- AJUSTE O DIRETÓRIO DO SEU LOG AQUI
-    $logFilePath = "$logDirectory\ScriptLog.log"
+    # Obter o nome do computador
+    $computerName = $env:COMPUTERNAME # ou [System.Environment]::MachineName
+
+    # Definir o diretório base para os logs conforme sua preferência
+    $logBaseDirectory = "C:\ScriptsLogs" # <--- DIRETÓRIO ESPECIFICADO PELO USUÁRIO
+
+    # Definir o caminho completo do arquivo de log, incluindo o nome do computador
+    $logFilePath = "$logBaseDirectory\$computerName-ScriptLog.log"
 
     # Criar o diretório de log se ele não existir
     try {
-        if (-not (Test-Path $logDirectory)) {
-            New-Item -Path $logDirectory -ItemType Directory -Force | Out-Null
+        if (-not (Test-Path $logBaseDirectory)) {
+            New-Item -Path $logBaseDirectory -ItemType Directory -Force | Out-Null
+            Write-Host "Diretório de log '$logBaseDirectory' criado." -ForegroundColor DarkGreen
         }
     } catch {
         # Se falhar ao criar o diretório, logar isso no console (não há arquivo de log ainda)
-        Write-Host "ERRO CRÍTICO: Não foi possível criar o diretório de log '$logDirectory'. Mensagens serão apenas no console. Erro: $($_.Exception.Message)" -ForegroundColor Red
-        # Definir logFilePath para nulo ou um caminho inválido para evitar tentativas futuras de escrita no arquivo
+        Write-Host "ERRO CRÍTICO: Não foi possível criar o diretório de log '$logBaseDirectory'. As mensagens serão apenas no console. Verifique se o script está rodando como Administrador e se há permissões de escrita. Erro: $($_.Exception.Message)" -ForegroundColor Red
+        # Definir logFilePath para nulo para evitar tentativas futuras de escrita no arquivo
         $logFilePath = $null
     }
 
@@ -193,17 +196,16 @@ function Write-Log {
     # Tenta escrever no arquivo de log, se o caminho for válido
     if ($null -ne $logFilePath) {
         try {
-            Add-Content -Path $logFilePath -Value $logEntry -ErrorAction SilentlyContinue
+            # Usar Stop para capturar o erro no catch
+            Add-Content -Path $logFilePath -Value $logEntry -ErrorAction Stop
         } catch {
-            # Se a escrita no arquivo falhar (ex: arquivo bloqueado por outro programa),
+            # Se a escrita no arquivo falhar (ex: arquivo bloqueado ou permissão negada),
             # loga a falha no console em vermelho.
-            Write-Host "Falha ao escrever no arquivo de log '$logFilePath': $($_.Exception.Message). Mensagem: $logEntry" -ForegroundColor Red
+            Write-Host "Falha ao escrever no arquivo de log '$logFilePath'. Verifique permissões ou se o arquivo está bloqueado. Erro: $($_.Exception.Message). Mensagem: $logEntry" -ForegroundColor Red
         }
     }
 
     # Define as cores padrão para os tipos de mensagem no console
-    # Use $global:defaultColors se esta hashtable for definida globalmente no seu script principal
-    # Caso contrário, defina-a aqui dentro da função (como está abaixo)
     $defaultColors = @{
         'Info' = 'Cyan';
         'Success' = 'Green';
@@ -211,7 +213,7 @@ function Write-Log {
         'Error' = 'Red';
         'Debug' = 'DarkGray';
         'Verbose' = 'Gray';
-        'Critical' = 'Magenta'; # Novo nível para erros graves
+        'Critical' = 'Magenta';
     }
 
     # Obtém a cor correspondente ao tipo da mensagem
@@ -512,24 +514,27 @@ function Clear-TemporaryFiles {
 
     if ($PSCmdlet.ShouldProcess("arquivos temporários", "limpar")) {
         try {
-            Grant-WriteProgress -Activity $activity -Status "Verificando configuração do cleanmgr..." -PercentComplete (($currentStep / $totalSteps) * 100)
-            Write-Log "Verificando configuração do cleanmgr /sageset:1..." -Type Info
+            Grant-WriteProgress -Activity $activity -Status "Verificando configuração do cleanmgr e executando..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            Write-Log "Verificando configuração do cleanmgr /sageset:1 e executando /sagerun:1 (pode levar vários minutos ou mais, por favor aguarde)..." -Type Warning # Aviso mais proeminente
             if (-not $WhatIf) {
                 # Verifica se o perfil 1 existe, senão configura
                 $cleanMgrReg = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
                 if (-not (Test-Path "$cleanMgrReg\Temporary Files\LastActiveSetup")) {
-                    Write-Log "Configurando cleanmgr /sageset:1..." -Type Warning
+                    Write-Log "Configurando cleanmgr /sageset:1..." -Type Info # Mudado para Info
                     Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sageset:1" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
                 }
-                Write-Log "Executando cleanmgr /sagerun:1..." -Type Info
-                Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
+                Write-Log "Executando cleanmgr /sagerun:1. Isso pode demorar bastante dependendo do sistema..." -Type Info # Mensagem adicional
+                $process = Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -WindowStyle Hidden -Wait -PassThru # Adicionado -PassThru para verificar ExitCode
+                if ($process.ExitCode -ne 0) {
+                    Write-Log "AVISO: cleanmgr /sagerun:1 pode ter terminado com erros (código de saída: $($process.ExitCode))." -Type Warning
+                }
             } else {
-                Write-Log "Modo WhatIf: cleanmgr /sagerun:1 seria executado." -Type Debug
+                Write-Log "Modo WhatIf: cleanmgr /sageset:1 e /sagerun:1 seriam executados." -Type Debug
             }
             $currentStep++
 
             Grant-WriteProgress -Activity $activity -Status "Removendo arquivos temporários adicionais..." -PercentComplete (($currentStep / $totalSteps) * 100)
-            Write-Log "Removendo arquivos temporários adicionais..." -Type Info
+            Write-Log "Removendo arquivos temporários adicionais ($env:TEMP e $env:SystemRoot\Temp) - isso pode demorar um pouco..." -Type Info # Aviso adicional
             $tempPaths = @(
                 "$env:TEMP\*",
                 "$env:SystemRoot\Temp\*"
@@ -538,7 +543,14 @@ function Clear-TemporaryFiles {
                 if (Test-Path $path) {
                     Write-Log "Removendo itens em $path" -Type Debug
                     if (-not $WhatIf) {
-                        Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+                        # Iterar e remover individualmente para lidar melhor com arquivos em uso
+                        Get-ChildItem -Path $path -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+                            try {
+                                Remove-Item $_.FullName -Force -ErrorAction Stop
+                            } catch {
+                                Write-Log "AVISO: Não foi possível remover '$($_.FullName)': $($_.Exception.Message)" -Type Warning
+                            }
+                        }
                     } else {
                         Write-Log "Modo WhatIf: Itens em $path seriam removidos." -Type Debug
                     }
@@ -753,19 +765,16 @@ function Remove-WindowsOld {
 
 function Clear-DeepSystemCleanup {
     [CmdletBinding(SupportsShouldProcess = $true)]
-    param(
-    )
+    param()
     Write-Log "Iniciando limpeza profunda do sistema (logs, etc.)..." -Type Info
     $activity = "Limpeza Profunda do Sistema"
     $currentStep = 1
-    $totalSteps = 2 # Ajustado, pois o cache de update foi removido daqui
+    $totalSteps = 2
     if ($PSCmdlet.ShouldProcess("limpeza profunda do sistema", "executar")) {
         try {
             # REMOVIDO: A limpeza do cache de update já é tratada por Clear-WUCache. Não duplicar aqui.
-            # Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
             Grant-WriteProgress -Activity $activity -Status "Removendo arquivos de log antigos e não essenciais..." -PercentComplete (($currentStep / $totalSteps) * 100)
-            Write-Log "Removendo arquivos de log antigos e não essenciais (ex: logs de INF, CBS)..." -Type Info
-            # Mais seletivo na limpeza de logs para não apagar dados importantes de diagnóstico
+            Write-Log "Removendo arquivos de log antigos e não essenciais (ex: logs de INF, CBS) - isso pode demorar um pouco..." -Type Info # Aviso adicional
             $logPaths = @(
                 "$env:SystemRoot\Logs\CBS\*.log",
                 "$env:SystemRoot\Logs\DISM\*.log",
@@ -785,10 +794,13 @@ function Clear-DeepSystemCleanup {
                 if (Test-Path $path) {
                     Write-Log "Tentando remover itens em $path" -Type Debug
                     if (-not $WhatIf) {
-                        try {
-                            Remove-Item $path -Force -Recurse -ErrorAction SilentlyContinue
-                        } catch {
-                            Write-Log "AVISO: Não foi possível remover $path. Pode estar em uso. Erro: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
+                        # Iterar e remover individualmente
+                        Get-ChildItem -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
+                            try {
+                                Remove-Item $_.FullName -Force -Recurse -ErrorAction Stop # Use -Recurse se for um diretório e Force
+                            } catch {
+                                Write-Log "AVISO: Não foi possível remover '$($_.FullName)': $($_.Exception.Message)" -Type Warning
+                            }
                         }
                     } else {
                         Write-Log "Modo WhatIf: Itens em $path seriam removidos." -Type Debug
@@ -797,12 +809,13 @@ function Clear-DeepSystemCleanup {
             }
             $currentStep++
 
-            # Limpeza adicional com cleanmgr se quiser garantir
-            Grant-WriteProgress -Activity $activity -Status "Executando limpeza de disco (cleanmgr) para arquivos de sistema..." -PercentComplete (($currentStep / $totalSteps) * 100)
-            Write-Log "Executando cleanmgr /sagerun:1 (para limpeza de disco de sistema)..." -Type Info
+            Grant-WriteProgress -Activity $activity -Status "Executando limpeza de disco (cleanmgr) para arquivos de sistema (pode demorar MUITO!)..." -PercentComplete (($currentStep / $totalSteps) * 100) # Aviso mais forte
+            Write-Log "Executando cleanmgr /sagerun:1 (para limpeza de disco de sistema). ATENÇÃO: Essa etapa pode levar DEZENAS DE MINUTOS ou mais, dependendo do estado do sistema. Por favor, aguarde." -Type Warning # Mensagem mais detalhada
             if (-not $WhatIf) {
-                # Executa o cleanmgr com as configurações salvas no perfil 1
-                Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
+                $process = Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -WindowStyle Hidden -Wait -PassThru
+                if ($process.ExitCode -ne 0) {
+                    Write-Log "AVISO: cleanmgr /sagerun:1 pode ter terminado com erros (código de saída: $($process.ExitCode))." -Type Warning
+                }
             } else {
                 Write-Log "Modo WhatIf: cleanmgr /sagerun:1 seria executado para limpeza de sistema." -Type Debug
             }
@@ -819,11 +832,10 @@ function Clear-DeepSystemCleanup {
     }
 }
 
+
 function Clear-PrintSpooler {
     [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-       
-            )
+    param()
     Write-Log "Iniciando limpeza do spooler de impressão..." -Type Info
     $activity = "Limpeza do Spooler de Impressão"
     $currentStep = 1
@@ -831,10 +843,31 @@ function Clear-PrintSpooler {
 
     if ($PSCmdlet.ShouldProcess("spooler de impressão", "limpar")) {
         try {
-            Grant-WriteProgress -Activity $activity -Status "Parando serviço 'Spooler'..." -PercentComplete (($currentStep / $totalSteps) * 100)
-            Write-Log "Parando serviço 'Spooler'..." -Type Info
+            Grant-WriteProgress -Activity $activity -Status "Parando serviço 'Spooler' (aguardando até 30s)..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            Write-Log "Tentando parar serviço 'Spooler'..." -Type Info
+
             if (-not $WhatIf) {
-                Stop-Service -Name Spooler -Force -ErrorAction SilentlyContinue
+                # Tenta parar o serviço, com retries
+                $serviceStopped = $false
+                for ($i = 0; $i -lt 6; $i++) { # Tenta 6 vezes, com 5s de espera = 30s
+                    try {
+                        Stop-Service -Name Spooler -Force -ErrorAction Stop
+                        # Aguarda um pouco para garantir que o serviço realmente parou
+                        Start-Sleep -Seconds 2
+                        if ((Get-Service -Name Spooler).Status -eq 'Stopped') {
+                            $serviceStopped = $true
+                            Write-Log "Serviço 'Spooler' parado com sucesso." -Type Debug
+                            break
+                        }
+                    } catch {
+                        Write-Log "AVISO: Falha ao parar serviço 'Spooler' (tentativa $($i+1)/6): $($_.Exception.Message)" -Type Warning
+                        Start-Sleep -Seconds 5
+                    }
+                }
+                if (-not $serviceStopped) {
+                    Write-Log "ERRO: Não foi possível parar o serviço 'Spooler' após múltiplas tentativas. A limpeza pode falhar." -Type Error
+                    # Poderia lançar um erro ou retornar para evitar a próxima etapa
+                }
             } else {
                 Write-Log "Modo WhatIf: Serviço 'Spooler' seria parado." -Type Debug
             }
@@ -843,16 +876,28 @@ function Clear-PrintSpooler {
             Grant-WriteProgress -Activity $activity -Status "Removendo arquivos da fila de impressão..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Removendo arquivos da fila de impressão em '$env:SystemRoot\System32\spool\PRINTERS\'..." -Type Info
             if (-not $WhatIf) {
-                Remove-Item -Path "$env:SystemRoot\System32\spool\PRINTERS\*" -Force -Recurse -ErrorAction SilentlyContinue
+                # Tenta remover arquivos individualmente para maior resiliência
+                Get-ChildItem -Path "$env:SystemRoot\System32\spool\PRINTERS\*" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+                    try {
+                        Remove-Item $_.FullName -Force -ErrorAction Stop
+                        # Write-Log "Removido: $($_.FullName)" -Type Debug # Habilitar para depuração detalhada
+                    } catch {
+                        Write-Log "AVISO: Não foi possível remover '$($_.FullName)': $($_.Exception.Message)" -Type Warning
+                    }
+                }
             } else {
                 Write-Log "Modo WhatIf: Arquivos da fila de impressão seriam removidos." -Type Debug
             }
+            Write-Log "Remoção de arquivos da fila de impressão tentada. Alguns podem ter permanecido se estavam bloqueados." -Type Info
             $currentStep++
 
             Grant-WriteProgress -Activity $activity -Status "Iniciando serviço 'Spooler'..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Iniciando serviço 'Spooler'..." -Type Info
             if (-not $WhatIf) {
                 Start-Service -Name Spooler -ErrorAction SilentlyContinue
+                if ((Get-Service -Name Spooler).Status -ne 'Running') {
+                    Write-Log "AVISO: O serviço 'Spooler' pode não ter iniciado corretamente." -Type Warning
+                }
             } else {
                 Write-Log "Modo WhatIf: Serviço 'Spooler' seria iniciado." -Type Debug
             }
@@ -867,26 +912,48 @@ function Clear-PrintSpooler {
     }
 }
 
+
 function Clear-Prefetch {
     [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-       
-            )
+    param()
     Write-Log "Iniciando limpeza de Prefetch..." -Type Info
     $activity = "Limpeza de Prefetch"
 
     if ($PSCmdlet.ShouldProcess("cache Prefetch", "limpar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Verificando existência da pasta Prefetch..." -PercentComplete 25
-            if (Test-Path "$env:SystemRoot\Prefetch") {
-                Grant-WriteProgress -Activity $activity -Status "Removendo arquivos Prefetch..." -PercentComplete 50
-                Write-Log "Removendo arquivos em '$env:SystemRoot\Prefetch\'..." -Type Info
+            $prefetchPath = "$env:SystemRoot\Prefetch"
+
+            if (Test-Path $prefetchPath) {
+                # Excluir o layout.ini, que é protegido e não deve ser removido
+                # Para evitar erros desnecessários e garantir que ele não tente remover a pasta inteira
+                $excludePath = Join-Path $prefetchPath "Layout.ini"
+
+                Grant-WriteProgress -Activity $activity -Status "Removendo arquivos Prefetch (excluindo Layout.ini)..." -PercentComplete 50
+                Write-Log "Removendo arquivos em '$prefetchPath\' (exceto Layout.ini) - isso pode demorar um pouco em sistemas com muitos arquivos..." -Type Info
+
                 if (-not $WhatIf) {
-                    Remove-Item "$env:SystemRoot\Prefetch\*" -Force -Recurse -ErrorAction SilentlyContinue
+                    Get-ChildItem -Path "$prefetchPath\*" -File -Exclude "Layout.ini" -ErrorAction SilentlyContinue | ForEach-Object {
+                        try {
+                            Remove-Item $_.FullName -Force -ErrorAction Stop
+                            # Write-Log "Removido: $($_.FullName)" -Type Debug # Habilitar para depuração detalhada
+                        } catch {
+                            Write-Log "AVISO: Não foi possível remover '$($_.FullName)': $($_.Exception.Message)" -Type Warning
+                        }
+                    }
+                    # Tenta remover subpastas, se houver
+                    Get-ChildItem -Path "$prefetchPath\*" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                        try {
+                            Remove-Item $_.FullName -Force -Recurse -ErrorAction Stop
+                            # Write-Log "Removida pasta: $($_.FullName)" -Type Debug # Habilitar para depuração detalhada
+                        } catch {
+                            Write-Log "AVISO: Não foi possível remover pasta '$($_.FullName)': $($_.Exception.Message)" -Type Warning
+                        }
+                    }
                 } else {
-                    Write-Log "Modo WhatIf: Arquivos Prefetch seriam removidos." -Type Debug
+                    Write-Log "Modo WhatIf: Arquivos Prefetch (exceto Layout.ini) seriam removidos." -Type Debug
                 }
-                Write-Log "Prefetch limpo." -Type Success
+                Write-Log "Limpeza da pasta Prefetch concluída. Alguns arquivos podem ter sido ignorados se estivessem em uso." -Type Success
             } else {
                 Write-Log "Pasta Prefetch não encontrada. Nenhuma ação necessária." -Type Info
             }
@@ -2237,6 +2304,7 @@ function Install-Applications {
 				@{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
                 @{Name = "Google Chrome"; Id = "Google.Chrome"},
                 @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
+				@{Name = "Greenshot"; Id = "Greenshot.Greenshot"},
 				@{Name = "CodecGuide.K-LiteCodecPack.Full"; Id = "CodecGuide.K-LiteCodecPack.Full"},
                 @{Name = "Microsoft Office"; Id = "Microsoft.Office"},
                 @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
@@ -3380,6 +3448,7 @@ function Disable-ActionCenter-Notifications {
         }
     }
 }
+
 function Set-VisualPerformance {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
@@ -4295,6 +4364,17 @@ Write-Log "Executando toolbox oficial do site christitus.com..." -Type Warning
     }
 }
 
+function Invoke-PowerShellProfile {
+    Clear-Host
+Write-Log "Executando script pra turbinar o perfil do PowerShell..." -Type Warning
+    try {
+		iex (iwr "https://raw.githubusercontent.com/CrazyWolf13/unix-pwsh/main/Microsoft.PowerShell_profile.ps1").Content        
+		Write-Log "Perfil executado com sucesso." -Type Success
+    } catch {
+        Write-Log "Erro ao executar o script do Perfil do PowerShell: $_" -Type Error
+    }
+}
+
 function Update-ScriptFromCloud {
     Clear-Host
 Write-Log "=======================" -Type Info
@@ -5105,12 +5185,14 @@ function Show-ExternalScriptsMenu {
         Write-Host " A) Rodar Ativador get.activated.win"
         Write-Host " B) Executar Chris Titus Toolbox"
         Write-Host " C) Atualizar Script Supremo pela URL"
+        Write-Host " D) Script pra perfil PowerShell"
         Write-Host " X) Voltar" -ForegroundColor Red
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-WindowsActivator }
             'B' { Invoke-ChrisTitusToolbox }
             'C' { Update-ScriptFromCloud }
+			'D' { Invoke-PowerShellProfile }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5466,9 +5548,10 @@ function Show-MainMenu {
         Write-Host " C) Privacidade e Segurança" -ForegroundColor Yellow
         Write-Host " D) Rede e Outros" -ForegroundColor Yellow
         Write-Host " E) Sistema e Desempenho" -ForegroundColor Yellow
-	Write-Host " F) Scripts Externos" -ForegroundColor Yellow
-        Write-Host " G) Rotina Colégio" -ForegroundColor Green
-	Write-Host " R) Reiniciar" -ForegroundColor Blue
+		Write-Host " F) Scripts Externos" -ForegroundColor Yellow
+		Write-Host " G) Restaurações" -ForegroundColor Yellow
+        Write-Host " H) Rotina Colégio" -ForegroundColor Green
+		Write-Host " R) Reiniciar" -ForegroundColor Blue
         Write-Host " S) Desligar" -ForegroundColor Blue
         Write-Host " X) Sair" -ForegroundColor Red
         Write-Host "==============================================="
@@ -5481,7 +5564,8 @@ function Show-MainMenu {
             'D' { Show-NetworkMenu } # Mapeado para o antigo "Rede e Impressoras"
             'E' { Show-SystemPerformanceMenu } # Mapeado para a função de desempenho
 			'F' { Show-ExternalScriptsMenu }
-			'G' { Invoke-Colegio }
+			'G' { Invoke-Undo }
+			'H' { Invoke-Colegio }
             'R' {
                 Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
                 Restart-Computer -Force
