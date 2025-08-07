@@ -444,18 +444,18 @@ function Invoke-All-DiagnosticsAdvanced {
 function Invoke-Colegio {
     Write-Log "Iniciando rotina completa de manutenção do Colégio..." -Type Info
 	try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-	try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Add-WiFiNetwork -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Add-WiFiNetwork: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Backup-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Backup-Registry: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Clear-ARP -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-ARP: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Clear-DNS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DNS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-PrintSpooler -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-PrintSpooler: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Clear-TemporaryFiles -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-TemporaryFiles: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Clear-WUCache -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WUCache: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Clear-WinSxS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WinSxS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-ActionCenter-Notifications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-IPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-IPv6: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-ClassicContextMenu -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClassicContextMenu: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -481,20 +481,27 @@ function Invoke-Colegio {
     try { Grant-SystemOptimizations -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-SystemOptimizations: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-UITweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-UITweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-WindowsUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Install-NetworkPrinters -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Install-NetworkPrinters: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Invoke-All-DiagnosticsAdvanced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-All-DiagnosticsAdvanced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Invoke-All-NetworkAdvanced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-All-NetworkAdvanced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-FolderForced -Path "C:\SCript" -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-NetworkPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-NetworkPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-Volumes -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-Volumes: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware : $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
+    try { Rename-Notebook -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Rename-Notebook: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Set-DnsGoogleCloudflare -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-DnsGoogleCloudflare: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Set-OptimizedPowerPlan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-OptimizedPowerPlan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Set-VisualPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-VisualPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Show-DiskUsage -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-DiskUsage: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Show-NetworkInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-NetworkInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-	try { Install-Applications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Install-Applications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-
+    try { Show-SystemInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-SystemInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    
+    Show-SuccessMessage
     Write-Log "Todas as rotinas de manutenção do Colégio foram concluídas." -Type Success
 
     Show-SuccessMessage
@@ -2282,81 +2289,68 @@ function Remove-SystemBloatware {
 function Install-Applications {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-       
-            )
+        [string[]]$AppId  # IDs a instalar; se vazio, instala tudo
+    )
+
     Write-Log "Iniciando instalação de aplicativos..." -Type Info
     $activity = "Instalação de Aplicativos via Winget"
 
-    if ($PSCmdlet.ShouldProcess("aplicativos", "instalar")) {
-        try {
-            Grant-WriteProgress -Activity $activity -Status "Verificando instalação do Winget..." -PercentComplete 5
-            if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-                Write-Log "Winget não está instalado. Pulando instalação de aplicativos." -Type Error
-                Write-Log "Por favor, instale o Winget manualmente ou via Microsoft Store para usar esta função." -Type Info
-                return
-            }
-            Write-Log "Winget encontrado. Prosseguindo com a instalação." -Type Success
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Log "Winget não está instalado. Pulando instalação de aplicativos." -Type Error
+        return
+    }
 
-            $apps = @(
-                @{Name = "7-Zip"; Id = "7zip.7zip"},
-				@{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
-				@{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
-				@{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
-                @{Name = "Google Chrome"; Id = "Google.Chrome"},
-                @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
-				@{Name = "Greenshot"; Id = "Greenshot.Greenshot"},
-				@{Name = "CodecGuide.K-LiteCodecPack.Full"; Id = "CodecGuide.K-LiteCodecPack.Full"},
-                @{Name = "Microsoft Office"; Id = "Microsoft.Office"},
-                @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
-                @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
-                @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"}
-            )
-            $totalApps = $apps.Count
-            $installedCount = 0
+    # Lista mestra de apps
+    $apps = @(
+        @{ Name = "7-Zip";            Id = "7zip.7zip" },
+        @{ Name = "AnyDesk";          Id = "AnyDesk.AnyDesk" },
+        @{ Name = "AutoHotkey";       Id = "AutoHotkey.AutoHotkey" },
+        @{ Name = "Foxit Reader";     Id = "Foxit.FoxitReader" },
+        @{ Name = "Google Chrome";    Id = "Google.Chrome" },
+        @{ Name = "Google Drive";     Id = "Google.GoogleDrive" },
+        @{ Name = "Greenshot";        Id = "Greenshot.Greenshot" },
+        @{ Name = "K-Lite Codec Pack";Id = "CodecGuide.K-LiteCodecPack.Full" },
+        @{ Name = "Microsoft Office"; Id = "Microsoft.Office" },
+        @{ Name = "PowerToys";        Id = "Microsoft.PowerToys" },
+        @{ Name = "Notepad++";        Id = "Notepad++.Notepad++" },
+        @{ Name = "VLC Media Player"; Id = "VideoLAN.VLC" }
+    )
 
-            foreach ($app in $apps) {
-                $installedCount++
-                $percentComplete = (($installedCount / $totalApps) * 100)
-                $statusMessage = "Instalando $($app.Name)..."
-
-                Grant-WriteProgress -Activity $activity -Status $statusMessage "App: $($app.Name) (ID: $($app.Id))" -PercentComplete $percentComplete
-
-                try {
-                    Write-Log "Tentando instalar $($app.Name) (ID: $($app.Id))..." -Type Info
-                    if (-not $WhatIf) {
-                        # A Winget pode retornar um exit code diferente de 0 mesmo em caso de sucesso (ex: se o app já está instalado)
-                        # Redirecionar stderr para stdout para capturar todas as mensagens
-                        $installResult = (winget install --id $app.Id -e --accept-package-agreements --accept-source-agreements 2>&1)
-                        
-                        # Verificar o $LASTEXITCODE para sucesso (0) ou falha. 
-                        # Muitos instaladores Winget retornam 0 mesmo se o software já estiver instalado ou se não houve alteração.
-                        if ($LASTEXITCODE -eq 0) {
-                            Write-Log "$($app.Name) instalado ou já presente com sucesso." -Type Success
-                        } else {
-                            # Tentar identificar se o erro é 'já instalado' ou um erro real
-                            if ($installResult -like "*already installed*" -or $installResult -like "*already exists*") {
-                                Write-Log "$($app.Name) já está instalado. Pulando." -Type Info
-                            } else {
-                                Write-Log "Falha ao instalar $($app.Name): Winget retornou erro. Detalhes: $($installResult | Out-String)" -Type Error
-                            }
-                        }
-                    } else {
-                        Write-Log "Modo WhatIf: $($app.Name) (ID: $($app.Id)) seria instalado." -Type Debug
-                    }
-                } catch {
-                    Write-Log "ERRO inesperado ao tentar instalar $($app.Name): $($_.Exception.Message)" -Type Error
-                    Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-                }
-            }
-            Write-Log "Instalação de aplicativos concluída." -Type Success
-
-        } catch {
-            Write-Log "ERRO GERAL durante a instalação de aplicativos: $($_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-        } finally {
-            Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    # Se receberam IDs, filtramos a lista
+    if ($AppId) {
+        $apps = $apps | Where-Object { $AppId -contains $_.Id }
+        if (-not $apps) {
+            Write-Log "Nenhum aplicativo corresponde aos IDs: $AppId" -Type Warning
+            return
         }
     }
+
+    $totalApps     = $apps.Count
+    $installedCount = 0
+
+    foreach ($app in $apps) {
+        $installedCount++
+        $percentComplete = [int](($installedCount / $totalApps) * 100)
+        Grant-WriteProgress -Activity $activity -Status "Instalando $($app.Name)..." -PercentComplete $percentComplete
+
+        if ($PSCmdlet.ShouldProcess("Instalar $($app.Name)", "$($app.Id)")) {
+            try {
+                $result = winget install --id $app.Id -e --accept-package-agreements --accept-source-agreements 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "$($app.Name) instalado ou já presente." -Type Success
+                } elseif ($result -match "already installed|already exists") {
+                    Write-Log "$($app.Name) já está instalado. Pulando." -Type Info
+                } else {
+                    Write-Log "Falha ao instalar $($app.Name): $result" -Type Error
+                }
+            } catch {
+                Write-Log "Erro instalando $($app.Name): $($_.Exception.Message)" -Type Error
+            }
+        }
+    }
+
+    Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    Write-Log "Instalação de aplicativos concluída." -Type Success
 }
 
 function Update-PowerShell {
@@ -2372,7 +2366,7 @@ function Update-PowerShell {
             Grant-WriteProgress -Activity $activity -Status "Definindo política de execução..." -PercentComplete 30
             Write-Log "Definindo política de execução para 'Unrestricted' no escopo CurrentUser para permitir scripts." -Type Info
             if (-not $WhatIf) {
-                Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Force -ErrorAction Stop
+				Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
             } else {
                 Write-Log "Modo WhatIf: Política de execução seria definida para 'Unrestricted'." -Type Debug
             }
@@ -4365,15 +4359,37 @@ Write-Log "Executando toolbox oficial do site christitus.com..." -Type Warning
 }
 
 function Invoke-PowerShellProfile {
-    Clear-Host
-Write-Log "Executando script pra turbinar o perfil do PowerShell..." -Type Warning
-    try {
+    param (
+        [string]$FonteProfile = "G:\Drives compartilhados\MundoCOC\Tecnologia\Powershell\Perfil Powershell\Microsoft.PowerShell_profile.ps1"
+    )
+
+    $usuarios = Get-ChildItem "C:\Users" -Directory | Where-Object {
+        Test-Path "$($_.FullName)\Documents"
+    }
+
+    foreach ($user in $usuarios) {
+        $destinoPasta = "$($user.FullName)\Documents\PowerShell"
+        $destinoProfile = "$destinoPasta\Microsoft.PowerShell_profile.ps1"
+
+        # Cria a pasta se não existir
+        if (-not (Test-Path $destinoPasta)) {
+            New-Item -ItemType Directory -Path $destinoPasta -Force | Out-Null
+            Write-Host "Criada a pasta: $destinoPasta"
+        }
+
+        # Copia o profile
+        Copy-Item -Path $FonteProfile -Destination $destinoProfile -Force
+        Write-Host "Profile copiado para: $destinoProfile"
+    }
+    Write-Host "Distribuição concluída para todos os usuários encontrados em C:\Users." -ForegroundColor Green
+	try {
 		iex (iwr "https://raw.githubusercontent.com/CrazyWolf13/unix-pwsh/main/Microsoft.PowerShell_profile.ps1").Content        
 		Write-Log "Perfil executado com sucesso." -Type Success
     } catch {
         Write-Log "Erro ao executar o script do Perfil do PowerShell: $_" -Type Error
     }
 }
+
 
 function Update-ScriptFromCloud {
     Clear-Host
@@ -4999,7 +5015,7 @@ Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type 
     } while ($true)
 }
 
-function Show-AdvancedSettingsMenu {
+function Show-AdvancedSettingsMenu {x
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5076,13 +5092,13 @@ function Show-DiagnosticsMenu {
     } while ($true)
 }
 
-function Show-AppsMenu {
+function Show-AppsMenu {x
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " MENU: INSTALAÇÃO E FERRAMENTAS" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Instalar Aplicativos Definidos"
+        Write-Host " A) Selecionar Aplicativos para Instalar"
         Write-Host " B) Gerenciar Programas e Recursos (Abrir)"
         Write-Host " C) Desinstalar Aplicativos UWP (Microsoft Store)"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
@@ -5091,14 +5107,63 @@ function Show-AppsMenu {
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Install-Applications; Show-SuccessMessage }
-            'B' { Start-Process "appwiz.cpl"; Show-SuccessMessage } # Abre "Programas e Recursos"
-            'C' { Start-Process "ms-settings:appsfeatures"; Show-SuccessMessage } # Abre "Aplicativos e Recursos" (UWP)
-            'Z' { Invoke-AppsAndTools; Show-SuccessMessage } # Chama o orquestrador
+            'A' { Show-InstallAppsMenu }
+            'B' { Start-Process "appwiz.cpl"; Show-SuccessMessage }
+            'C' { Start-Process "ms-settings:appsfeatures"; Show-SuccessMessage }
+            'Z' { Install-Applications; Show-SuccessMessage }
             'X' { return }
             default {
                 Write-Host 'Opção inválida. Pressione qualquer tecla para continuar...' -ForegroundColor Yellow
                 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+            }
+        }
+    } while ($true)
+}
+
+function Show-InstallAppsMenu {
+    $appsToInstall = @(
+        @{ Key = '1'; Name = '7-Zip';                  Id = '7zip.7zip' },
+        @{ Key = '2'; Name = 'AnyDesk';                Id = 'AnyDesk.AnyDesk' },
+        @{ Key = '3'; Name = 'AutoHotKey';             Id = 'AutoHotkey.AutoHotkey' },
+        @{ Key = '4'; Name = 'Foxit Reader';           Id = 'Foxit.FoxitReader' },
+        @{ Key = '5'; Name = 'Google Chrome';          Id = 'Google.Chrome' },
+        @{ Key = '6'; Name = 'Google Drive';           Id = 'Google.GoogleDrive' },
+        @{ Key = '7'; Name = 'Greenshot';              Id = 'Greenshot.Greenshot' },
+        @{ Key = '8'; Name = 'K-Lite Codec Pack Full'; Id = 'CodecGuide.K-LiteCodecPack.Full' },
+        @{ Key = '9'; Name = 'Microsoft Office';       Id = 'Microsoft.Office' },
+        @{ Key = 'A'; Name = 'Microsoft PowerToys';    Id = 'Microsoft.PowerToys' },
+        @{ Key = 'B'; Name = 'Notepad++';              Id = 'Notepad++.Notepad++' },
+        @{ Key = 'C'; Name = 'VLC Media Player';       Id = 'VideoLAN.VLC' }
+    )
+
+    do {
+        Clear-Host
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " SUBMENU: Seleção de Aplicativos" -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+
+        foreach ($app in $appsToInstall) {
+            Write-Host " $($app.Key)) $($app.Name)"
+        }
+        Write-Host " Z) Voltar ao menu de Aplicativos" -ForegroundColor Red
+        Write-Host " X) Voltar ao menu principal" -ForegroundColor Red
+        Write-Host "=============================================" -ForegroundColor Cyan
+
+        $choice = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        $selected = $appsToInstall | Where-Object Key -EQ $choice
+
+        if ($selected) {
+            Install-Applications -AppId $selected.Id
+            Show-SuccessMessage
+        }
+        else {
+            switch ($choice) {
+                'Z' { return }        # Volta ao menu anterior (Show-AppsMenu)
+                'X' { return }        # Volta ao menu principal
+                default {
+                    Write-Host 'Opção inválida. Pressione qualquer tecla para continuar...' -ForegroundColor Yellow
+                    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+                }
             }
         }
     } while ($true)
@@ -5134,7 +5199,7 @@ function Show-DiagnosticsMenu {
     } while ($true)
 }
 
-function Show-NetworkMenu {
+function Show-NetworkMenu {x
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5176,7 +5241,7 @@ function Show-NetworkMenu {
     } while ($true)
 }
 
-function Show-ExternalScriptsMenu {
+function Show-ExternalScriptsMenu {x
     do {
         Clear-Host
 		Write-Host "=============================================" -ForegroundColor Cyan
@@ -5236,7 +5301,7 @@ function Show-RestoreMenu {
     } while ($true)
 }
 
-function Show-UtilitiesMenu {
+function Show-UtilitiesMenu {x
     do {
         Clear-Host
 Write-Log "=============================================" -Type Info
@@ -5259,10 +5324,8 @@ Write-Log "=============================================" -Type Info
             'A' {
 Write-Log "Executando: Todas as Tarefas de Otimização..." -Type Warning
                 Remove-SystemBloatware
-
                 Remove-OneDrive-AndRestoreFolders
                 Invoke-Cleanup
-                
                 Grant-PrivacyTweaks
                 Grant-ControlPanelTweaks
                 Grant-ExtraTweaks
@@ -5442,7 +5505,7 @@ function Show-CleanupMenu {
     } while ($true)
 }
 
-function Show-BloatwareMenu {
+function Show-BloatwareMenu {x
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5484,7 +5547,7 @@ function Show-BloatwareMenu {
     } while ($true)
 }
 
-function Show-SystemPerformanceMenu {
+function Show-SystemPerformanceMenu { x
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5535,8 +5598,6 @@ function Show-WindowsFeaturesMenu {
     } while ($true)
 }
 
-# === MENU PRINCIPAL ===
-
 function Show-MainMenu {
     do {
         Clear-Host
@@ -5548,30 +5609,43 @@ function Show-MainMenu {
         Write-Host " C) Privacidade e Segurança" -ForegroundColor Yellow
         Write-Host " D) Rede e Outros" -ForegroundColor Yellow
         Write-Host " E) Sistema e Desempenho" -ForegroundColor Yellow
-		Write-Host " F) Scripts Externos" -ForegroundColor Yellow
-		Write-Host " G) Restaurações" -ForegroundColor Yellow
+        Write-Host " F) Scripts Externos" -ForegroundColor Yellow
+        Write-Host " G) Menu de Utilidades" -ForegroundColor Yellow
         Write-Host " H) Rotina Colégio" -ForegroundColor Green
-		Write-Host " R) Reiniciar" -ForegroundColor Blue
-        Write-Host " S) Desligar" -ForegroundColor Blue
-        Write-Host " X) Sair" -ForegroundColor Red
+        Write-Host " I) Manutenção Completa" -ForegroundColor Magenta
+        Write-Host " J) Diagnósticos do Sistema" -ForegroundColor Magenta
+        Write-Host " K) Limpeza do Sistema" -ForegroundColor Magenta
+        Write-Host " L) Recursos do Windows" -ForegroundColor Magenta
+        Write-Host " M) Ajustes de Personalização" -ForegroundColor Magenta
+        Write-Host " N) Restaurações" -ForegroundColor Magenta
+        Write-Host "---------------------------------------------" -ForegroundColor Gray
+        Write-Host " Y) Reiniciar o Sistema" -ForegroundColor Blue
+        Write-Host " Z) Desligar o Sistema" -ForegroundColor Blue
+        Write-Host " X) Sair do Script" -ForegroundColor Red
         Write-Host "==============================================="
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Show-AdvancedSettingsMenu }
-            'B' { Show-AppsMenu } # Mapeado para o antigo "Aplicativos"
-            'C' { Show-BloatwareMenu } # Mapeado para o antigo "Remoção de Bloatware"
-            'D' { Show-NetworkMenu } # Mapeado para o antigo "Rede e Impressoras"
-            'E' { Show-SystemPerformanceMenu } # Mapeado para a função de desempenho
-			'F' { Show-ExternalScriptsMenu }
-			'G' { Invoke-Undo }
-			'H' { Invoke-Colegio }
-            'R' {
+            'B' { Show-AppsMenu }
+            'C' { Show-BloatwareMenu }
+            'D' { Show-NetworkMenu }
+            'E' { Show-SystemPerformanceMenu }
+            'F' { Show-ExternalScriptsMenu }
+            'G' { Show-UtilitiesMenu }
+            'H' { Invoke-Colegio }
+            'I' { Show-FullMaintenance }
+            'J' { Show-DiagnosticsMenu }
+            'K' { Show-CleanupMenu }
+            'L' { Show-WindowsFeaturesMenu }
+            'M' { Show-PersonalizationTweaksMenu }
+            'N' { Show-RestoreMenu }
+            'Y' {
                 Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
                 Restart-Computer -Force
                 # O script será encerrado aqui, pois o computador será reiniciado.
             }
-            'S' {
+            'Z' {
                 Write-Host 'Desligando o sistema...' -ForegroundColor Cyan
                 Stop-Computer -Force
                 # O script será encerrado aqui, pois o computador será desligado.
@@ -5587,9 +5661,7 @@ function Show-MainMenu {
             }
         }
     } while ($true)
-}
-
-# -------------------------------------------------------------------------
+}# -------------------------------------------------------------------------
 # 🔧 Função principal: ponto de entrada do script
 function Start-ScriptSupremo {
     Write-Log "`n🛠️ Iniciando o script de manutenção..." -Type Info
