@@ -327,19 +327,6 @@ function Invoke-Bloatware {
     Show-SuccessMessage
 }
 
-function Invoke-Diagnose {
-    Write-Log "Iniciando o orquestrador de Diagnósticos..." -Type Info
-
-    try { Invoke-All-DiagnosticsAdvanced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-All-DiagnosticsAdvanced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-DiskUsage -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-DiskUsage: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-SystemInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-SystemInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Test-Memory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Test-Memory: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-
-    Write-Log "Todas as rotinas de diagnósticos foram concluídas pelo orquestrador." -Type Success
-
-    Show-SuccessMessage
-}
-
 function Invoke-Tweaks {
     Write-Log "Iniciando o orquestrador de Tweaks..." -Type Info
 
@@ -437,64 +424,12 @@ function Invoke-All-DiagnosticsAdvanced {
 
 function Invoke-Colegio {
     Write-Log "Iniciando rotina completa de manutenção do Colégio..." -Type Info
-	try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Add-WiFiNetwork -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Add-WiFiNetwork: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Backup-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Backup-Registry: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-ARP -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-ARP: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-DNS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DNS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-PrintSpooler -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-PrintSpooler: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-TemporaryFiles -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-TemporaryFiles: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-WUCache -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WUCache: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-WinSxS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WinSxS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-ActionCenter-Notifications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-IPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-IPv6: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-ClassicContextMenu -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClassicContextMenu: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-ClipboardHistory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClipboardHistory: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-DarkTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-DarkTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-OtherMicrosoftUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-OtherMicrosoftUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-PowerOptions -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PowerOptions: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-PrivacyHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PrivacyHardening: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-RestartAppsAfterReboot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-RestartAppsAfterReboot: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-Sudo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-Sudo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-TaskbarEndTask -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarEndTask: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-TaskbarSeconds -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarSeconds: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-WindowsHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsHardening: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-WindowsUpdateFast -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsUpdateFast: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-Cleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-Cleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-ControlPanelTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ControlPanelTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-ExtraTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ExtraTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-GPORegistrySettings -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-GPORegistrySettings: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-HardenOfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-HardenOfficeMacros: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-PrivacyAndBloatwarePrevention -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyAndBloatwarePrevention: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-PrivacyTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-SystemOptimizations -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-SystemOptimizations: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-UITweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-UITweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-WindowsUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Install-NetworkPrinters -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Install-NetworkPrinters: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Invoke-All-DiagnosticsAdvanced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-All-DiagnosticsAdvanced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Invoke-All-NetworkAdvanced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-All-NetworkAdvanced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { New-FolderForced -Path "C:\SCript" -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Optimize-NetworkPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-NetworkPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Optimize-Volumes -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-Volumes: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware : $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
-    try { Rename-Notebook -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Rename-Notebook: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Set-DnsGoogleCloudflare -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-DnsGoogleCloudflare: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Set-OptimizedPowerPlan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-OptimizedPowerPlan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Set-VisualPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-VisualPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-DiskUsage -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-DiskUsage: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-NetworkInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-NetworkInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-SystemInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-SystemInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    
+	
+	try { Invoke-NetworkUtilities -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-NetworkUtilities: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+	try { Invoke-Tweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-Tweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+	try { Invoke-Bloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-Bloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+	try { Invoke-Cleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-Cleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+	
     Show-SuccessMessage
     Write-Log "Todas as rotinas de manutenção do Colégio foram concluídas." -Type Success
 
@@ -860,7 +795,6 @@ function Clear-DeepSystemCleanup {
     }
 }
 
-
 function Clear-PrintSpooler {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param()
@@ -939,7 +873,6 @@ function Clear-PrintSpooler {
         }
     }
 }
-
 
 function Clear-Prefetch {
     [CmdletBinding(SupportsShouldProcess=$true)]
@@ -4928,50 +4861,26 @@ Write-Log "=============================================" -Type Info
 Write-Log "        INICIANDO MANUTENÇÃO COMPLETA        " -Type Info
 Write-Log "=============================================" -Type Info
     Write-Log "Iniciando Manutenção Completa..." Yellow
-
-    # Sequência lógica de chamadas aos novos menus e funções
-    # A maioria dos menus já tem sua própria opção de "Executar Todos" (Opção 1)
-    # Então, vamos simular a seleção da Opção 1 dentro de cada submenu
-    # Nota: Show-MainMenu não tem "Executar Todos", suas opções são os submenus em si.
-
-Write-Log "Executando: Menu de Instalação de Programas (Opção 1 - Todas as Ferramentas)..." -Type Success
+    Write-Log "Executando: Menu de Instalação de Programas (Opção 1 - Todas as Ferramentas)..." -Type Success
     # Chamando a função Install-Applications que está dentro de Show-InstallationMenu opção 1
     Install-Applications
-    # Se Show-InstallationMenu tivesse outras funções que não estivessem em Install-Applications,
-    # ou uma opção de "Executar Todas" mais abrangente, chamaria essa opção aqui.
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Rede e Impressoras (Opção 1 - Todas as Configurações de Rede)..." -Type Success
-    # Chamando as funções que estão dentro de Show-NetworkMenu opção 1
+    Write-Log "Executando: Menu de Rede e Impressoras (Opção 1 - Todas as Configurações de Rede)..." -Type Success
     Install-NetworkPrinters
     Optimize-NetworkPerformance
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as Configurações)..." -Type Success
-    # Chamando as funções que estão dentro de Show-AdvancedSettingsMenu opção 1
+	Write-Log "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as Configurações)..." -Type Success
     Disable-SMBv1
     Grant-HardenOfficeMacros
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -Type Success
-    # Chamando as funções que estão dentro de Show-UtilitiesMenu opção 1
+	Write-Log "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -Type Success
     Remove-SystemBloatware
-
     Remove-OneDrive-AndRestoreFolders
     Invoke-Cleanup
-    
     Grant-PrivacyTweaks
     Grant-ControlPanelTweaks
     Grant-ExtraTweaks
     Disable-Cortana-AndSearch
-    Start-Sleep 2
-
-Write-Log "Executando: Menu de Diagnóstico e Informações (Opção 1 - Todas as Verificações)..." -Type Success
-    # Chamando as funções que estão dentro de Show-DiagnosticsMenu opção 1
-    sfc /scannow
-    Dism /Online /Cleanup-Image /RestoreHealth
-    # Chkdsk é omitido aqui por requerer reboot
-    Start-Sleep 2
+	Write-Log "Executando: Menu de Diagnóstico e Informações (Opção 1 - Todas as Verificações)..." -Type Success
+    ;sfc /scannow
+    ;Dism /Online /Cleanup-Image /RestoreHealth
 
 Write-Log "=============================================" -Type Info
 Write-Log "        MANUTENÇÃO COMPLETA CONCLUÍDA!       " -Type Info
@@ -4998,8 +4907,8 @@ function Show-PersonalizationTweaksMenu {
         Write-Host " I) Reforçar e ativar Microsoft Defender"      # NOVO
         Write-Host " J) Política de Energia (AC nunca; DC 60 min)" # NOVO
         Write-Host ""
-        Write-Host " Z) Executar Todos (Sequência)" -ForegroundColor Green
         Write-Host " X) Voltar ao Menu Anterior"    -ForegroundColor Red
+		Write-Host " Z) Executar Todos (Sequência)" -ForegroundColor Green
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -5064,9 +4973,9 @@ function Show-AdvancedSettingsMenu {
         Write-Host " Q) Reforçar Microsoft Defender"             # NOVO
         Write-Host " R) Política de Energia (AC nunca; DC 60 min)" # NOVO
         Write-Host ""
-        Write-Host " Z) Rotina Completa (Executa A–R em sequência)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior"                    -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " Z) Rotina Completa (Executa A–R em sequência)" -ForegroundColor Green
+		Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         Write-Log "Opção no menu Avançado: $key" -Type Info
@@ -5132,7 +5041,7 @@ function Show-DiagnosticsMenu {
         Write-Host " D) Teste de Memória"
         Write-Host " E) Informações do Sistema"
         Write-Host ""
-        Write-Host " X) Voltar"
+        Write-Host " X) Voltar" -ForegroundColor Cyan
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-SFC-Scan }
@@ -5156,9 +5065,9 @@ function Show-AppsMenu {
         Write-Host " B) Gerenciar Programas e Recursos (Abrir)"
         Write-Host " C) Desinstalar Aplicativos UWP (Microsoft Store)"
         Write-Host ""
-        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+		Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
@@ -5234,8 +5143,9 @@ function Show-DiagnosticsMenu {
         Write-Host " B) Mostrar Uso de Disco"
         Write-Host " C) Mostrar Informações do Sistema"
         Write-Host " D) Testar Memória"
-        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
-        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
+        Write-Host ""
+		Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
+		Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -5270,9 +5180,10 @@ function Show-NetworkMenu {
         Write-Host " H) Configurar DNS Google/Cloudflare"
         Write-Host " I) Mostrar Informações de Rede"
         Write-Host " J) Testar Velocidade da Internet"
-        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+		Write-Host ""
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+	    Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
@@ -5306,8 +5217,10 @@ function Show-ExternalScriptsMenu {
         Write-Host " B) Executar Chris Titus Toolbox"
         Write-Host " C) Atualizar Script Supremo pela URL"
         Write-Host " D) Script pra perfil PowerShell"
+		Write-Host ""
         Write-Host " X) Voltar" -ForegroundColor Red
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        Write-Host "=============================================" -ForegroundColor Cyan
+		$key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-WindowsActivator }
             'B' { Invoke-ChrisTitusToolbox }
@@ -5336,8 +5249,10 @@ function Show-RestoreMenu {
         Write-Host " I) Restaurar macros Office"
         Write-Host " J) Restaurar IPv6"
         Write-Host " K) Reabilitar notificações Action Center"
+		Write-Host ""
         Write-Host " X) Voltar" -ForegroundColor Red
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        Write-Host "=============================================" -ForegroundColor Cyan
+		$key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { New-SystemRestorePoint }
             'B' { Backup-Registry }
@@ -5362,13 +5277,13 @@ function Show-UtilitiesMenu {
 Write-Host "=============================================" -Type Info
 Write-Host "       MENU DE UTILITÁRIOS DO SISTEMA        " -Type Info
 Write-Host "=============================================" -Type Info
-        Write-Host "Exibindo menu de Utilitários do Sistema..." Blue
-
+Write-Host "Exibindo menu de Utilitários do Sistema..." Blue
 Write-Host " A. Executar Todas as Tarefas de Otimização (Sequência)" -Type Success
 Write-Host " B. Gerenciar Bloatware"
 Write-Host " C. Limpeza e Otimização de Disco"
 Write-Host " D. Aplicar Otimizações de Desempenho e Privacidade"
 Write-Host " E. Desativar Cortana e Pesquisa Online"
+Write-Host ""
 Write-Host "`n X. Voltar ao Menu Principal"
 Write-Host "=============================================" -Type Info
 
@@ -5392,23 +5307,23 @@ Write-Log "Todas as Tarefas de Otimização Concluídas!" -Type Success
             'B' {
                 do {
                     Clear-Host
-Write-Log "=============================================" -Type Info
-Write-Log "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -Type Info
-Write-Log "=============================================" -Type Info
-                    Write-Log "Exibindo submenu de Bloatware..." Blue
-
-Write-Log " A. Remover Bloatware (Todos em sequência)"
-Write-Log " B. Remover Aplicativos Pré-instalados (Bloatware)"
-Write-Log " C. Remover OneDrive e Restaurar Pastas"
-Write-Log "`n X. Voltar ao Menu Anterior"
-Write-Log "=============================================" -Type Info
+Write-Host "=============================================" -Type Info
+Write-Host "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -Type Info
+Write-Host "=============================================" -Type Info
+Write-Host "Exibindo submenu de Bloatware..." Blue
+Write-Host " A. Remover Bloatware (Todos em sequência)"
+Write-Host " B. Remover Aplicativos Pré-instalados (Bloatware)"
+Write-Host " C. Remover OneDrive e Restaurar Pastas"
+Write-Host ""
+Write-Host "`n X. Voltar ao Menu Anterior" -Type Warning
+Write-Host "=============================================" -Type Info
 
                     $subChoice = [Console]::ReadKey($true).Key
                     Write-Log "Opção escolhida no submenu de Bloatware: $subChoice" Blue
 
                     switch ($subChoice) {
                         'A' {
-Write-Log "Executando: Remover Bloatware (Todos em sequência)..." -Type Warning
+Write-Host "Executando: Remover Bloatware (Todos em sequência)..." -Type Warning
                             Remove-SystemBloatware
                             Remove-OneDrive-AndRestoreFolders Write-Log "Remoção de Bloatware Concluída!" -Type Success
                             [Console]::ReadKey($true) | Out-Null
@@ -5418,7 +5333,7 @@ Write-Log "Executando: Remover Bloatware (Todos em sequência)..." -Type Warning
                         'x' { return }
                         'X' { return }
                         default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
+Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
                             [Console]::ReadKey($true) | Out-Null
                         }
                     }
@@ -5430,11 +5345,11 @@ Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type 
 Write-Host "=============================================" -Type Info
 Write-Host "      SUBMENU DE LIMPEZA E OTIMIZAÇÃO DE DISCO      " -Type Info
 Write-Host "=============================================" -Type Info
-                    Write-Host "Exibindo submenu de Limpeza e Otimização..." Blue
-
+Write-Host "Exibindo submenu de Limpeza e Otimização..." Blue
 Write-Host " A. Executar Todas as Tarefas de Limpeza e Otimização"
 Write-Host " B. Limpeza de Arquivos Temporários"
 Write-Host " C. Desfragmentar/Otimizar Drives"
+Write-Host ""
 Write-Host "`n X. Voltar ao Menu Anterior"
 Write-Host "=============================================" -Type Info
 
@@ -5531,7 +5446,7 @@ function Show-CleanupMenu {
         Write-Host " I) Iniciar Verificação DISM"
         Write-Host " J) Iniciar Verificação SFC"
         Write-Host " K) Agendar ChkDsk no Reboot"
-		
+        Write-Host ""
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5575,8 +5490,9 @@ function Show-BloatwareMenu {
         Write-Host " H) Remover Pastas de Bloatware Seguras"
         Write-Host " I) Parar Processos de Bloatware em Execução"
         Write-Host " J) Aplicar Prevenção de Bloatware e Privacidade"
-        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+        Write-Host ""
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
+        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -5612,8 +5528,9 @@ function Show-SystemPerformanceMenu {
         Write-Host " C) Ajustar Efeitos Visuais para Desempenho"
         Write-Host " D) Realizar Otimizações Gerais do Sistema"
         Write-Host " E) Criar Ponto de Restauração do Sistema"
-        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+        Write-Host ""
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
+        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -5636,11 +5553,15 @@ function Show-SystemPerformanceMenu {
 function Show-WindowsFeaturesMenu {
     do {
         Clear-Host
-        Write-Host "`n[RECURSOS DO WINDOWS]" -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+		Write-Host "`n[RECURSOS DO WINDOWS]" -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " A) Remover Copilot"
         Write-Host " B) Desativar Recall"
         Write-Host " C) Aplicar plano de energia otimizado"
-        Write-Host " X) Voltar"
+		Write-Host ""
+        Write-Host " X) Voltar" -ForegroundColor Red
+        Write-Host "=============================================" -ForegroundColor Cyan
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Remove-SystemBloatware}
@@ -5673,9 +5594,9 @@ function Show-MainMenu {
         Write-Host " M) Ajustes de Personalização" -ForegroundColor Magenta
         Write-Host " N) Restaurações" -ForegroundColor Magenta
         Write-Host "---------------------------------------------" -ForegroundColor Gray
+        Write-Host " X) Sair do Script" -ForegroundColor Red
         Write-Host " Y) Reiniciar o Sistema" -ForegroundColor Blue
         Write-Host " Z) Desligar o Sistema" -ForegroundColor Blue
-        Write-Host " X) Sair do Script" -ForegroundColor Red
         Write-Host "==============================================="
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
