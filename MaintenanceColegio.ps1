@@ -71,9 +71,10 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-    LogFilePath = Join-Path $PSScriptRoot "ScriptSupremo.log"
-    ConfirmBeforeDestructive = $true
-    Cleanup = @{
+        LogFilePath = Join-Path $PSScriptRoot "ScriptSupremo.log"
+        ConfirmBeforeDestructive = $true
+        UpdateServer = $env:SCRIPT_UPDATE_SERVER
+        Cleanup = @{
         CleanTemporaryFiles = $true
         CleanWUCache = $true
         OptimizeVolumes = $true
@@ -158,11 +159,15 @@ function Write-Log {
     # Obter o nome do computador
     $computerName = $env:COMPUTERNAME # ou [System.Environment]::MachineName
 
-    # Definir o diretório base para os logs conforme sua preferência
-    $logBaseDirectory = "C:\ScriptsLogs" # <--- DIRETÓRIO ESPECIFICADO PELO USUÁRIO
-
-    # Definir o caminho completo do arquivo de log, incluindo o nome do computador
-    $logFilePath = "$logBaseDirectory\$computerName-ScriptLog.log"
+    # Definir o caminho completo do arquivo de log
+    if ($null -ne $ScriptConfig -and $ScriptConfig.LogFilePath) {
+        $logFilePath = $ScriptConfig.LogFilePath
+        $logBaseDirectory = Split-Path $logFilePath -Parent
+    } else {
+        # Fallback para diretório padrão caso ScriptConfig não exista
+        $logBaseDirectory = "C:\ScriptsLogs" # <--- DIRETÓRIO ESPECIFICADO PELO USUÁRIO
+        $logFilePath = "$logBaseDirectory\$computerName-ScriptLog.log"
+    }
 
     # Criar o diretório de log se ele não existir
     try {
@@ -317,10 +322,8 @@ function Invoke-Bloatware {
     try { Grant-PrivacyAndBloatwarePrevention -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyAndBloatwarePrevention: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware : $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
+    try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }    
+	try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
 
     Write-Log "Todas as rotinas de bloatware foram concluídas pelo orquestrador." -Type Success
 
@@ -1301,22 +1304,22 @@ function Remove-SystemBloatware{
                 Safe-WriteProgress -Activity $activity -Status "Removendo pastas de dados e vestígios do OneDrive..." -PercentComplete (($currentOnedriveStep / $onedriveSubSteps) * 100)
                 Write-Log "Removendo pastas de dados e vestígios do OneDrive." -Type Info
                 $userProfiles = Get-ChildItem -Path "$env:SystemDrive\Users" -Directory -ErrorAction SilentlyContinue
-                foreach ($profile in $userProfiles) {
-                    $onedriveUserPath = Join-Path -Path $profile.FullName -ChildPath "OneDrive"
-                    $onedriveLocalAppData = Join-Path -Path $profile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
-                    if (-not $WhatIf) {
-                        if (Test-Path $onedriveUserPath) {
-                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue
-                            Write-Log "Removido pasta OneDrive de $($profile.BaseName)." -Type Debug
-                        }
-                        if (Test-Path $onedriveLocalAppData) {
-                            Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
-                            Write-Log "Removido AppData de OneDrive de $($profile.BaseName)." -Type Debug
-                        }
-                    } else {
-                        Write-Log "Modo WhatIf: Pastas OneDrive e AppData de $($profile.BaseName) seriam removidas." -Type Debug
-                    }
-                }
+                foreach ($userProfile in $userProfiles) {
+                    $onedriveUserPath = Join-Path -Path $userProfile.FullName -ChildPath "OneDrive"
+                    $onedriveLocalAppData = Join-Path -Path $userProfile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
+                    if (-not $WhatIf) {␊
+                        if (Test-Path $onedriveUserPath) {␊
+                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue␊
+                            Write-Log "Removido pasta OneDrive de $($userProfile.BaseName)." -Type Debug
+                        }␊
+                        if (Test-Path $onedriveLocalAppData) {␊
+                            Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue␊
+                            Write-Log "Removido AppData de OneDrive de $($userProfile.BaseName)." -Type Debug
+                        }␊
+                    } else {␊
+                        Write-Log "Modo WhatIf: Pastas OneDrive e AppData de $($userProfile.BaseName) seriam removidas." -Type Debug
+                    }␊
+                }␊
                 $currentOnedriveStep++
 
                 # Limpando entradas de registro do OneDrive
@@ -1909,22 +1912,22 @@ function Remove-SystemBloatware {
                 Safe-WriteProgress -Activity $activity -Status "Removendo pastas de dados e vestígios do OneDrive..." -PercentComplete (($currentOnedriveStep / $onedriveSubSteps) * 100)
                 Write-Log "Removendo pastas de dados e vestígios do OneDrive." -Type Info
                 $userProfiles = Get-ChildItem -Path "$env:SystemDrive\Users" -Directory -ErrorAction SilentlyContinue
-                foreach ($profile in $userProfiles) {
-                    $onedriveUserPath = Join-Path -Path $profile.FullName -ChildPath "OneDrive"
-                    $onedriveLocalAppData = Join-Path -Path $profile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
-                    if (-not $WhatIf) {
-                        if (Test-Path $onedriveUserPath) {
-                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue
-                            Write-Log "Removido pasta OneDrive de $($profile.BaseName)." -Type Debug
-                        }
-                        if (Test-Path $onedriveLocalAppData) {
-                            Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
-                            Write-Log "Removido AppData de OneDrive de $($profile.BaseName)." -Type Debug
-                        }
-                    } else {
-                        Write-Log "Modo WhatIf: Pastas OneDrive e AppData de $($profile.BaseName) seriam removidas." -Type Debug
-                    }
-                }
+                foreach ($userProfile in $userProfiles) {
+                    $onedriveUserPath = Join-Path -Path $userProfile.FullName -ChildPath "OneDrive"
+                    $onedriveLocalAppData = Join-Path -Path $userProfile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
+                    if (-not $WhatIf) {␊
+                        if (Test-Path $onedriveUserPath) {␊
+                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue␊
+                            Write-Log "Removido pasta OneDrive de $($userProfile.BaseName)." -Type Debug
+                        }␊
+                        if (Test-Path $onedriveLocalAppData) {␊
+                            Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue␊
+                            Write-Log "Removido AppData de OneDrive de $($userProfile.BaseName)." -Type Debug
+                        }␊
+                    } else {␊
+                        Write-Log "Modo WhatIf: Pastas OneDrive e AppData de $($userProfile.BaseName) seriam removidas." -Type Debug
+                    }␊
+                }␊
                 $currentOnedriveStep++
 
                 # Limpando entradas de registro do OneDrive
@@ -2561,7 +2564,8 @@ function Test-InternetSpeed {
             }
 
             Grant-WriteProgress -Activity $activity -Status "Verificando instalação do Speedtest CLI..." -PercentComplete 30
-            if (-not (Get-Command speedtest -ErrorAction SilentlyContinue)) {
+            $speedtestCommand = Get-Command speedtest -CommandType Application -ErrorAction SilentlyContinue
+            if (-not $speedtestCommand) {
                 Write-Log "Speedtest CLI não encontrado. Tentando instalar via Winget..." -Type Info
                 if (-not $WhatIf) {
                     Write-Log "Instalando Ookla.Speedtest..." -Type Info
@@ -2570,6 +2574,7 @@ function Test-InternetSpeed {
                 } else {
                     Write-Log "Modo WhatIf: Ookla.Speedtest seria instalado via Winget." -Type Debug
                 }
+                $speedtestCommand = Get-Command speedtest -CommandType Application -ErrorAction SilentlyContinue
             } else {
                 Write-Log "Speedtest CLI já está instalado." -Type Info
             }
@@ -2577,7 +2582,10 @@ function Test-InternetSpeed {
             Grant-WriteProgress -Activity $activity -Status "Executando teste de velocidade..." -PercentComplete 70
             Write-Log "Executando comando 'speedtest'. Isso pode demorar um pouco..." -Type Info
             if (-not $WhatIf) {
-                speedtest -ErrorAction Stop
+                if (-not $speedtestCommand) {
+                    throw "Speedtest CLI não disponível após tentativa de instalação."
+                }
+                & $speedtestCommand.Source
                 Write-Log "Teste de velocidade concluído." -Type Success
             } else {
                 Write-Log "Modo WhatIf: Comando 'speedtest' seria executado." -Type Debug
@@ -3221,7 +3229,7 @@ function Set-SystemTweaks {
             foreach ($path in $allGrantTweaks.Keys) {
                 $currentChange++
                 $percentComplete = ($currentChange / $totalChanges) * 100
-                Grant-WriteProgress -Activity $activity -Status "Processando caminho: $path" -PercentComplete $percentComplete "Caminho: $path"
+				Grant-WriteProgress -Activity $activity -Status "Processando caminho: $path" -PercentComplete $percentComplete
 
                 if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
                     Write-Log "Verificando/Criando caminho de registro: $path" -Type Debug
@@ -3259,8 +3267,66 @@ function Set-SystemTweaks {
             Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
         } finally {
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+            }
+}
+}
+
+function Invoke-RemoteScript {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [string[]]$Arguments = @()
+    )
+
+    $tempFile = Join-Path $env:TEMP ("remote_script_{0}.ps1" -f ([guid]::NewGuid()))
+
+    try {
+        Write-Log "Baixando script remoto: $Uri" -Type Info
+        $scriptContent = Invoke-RestMethod -Uri $Uri -ErrorAction Stop
+        Set-Content -Path $tempFile -Value $scriptContent -Encoding UTF8
+
+        if ($PSCmdlet.ShouldProcess($Uri, "Executar script remoto")) {
+            & $tempFile @Arguments
+        }
+    } catch {
+        Write-Log "Erro ao baixar/executar script remoto: $($_.Exception.Message)" -Type Error
+    } finally {
+        if (Test-Path $tempFile) {
+            Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
         }
     }
+}
+
+function Grant-PrivacyTweaks {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Aplicando tweaks de privacidade..." -Type Info
+    if ($PSCmdlet.ShouldProcess("tweaks de privacidade", "aplicar")) {
+        Set-SystemTweaks -ApplyPrivacyTweaks
+    }
+}
+
+function Grant-ControlPanelTweaks {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Aplicando tweaks de Painel de Controle/Explorer..." -Type Info
+    if ($PSCmdlet.ShouldProcess("tweaks de Painel de Controle/Explorer", "aplicar")) {
+        Set-SystemTweaks -ApplyControlPanelTweaks
+    }
+}
+
+function Grant-ExtraTweaks {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Aplicando tweaks extras..." -Type Info
+    if ($PSCmdlet.ShouldProcess("tweaks extras", "aplicar")) {
+        Set-SystemTweaks -ApplyExtraTweaks
+    }
+}
+
+function Invoke-Diagnose {
+    Write-Log "Executando diagnósticos avançados..." -Type Info
+    Invoke-All-DiagnosticsAdvanced
 }
 
 function Enable-PrivacyHardening {
@@ -4134,24 +4200,24 @@ function Rename-Notebook {
     Write-Log "Deseja renomear este notebook? (S/N)" -Type Warning
     $timeout = 15
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    $input = $null
-Write-Log "Digite o novo nome do notebook e pressione ENTER (ou aguarde $timeout segundos para cancelar):" -Type Info
-    while ($sw.Elapsed.TotalSeconds -lt $timeout -and !$input) {
-        if ([System.Console]::KeyAvailable) {
-            $input = Read-Host
-        } else {
-            Start-Sleep -Milliseconds 200
-        }
-    }
-    $sw.Stop()
-    if ([string]::IsNullOrWhiteSpace($input)) {
-        Write-Log "Tempo esgotado. Renomeação cancelada." -Type Error
-        Start-Sleep -Seconds 2
-        return
-    }
-    try {
-        Rename-Computer -NewName $input -Force
-        Write-Log "Nome do notebook alterado para: $input. Reinicie para aplicar." -Type Success
+    $newNameInput = $null
+Write-Log "Digite o novo nome do notebook e pressione ENTER (ou aguarde $timeout segundos para cancelar):" -Type Info␊
+    while ($sw.Elapsed.TotalSeconds -lt $timeout -and !$newNameInput) {
+        if ([System.Console]::KeyAvailable) {␊
+            $newNameInput = Read-Host
+        } else {␊
+            Start-Sleep -Milliseconds 200␊
+        }␊
+    }␊
+    $sw.Stop()␊
+    if ([string]::IsNullOrWhiteSpace($newNameInput)) {
+        Write-Log "Tempo esgotado. Renomeação cancelada." -Type Error␊
+        Start-Sleep -Seconds 2␊
+        return␊
+    }␊
+    try {␊
+        Rename-Computer -NewName $newNameInput -Force
+        Write-Log "Nome do notebook alterado para: $newNameInput. Reinicie para aplicar." -Type Success
     } catch {
         Write-Log "Erro ao renomear o notebook: $_" -Type Error
     }
@@ -4337,7 +4403,7 @@ function Invoke-PowerShellProfile {
     }
     Write-Host "Distribuição concluída para todos os usuários encontrados em C:\Users." -ForegroundColor Green
 	try {
-		iex (iwr "https://raw.githubusercontent.com/CrazyWolf13/unix-pwsh/main/Microsoft.PowerShell_profile.ps1").Content        
+		Invoke-RemoteScript -Uri "https://raw.githubusercontent.com/CrazyWolf13/unix-pwsh/main/Microsoft.PowerShell_profile.ps1"
 		Write-Log "Perfil executado com sucesso." -Type Success
     } catch {
         Write-Log "Erro ao executar o script do Perfil do PowerShell: $_" -Type Error
@@ -4346,20 +4412,38 @@ function Invoke-PowerShellProfile {
 
 
 function Update-ScriptFromCloud {
+    param(
+        [string]$UpdateServer = $ScriptConfig.UpdateServer
+    )
     Clear-Host
 Write-Log "=======================" -Type Info
 Write-Log "ATUALIZANDO SCRIPT..." -Type Info
 Write-Log "=======================" -Type Info
 
+    if ([string]::IsNullOrWhiteSpace($UpdateServer)) {
+        Write-Log "Servidor de atualização não configurado. Defina SCRIPT_UPDATE_SERVER ou informe o parâmetro UpdateServer." -Type Error
+        return
+    }
+
+    $updateHost = $UpdateServer
+    try {
+        $updateHost = ([uri]$UpdateServer).Host
+        if ([string]::IsNullOrWhiteSpace($updateHost)) {
+            $updateHost = $UpdateServer
+        }
+    } catch {
+        $updateHost = $UpdateServer
+    }
+
     try {
         Write-Log "Verificando conexão com servidor..." -Type Warning
-        if (-not (Test-Connection -ComputerName "script.colegiomundodosaber.com.br" -Count 1 -Quiet)) {
+        if (-not (Test-Connection -ComputerName $updateHost -Count 1 -Quiet)) {
             Write-Log "❌ Sem conexão. Atualização abortada." -Type Error
             return
         }
 
         Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." -Type Warning
-        irm script.colegiomundodosaber.com.br | iex
+        Invoke-RemoteScript -Uri $UpdateServer
         Write-Log "✅ Script atualizado com sucesso!" -Type Success
         Show-SuccessMessage
     } catch {
@@ -5025,6 +5109,87 @@ function Show-AdvancedSettingsMenu {
             'X' { return }
             default {
                 Write-Log "Opção inválida (Avançado)." -ForegroundColor Red
+                Start-Sleep 1
+            }
+        }
+    } while ($true)
+}
+
+function Show-SecurityMenu {
+    do {
+        Clear-Host
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "              MENU: SEGURANÇA               " -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " A) Endurecimento de privacidade"
+        Write-Host " B) Hardening do Windows"
+        Write-Host " C) Reforçar Microsoft Defender"
+        Write-Host " D) Harden Office (bloquear macros)"
+        Write-Host " E) Desfazer privacidade agressiva"
+        Write-Host " F) Restaurar macros do Office"
+        Write-Host ""
+        Write-Host " X) Voltar ao Menu Anterior" -ForegroundColor Red
+        Write-Host " Z) Executar Tudo (Sequência)" -ForegroundColor Green
+        Write-Host "=============================================" -ForegroundColor Cyan
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        Write-Log "Opção no menu Segurança: $key" -ForegroundColor Cyan
+
+        switch ($key) {
+            'A' { Enable-PrivacyHardening;       Show-SuccessMessage }
+            'B' { Enable-WindowsHardening;       Show-SuccessMessage }
+            'C' { Enable-WindowsDefenderHardening; Show-SuccessMessage }
+            'D' { Grant-HardenOfficeMacros;      Show-SuccessMessage }
+            'E' { Undo-PrivacyHardening;         Show-SuccessMessage }
+            'F' { Restore-OfficeMacros;          Show-SuccessMessage }
+            'Z' {
+                Write-Log "Executando sequência completa de Segurança..." -ForegroundColor Red
+                Enable-PrivacyHardening
+                Enable-WindowsHardening
+                Enable-WindowsDefenderHardening
+                Grant-HardenOfficeMacros
+                Show-SuccessMessage
+            }
+            'X' { return }
+            default {
+                Write-Log "Opção inválida (Segurança)." -ForegroundColor Red
+                Start-Sleep 1
+            }
+        }
+    } while ($true)
+}
+
+function Show-UpdatesMenu {
+    do {
+        Clear-Host
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "             MENU: ATUALIZAÇÕES             " -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " A) Windows Update (PSWindowsUpdate)"
+        Write-Host " B) Updates para outros produtos Microsoft"
+        Write-Host " C) Atualizar Windows + Drivers (winget)"
+        Write-Host ""
+        Write-Host " X) Voltar ao Menu Anterior" -ForegroundColor Red
+        Write-Host " Z) Executar Tudo (Sequência)" -ForegroundColor Green
+        Write-Host "=============================================" -ForegroundColor Cyan
+
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        Write-Log "Opção no menu Atualizações: $key" -ForegroundColor Cyan
+
+        switch ($key) {
+            'A' { Grant-WindowsUpdates;      Show-SuccessMessage }
+            'B' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
+            'C' { Update-WindowsAndDrivers;  Show-SuccessMessage }
+            'Z' {
+                Write-Log "Executando sequência completa de Atualizações..." -ForegroundColor Red
+                Grant-WindowsUpdates
+                Enable-OtherMicrosoftUpdates
+                Update-WindowsAndDrivers
+                Show-SuccessMessage
+            }
+            'X' { return }
+            default {
+                Write-Log "Opção inválida (Atualizações)." -ForegroundColor Red
                 Start-Sleep 1
             }
         }
@@ -5954,16 +6119,6 @@ function Invoke-MaintenanceStandard {
 }
 
 
-if (-not (Get-Command Safe-WriteProgress -ErrorAction SilentlyContinue)) {
-    function Safe-WriteProgress { param([string]$Activity,[string]$Status,[int]$PercentComplete)
-        try { Write-Progress -Activity $Activity -Status $Status -PercentComplete $PercentComplete } catch {}
-    }
-}
-if (-not (Get-Command Write-Log -ErrorAction SilentlyContinue)) {
-    function Write-Log { param([string]$Message,[string]$Type='Info'); Write-Host $Message }
-}
-
-
 function Clear-SystemLogsDeep {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
@@ -6016,14 +6171,14 @@ function Invoke-WinSxSComponentCleanup {
         [switch]$Aggressive  # usa /ResetBase
     )
 
-    $args = "/online /Cleanup-Image /StartComponentCleanup"
-    if ($Aggressive) { $args += " /ResetBase" }
-
-    Write-Log "Iniciando limpeza de componentes (WinSxS) $(if($Aggressive){"- agressiva"})..." -Type Info
-    if ($PSCmdlet.ShouldProcess("DISM.exe $args","Start-Process")) {
-        try {
-            $p = Start-Process -FilePath "Dism.exe" -ArgumentList $args -WindowStyle Hidden -Wait -PassThru
-            if ($p.ExitCode -eq 0) {
+    $dismArgs = "/online /Cleanup-Image /StartComponentCleanup"
+    if ($Aggressive) { $dismArgs += " /ResetBase" }
+␊
+    Write-Log "Iniciando limpeza de componentes (WinSxS) $(if($Aggressive){"- agressiva"})..." -Type Info␊
+    if ($PSCmdlet.ShouldProcess("DISM.exe $dismArgs","Start-Process")) {
+        try {␊
+            $p = Start-Process -FilePath "Dism.exe" -ArgumentList $dismArgs -WindowStyle Hidden -Wait -PassThru
+            if ($p.ExitCode -eq 0) {␊
                 Write-Log "WinSxS limpo com sucesso." -Type Success
             } else {
                 Write-Log "DISM retornou código $($p.ExitCode)." -Type Warning
@@ -6127,41 +6282,6 @@ function Show-DiagnosticsMenu {
 
 <# ========== Consolidação de Funções de Manutenção (Append-Only) ========== #>
 
-# Fallbacks mínimos (caso o script original ainda não tenha carregado)
-if (-not (Get-Command Write-Log -ErrorAction SilentlyContinue)) {
-    function Write-Log { param([string]$Message,[string]$Type='Info'); Write-Host "[$Type] $Message" }
-}
-if (-not (Get-Command Safe-WriteProgress -ErrorAction SilentlyContinue)) {
-    function Safe-WriteProgress { param([string]$Activity,[string]$Status,[int]$PercentComplete)
-        try { Write-Progress -Activity $Activity -Status $Status -PercentComplete $PercentComplete } catch {}
-    }
-}
-
-# Helpers robustos
-if (-not (Get-Command Remove-ItemRobust -ErrorAction SilentlyContinue)) {
-    function Remove-ItemRobust {
-        [CmdletBinding()]
-        param(
-            [Parameter(Mandatory)][string]$Path,
-            [int]$Retries = 3,
-            [int]$DelayMs = 250
-        )
-        for($i=1; $i -le $Retries; $i++){
-            try {
-                if (Test-Path -LiteralPath $Path) {
-                    Remove-Item -LiteralPath $Path -Force -Recurse -ErrorAction Stop
-                }
-                return $true
-            } catch {
-                Start-Sleep -Milliseconds $DelayMs
-                if ($i -eq $Retries) {
-                    Write-Log "Falha ao remover '$Path': $($_.Exception.Message)" -Type Warning
-                    return $false
-                }
-            }
-        }
-    }
-}
 if (-not (Get-Command Stop-ServiceGracefully -ErrorAction SilentlyContinue)) {
     function Stop-ServiceGracefully {
         [CmdletBinding()]
