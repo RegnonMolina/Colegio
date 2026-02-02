@@ -71,7 +71,7 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-        LogFilePath = Join-Path $PSScriptRoot "ScriptSupremo.log"
+        
         ConfirmBeforeDestructive = $true
         UpdateServer = $env:SCRIPT_UPDATE_SERVER
         Cleanup = @{
@@ -6577,3 +6577,4 @@ function Show-MainMenu {
         }
     } while ($true)
 }
+
