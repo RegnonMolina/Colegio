@@ -1307,19 +1307,19 @@ function Remove-SystemBloatware{
                 foreach ($userProfile in $userProfiles) {
                     $onedriveUserPath = Join-Path -Path $userProfile.FullName -ChildPath "OneDrive"
                     $onedriveLocalAppData = Join-Path -Path $userProfile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
-                    if (-not $WhatIf) {␊
-                        if (Test-Path $onedriveUserPath) {␊
-                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue␊
+                    if (-not $WhatIf) {
+                        if (Test-Path $onedriveUserPath) {
+                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue
                             Write-Log "Removido pasta OneDrive de $($userProfile.BaseName)." -Type Debug
-                        }␊
-                        if (Test-Path $onedriveLocalAppData) {␊
-                            Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue␊
+                        }
+                        if (Test-Path $onedriveLocalAppData) {
+                            Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
                             Write-Log "Removido AppData de OneDrive de $($userProfile.BaseName)." -Type Debug
-                        }␊
-                    } else {␊
+                        }
+                    } else {
                         Write-Log "Modo WhatIf: Pastas OneDrive e AppData de $($userProfile.BaseName) seriam removidas." -Type Debug
-                    }␊
-                }␊
+                    }
+                }
                 $currentOnedriveStep++
 
                 # Limpando entradas de registro do OneDrive
@@ -1915,19 +1915,19 @@ function Remove-SystemBloatware {
                 foreach ($userProfile in $userProfiles) {
                     $onedriveUserPath = Join-Path -Path $userProfile.FullName -ChildPath "OneDrive"
                     $onedriveLocalAppData = Join-Path -Path $userProfile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
-                    if (-not $WhatIf) {␊
-                        if (Test-Path $onedriveUserPath) {␊
-                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue␊
+                    if (-not $WhatIf) {
+                        if (Test-Path $onedriveUserPath) {
+                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue
                             Write-Log "Removido pasta OneDrive de $($userProfile.BaseName)." -Type Debug
-                        }␊
-                        if (Test-Path $onedriveLocalAppData) {␊
-                            Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue␊
+                        }
+                        if (Test-Path $onedriveLocalAppData) {
+                            Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
                             Write-Log "Removido AppData de OneDrive de $($userProfile.BaseName)." -Type Debug
-                        }␊
-                    } else {␊
+                        }
+                    } else {
                         Write-Log "Modo WhatIf: Pastas OneDrive e AppData de $($userProfile.BaseName) seriam removidas." -Type Debug
-                    }␊
-                }␊
+                    }
+                }
                 $currentOnedriveStep++
 
                 # Limpando entradas de registro do OneDrive
@@ -4201,21 +4201,21 @@ function Rename-Notebook {
     $timeout = 15
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $newNameInput = $null
-Write-Log "Digite o novo nome do notebook e pressione ENTER (ou aguarde $timeout segundos para cancelar):" -Type Info␊
+Write-Log "Digite o novo nome do notebook e pressione ENTER (ou aguarde $timeout segundos para cancelar):" -Type Info
     while ($sw.Elapsed.TotalSeconds -lt $timeout -and !$newNameInput) {
-        if ([System.Console]::KeyAvailable) {␊
+        if ([System.Console]::KeyAvailable) {
             $newNameInput = Read-Host
-        } else {␊
-            Start-Sleep -Milliseconds 200␊
-        }␊
-    }␊
-    $sw.Stop()␊
+        } else {
+            Start-Sleep -Milliseconds 200
+        }
+    }
+    $sw.Stop()
     if ([string]::IsNullOrWhiteSpace($newNameInput)) {
-        Write-Log "Tempo esgotado. Renomeação cancelada." -Type Error␊
-        Start-Sleep -Seconds 2␊
-        return␊
-    }␊
-    try {␊
+        Write-Log "Tempo esgotado. Renomeação cancelada." -Type Error
+        Start-Sleep -Seconds 2
+        return
+    }
+    try {
         Rename-Computer -NewName $newNameInput -Force
         Write-Log "Nome do notebook alterado para: $newNameInput. Reinicie para aplicar." -Type Success
     } catch {
@@ -6173,12 +6173,12 @@ function Invoke-WinSxSComponentCleanup {
 
     $dismArgs = "/online /Cleanup-Image /StartComponentCleanup"
     if ($Aggressive) { $dismArgs += " /ResetBase" }
-␊
-    Write-Log "Iniciando limpeza de componentes (WinSxS) $(if($Aggressive){"- agressiva"})..." -Type Info␊
+
+    Write-Log "Iniciando limpeza de componentes (WinSxS) $(if($Aggressive){"- agressiva"})..." -Type Info
     if ($PSCmdlet.ShouldProcess("DISM.exe $dismArgs","Start-Process")) {
-        try {␊
+        try {
             $p = Start-Process -FilePath "Dism.exe" -ArgumentList $dismArgs -WindowStyle Hidden -Wait -PassThru
-            if ($p.ExitCode -eq 0) {␊
+            if ($p.ExitCode -eq 0) {
                 Write-Log "WinSxS limpo com sucesso." -Type Success
             } else {
                 Write-Log "DISM retornou código $($p.ExitCode)." -Type Warning
