@@ -71,7 +71,7 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-        
+        LogFilePath = Join-Path $PSScriptRoot "ScriptSupremo.log"
         ConfirmBeforeDestructive = $true
         UpdateServer = $env:SCRIPT_UPDATE_SERVER
         Cleanup = @{
@@ -270,6 +270,8 @@ function Test-RequiredFunctions {
     } else {
         Write-Log "`n✔️ Todas as funções estão disponíveis. Continuando execução..." -Type Info 
     }
+
+    return $allGood
 }
 
 function Update-SystemErrorMessage {
@@ -302,8 +304,7 @@ function Update-SystemErrorMessage {
 function Invoke-Cleanup {
     Write-Log "Iniciando o orquestrador de Limpeza e Manutenção Completa..." -Type Info
 
-   
-			# dentro do Invoke-Cleanup (mantendo seu estilo de try/catch e Write-Log):
+   			# dentro do Invoke-Cleanup (mantendo seu estilo de try/catch e Write-Log):
 			try { Clear-Prefetch -ErrorAction Stop }        catch { Write-Log "ERRO: Clear-Prefetch: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
 			try { Clear-PrintSpooler -ErrorAction Stop }    catch { Write-Log "ERRO: Clear-PrintSpooler: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
 			try { Clear-TemporaryFiles -ErrorAction Stop }  catch { Write-Log "ERRO: Clear-TemporaryFiles: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -322,7 +323,7 @@ function Invoke-Bloatware {
     try { Grant-PrivacyAndBloatwarePrevention -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyAndBloatwarePrevention: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware : $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }    
+    try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
 	try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
 
     Write-Log "Todas as rotinas de bloatware foram concluídas pelo orquestrador." -Type Success
@@ -394,7 +395,7 @@ function Invoke-Undo {
     Write-Log "Iniciando o orquestrador de Restauração..." -Type Info
 
     try { Grant-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ActionCenter-Notifications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Restore-ControlPanelTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-ControlPanelTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Restore-SystemDefaults -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-SystemDefaults: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Restore-DefaultIPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-DefaultIPv6: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Restore-DefaultUAC -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-DefaultUAC: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Restore-OfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-OfficeMacros: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -1044,47 +1045,47 @@ function Grant-Cleanup {
             # Acompanhe o progresso geral
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Limpeza de cache ARP..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions
             Clear-ARP -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Limpeza de cache DNS..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-DNS -WhatIf:$WhatIf
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+			Clear-DNS -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Limpeza de Prefetch..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-Prefetch -WhatIf:$WhatIf
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+			Clear-Prefetch -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Limpeza do spooler de impressão..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-PrintSpooler -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Limpeza de arquivos temporários..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-TemporaryFiles -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Limpeza do cache do Windows Update..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-WUCache -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Limpeza do WinSxS..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-WinSxS -WhatIf:$WhatIf
 
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Limpeza profunda do sistema (logs, etc.)..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-DeepSystemCleanup -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Verificando/removendo Windows.old..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Remove-WindowsOld -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Agendando ChkDsk para o próximo reboot..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             New-ChkDsk -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-WriteProgress -Activity $activity -Status "Otimizando volumes do disco..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
+			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Optimize-Volumes -WhatIf:$WhatIf
 
             Write-Log "Todas as rotinas de limpeza e otimização foram concluídas." -Type Success
@@ -2323,10 +2324,9 @@ function Update-PowerShell {
             Grant-WriteProgress -Activity $activity -Status "Definindo política de execução..." -PercentComplete 30
             Write-Log "Definindo política de execução para 'Unrestricted' no escopo CurrentUser para permitir scripts." -Type Info
             if (-not $WhatIf) {
-				Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
-            } else {
-                Write-Log "Modo WhatIf: Política de execução seria definida para 'Unrestricted'." -Type Debug
-            }
+				# O script baixado pode necessitar de conexão com a internet
+                Invoke-RemoteScript -Uri "https://aka.ms/install-powershell.ps1" -Arguments @("-UseMSI")
+                Write-Log "Script de instalação/atualização do PowerShell executado. Por favor, verifique a saída para detalhes." -Type Success
 
             Grant-WriteProgress -Activity $activity -Status "Baixando e executando script de instalação..." -PercentComplete 60
             Write-Log "Baixando e executando script oficial de instalação/atualização do PowerShell." -Type Info
@@ -2557,7 +2557,7 @@ function Test-InternetSpeed {
     if ($PSCmdlet.ShouldProcess("velocidade da internet", "testar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Verificando instalação do Winget..." -PercentComplete 10
-            if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            if (-not (Test-CommandExists -Command "winget")) {
                 Write-Log "Winget não está disponível neste sistema. Não é possível instalar o Speedtest CLI." -Type Error
                 Write-Log "Por favor, instale o Winget para usar esta função ou instale o Speedtest CLI manualmente." -Type Info
                 return
@@ -3094,7 +3094,7 @@ function Set-SystemTweaks {
         [switch]$ApplyExtraTweaks,
 
         [Parameter(Mandatory=$false)]
-        [switch]$RestoreDefaults # Usaremos a função Restore-ControlPanelTweaks para isso
+        [switch]$RestoreDefaults # Usaremos a função Restore-SystemDefaults para isso
     )
 
     Write-Log "Iniciando aplicação/restauração de tweaks no sistema..." -Type Info
@@ -3109,7 +3109,7 @@ function Set-SystemTweaks {
     # ---- Se o usuário quer restaurar padrões, chame a função específica de restauração ----
     if ($RestoreDefaults) {
         Write-Log "Executando restauração de configurações padrão..." -Type Info
-        Restore-ControlPanelTweaks # Chama a função que você já tem para restauração
+        Restore-SystemDefaults # Chama a função que você já tem para restauração
         return # Termina a função após a restauração
     }
 
@@ -3230,7 +3230,6 @@ function Set-SystemTweaks {
                 $currentChange++
                 $percentComplete = ($currentChange / $totalChanges) * 100
 				Grant-WriteProgress -Activity $activity -Status "Processando caminho: $path" -PercentComplete $percentComplete
-
                 if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
                     Write-Log "Verificando/Criando caminho de registro: $path" -Type Debug
                     try {
@@ -3268,7 +3267,7 @@ function Set-SystemTweaks {
         } finally {
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
             }
-}
+ }
 }
 
 function Invoke-RemoteScript {
@@ -3329,8 +3328,8 @@ function Invoke-Diagnose {
     Invoke-All-DiagnosticsAdvanced
 }
 
-function Enable-PrivacyHardening {
-    [CmdletBinding(SupportsShouldProcess=$true)]
+function Enable-PrivacyHardening {    
+[CmdletBinding(SupportsShouldProcess=$true)]
     param(
        
             )
@@ -4358,7 +4357,7 @@ function Invoke-WindowsActivator {
 Write-Log "==== ATIVAÇÃO DO WINDOWS ====" -Type Info
 Write-Log "Executando script de ativação oficial (get.activated.win)..." -Type Warning
     try {
-        irm https://get.activated.win | iex
+        Invoke-RemoteScript -Uri "https://get.activated.win"
         Write-Log "Script de ativação executado com sucesso." -Type Success
     } catch {
         Write-Log "Erro ao executar o script de ativação: $_" -Type Error
@@ -4371,12 +4370,13 @@ function Invoke-ChrisTitusToolbox {
 Write-Log "==== CHRIS TITUS TOOLBOX ====" -Type Info
 Write-Log "Executando toolbox oficial do site christitus.com..." -Type Warning
     try {
-        irm christitus.com/win | iex
+        Invoke-RemoteScript -Uri "https://christitus.com/win"
         Write-Log "Chris Titus Toolbox executado com sucesso." -Type Success
     } catch {
         Write-Log "Erro ao executar o script do Chris Titus: $_" -Type Error
     }
 }
+
 
 function Invoke-PowerShellProfile {
     param (
@@ -4658,6 +4658,16 @@ function Restore-BloatwareSafe {
     Show-SuccessMessage
 }
 
+function Restore-ControlPanelTweaks {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+
+    Write-Log "Restaurando tweaks do Painel de Controle/Explorer para padrões..." -Type Warning
+    if ($PSCmdlet.ShouldProcess("configurações do sistema", "restaurar padrões")) {
+        Restore-SystemDefaults
+    }
+}
+
 function Restore-SystemDefaults {
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
     param()
@@ -4667,7 +4677,7 @@ function Restore-SystemDefaults {
     # Dicionário de alterações de registro para restaurar padrões
     # ATENÇÃO: Os valores aqui devem ser os valores PADRÃO do Windows ou os valores que reabilitam funcionalidades.
     $restoreDefaults = @{
-        # --- Configurações de Explorer e Visual FX (origem: Grant-ControlPanelTweaks e parte de Restore-ControlPanelTweaks) ---
+        # --- Configurações de Explorer e Visual FX (origem: Grant-ControlPanelTweaks e parte de Restore-SystemDefaults) ---
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" = @{NoControlPanel = 0; NoViewContextMenu = 0; NoDesktop = 0; NoFind = 0};
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{
             Start_JumpListsItems = 10; # Padrão é 10 atalhos recentes
@@ -4990,6 +5000,7 @@ function Show-PersonalizationTweaksMenu {
         Write-Host " H) Habilitar sudo embutido (Windows 11 24H2+)"
         Write-Host " I) Reforçar e ativar Microsoft Defender"      # NOVO
         Write-Host " J) Política de Energia (AC nunca; DC 60 min)" # NOVO
+        Write-Host " K) Menu clássico de aparência"
         Write-Host ""
         Write-Host " X) Voltar ao Menu Anterior"    -ForegroundColor Red
 		Write-Host " Z) Executar Todos (Sequência)" -ForegroundColor Green
@@ -5009,6 +5020,7 @@ function Show-PersonalizationTweaksMenu {
             'H' { Enable-Sudo;                      Show-SuccessMessage }
             'I' { Enable-WindowsDefenderHardening;  Show-SuccessMessage } # NOVO
             'J' { Set-PowerOptionsByPowerSource -BatterySleepMinutes 60; Show-SuccessMessage } # NOVO
+            'K' { Show-PersonalizationMenu }
             'Z' {
                 Write-Log "Executando sequência completa de Personalização..." -ForegroundColor Red
                 Enable-TaskbarEndTask
@@ -5021,6 +5033,7 @@ function Show-PersonalizationTweaksMenu {
                 Enable-Sudo
                 Enable-WindowsDefenderHardening
                 Set-PowerOptionsByPowerSource -BatterySleepMinutes 60
+                Show-PersonalizationMenu
                 Show-SuccessMessage
             }
             'X' { return }
@@ -5168,6 +5181,7 @@ function Show-UpdatesMenu {
         Write-Host " A) Windows Update (PSWindowsUpdate)"
         Write-Host " B) Updates para outros produtos Microsoft"
         Write-Host " C) Atualizar Windows + Drivers (winget)"
+        Write-Host " D) Atualizar PowerShell"
         Write-Host ""
         Write-Host " X) Voltar ao Menu Anterior" -ForegroundColor Red
         Write-Host " Z) Executar Tudo (Sequência)" -ForegroundColor Green
@@ -5180,11 +5194,13 @@ function Show-UpdatesMenu {
             'A' { Grant-WindowsUpdates;      Show-SuccessMessage }
             'B' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
             'C' { Update-WindowsAndDrivers;  Show-SuccessMessage }
+            'D' { Update-PowerShell;         Show-SuccessMessage }
             'Z' {
                 Write-Log "Executando sequência completa de Atualizações..." -ForegroundColor Red
                 Grant-WindowsUpdates
                 Enable-OtherMicrosoftUpdates
                 Update-WindowsAndDrivers
+                Update-PowerShell
                 Show-SuccessMessage
             }
             'X' { return }
@@ -5381,7 +5397,8 @@ function Show-ExternalScriptsMenu {
         Write-Host " A) Rodar Ativador get.activated.win"
         Write-Host " B) Executar Chris Titus Toolbox"
         Write-Host " C) Atualizar Script Supremo pela URL"
-        Write-Host " D) Script pra perfil PowerShell"
+		Write-Host " D) Atualizar PowerShell"
+        Write-Host " E) Script pra perfil PowerShell"
 		Write-Host ""
         Write-Host " X) Voltar" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5390,7 +5407,8 @@ function Show-ExternalScriptsMenu {
             'A' { Invoke-WindowsActivator }
             'B' { Invoke-ChrisTitusToolbox }
             'C' { Update-ScriptFromCloud }
-			'D' { Invoke-PowerShellProfile }
+			'D' { Update-PowerShell }
+			'E' { Invoke-PowerShellProfile }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5414,6 +5432,8 @@ function Show-RestoreMenu {
         Write-Host " I) Restaurar macros Office"
         Write-Host " J) Restaurar IPv6"
         Write-Host " K) Reabilitar notificações Action Center"
+        Write-Host " L) Orquestrador de restauração (completo)"
+        Write-Host " M) Restaurar configurações padrão do sistema"
 		Write-Host ""
         Write-Host " X) Voltar" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5430,6 +5450,8 @@ function Show-RestoreMenu {
             'I' { Restore-OfficeMacros }
             'J' { Restore-DefaultIPv6 }
             'K' { Grant-ActionCenter-Notifications }
+            'L' { Invoke-Undo }
+            'M' { Restore-SystemDefaults }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5611,6 +5633,7 @@ function Show-CleanupMenu {
         Write-Host " I) Iniciar Verificação DISM"
         Write-Host " J) Iniciar Verificação SFC"
         Write-Host " K) Agendar ChkDsk no Reboot"
+        Write-Host " L) Rotina agrupada (Grant-Cleanup)"
         Write-Host ""
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
@@ -5629,6 +5652,7 @@ function Show-CleanupMenu {
             'I' { Invoke-DISM-Scan; Show-SuccessMessage }
             'J' { Invoke-SFC-Scan; Show-SuccessMessage }
             'K' { New-ChkDsk; Show-SuccessMessage }
+            'L' { Grant-Cleanup; Show-SuccessMessage }
             'Z' { Invoke-Cleanup; Show-SuccessMessage } # Chama o orquestrador de Limpeza
             'X' { return }
             default {
@@ -5780,16 +5804,8 @@ function Show-MainMenu {
             'L' { Show-WindowsFeaturesMenu }
             'M' { Show-PersonalizationTweaksMenu }
             'N' { Show-RestoreMenu }
-            'Y' {
-                Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
-                Restart-Computer -Force
-                # O script será encerrado aqui, pois o computador será reiniciado.
-            }
-            'Z' {
-                Write-Host 'Desligando o sistema...' -ForegroundColor Cyan
-                Stop-Computer -Force
-                # O script será encerrado aqui, pois o computador será desligado.
-            }
+            'Y' { Restart-ComputerConfirmation }
+            'Z' { Stop-ComputerConfirmation }
             'X' {
                 Write-Host "Saindo do script. Pressione qualquer tecla para fechar..." -ForegroundColor Magenta
                 [void][System.Console]::ReadKey($true) # Espera por qualquer tecla
@@ -5806,12 +5822,22 @@ function Show-MainMenu {
 # 🔧 Função principal: ponto de entrada do script
 function Start-ScriptSupremo {
     Write-Log "`n🛠️ Iniciando o script de manutenção..." -Type Info
+    $requiredFunctions = @(
+        "Show-MainMenu",
+        "Invoke-Cleanup",
+        "Invoke-Tweaks",
+        "Invoke-NetworkUtilities",
+        "Invoke-All-DiagnosticsAdvanced"
+    )
+    if (-not (Test-RequiredFunctions -FunctionList $requiredFunctions)) {
+        Suspend-Script
+    }
 
     try {
         Write-Log "⚙️ Chamando o menu principal..." -Type Warning
         Show-MainMenu
     } catch {
-        Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Error
+    Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Error
     }
 }
 
@@ -6577,4 +6603,3 @@ function Show-MainMenu {
         }
     } while ($true)
 }
-
