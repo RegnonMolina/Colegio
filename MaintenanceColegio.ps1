@@ -174,14 +174,14 @@ function Write-Log {
         if (-not (Test-Path $logBaseDirectory)) {
             New-Item -Path $logBaseDirectory -ItemType Directory -Force | Out-Null
             Write-Host "Diretório de log '$logBaseDirectory' criado." -ForegroundColor DarkGreen
-			
+        }
     } catch {
         # Se falhar ao criar o diretório, logar isso no console (não há arquivo de log ainda)
         Write-Host "ERRO CRÍTICO: Não foi possível criar o diretório de log '$logBaseDirectory'. As mensagens serão apenas no console. Verifique se o script está rodando como Administrador e se há permissões de escrita. Erro: $($_.Exception.Message)" -ForegroundColor Red
         # Definir logFilePath para nulo para evitar tentativas futuras de escrita no arquivo
         $logFilePath = $null
     }
-}
+
     # Mapear tipos de log para português
     $tipoPortugues = switch ($Type.ToLower()) {
         "info" { "INFORMAÇÃO" }
@@ -231,8 +231,8 @@ function Write-Log {
 
     # Imprime no console com a cor definida
     Write-Host $logEntry -ForegroundColor $consoleColor
-}
 
+}
 # endregion
 
 # --- Funções Auxiliares de Interação ---
@@ -890,10 +890,6 @@ function Clear-Prefetch {
             $prefetchPath = "$env:SystemRoot\Prefetch"
 
             if (Test-Path $prefetchPath) {
-                # Excluir o layout.ini, que é protegido e não deve ser removido
-                # Para evitar erros desnecessários e garantir que ele não tente remover a pasta inteira
-                $excludePath = Join-Path $prefetchPath "Layout.ini"
-
                 Grant-WriteProgress -Activity $activity -Status "Removendo arquivos Prefetch (excluindo Layout.ini)..." -PercentComplete 50
                 Write-Log "Removendo arquivos em '$prefetchPath\' (exceto Layout.ini) - isso pode demorar um pouco em sistemas com muitos arquivos..." -Type Info
 
@@ -1049,43 +1045,43 @@ function Grant-Cleanup {
             Clear-ARP -WhatIf:$WhatIf
             
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
-			Clear-DNS -WhatIf:$WhatIf
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Clear-DNS -WhatIf:$WhatIf
             
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
-			Clear-Prefetch -WhatIf:$WhatIf
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Clear-Prefetch -WhatIf:$WhatIf
             
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-PrintSpooler -WhatIf:$WhatIf
             
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-TemporaryFiles -WhatIf:$WhatIf
             
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-WUCache -WhatIf:$WhatIf
             
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-WinSxS -WhatIf:$WhatIf
 
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Clear-DeepSystemCleanup -WhatIf:$WhatIf
             
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Remove-WindowsOld -WhatIf:$WhatIf
             
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             New-ChkDsk -WhatIf:$WhatIf
             
             $completedFunctions++
-			Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
             Optimize-Volumes -WhatIf:$WhatIf
 
             Write-Log "Todas as rotinas de limpeza e otimização foram concluídas." -Type Success
@@ -2324,9 +2320,10 @@ function Update-PowerShell {
             Grant-WriteProgress -Activity $activity -Status "Definindo política de execução..." -PercentComplete 30
             Write-Log "Definindo política de execução para 'Unrestricted' no escopo CurrentUser para permitir scripts." -Type Info
             if (-not $WhatIf) {
-				# O script baixado pode necessitar de conexão com a internet
+                # O script baixado pode necessitar de conexão com a internet
                 Invoke-RemoteScript -Uri "https://aka.ms/install-powershell.ps1" -Arguments @("-UseMSI")
                 Write-Log "Script de instalação/atualização do PowerShell executado. Por favor, verifique a saída para detalhes." -Type Success
+            }
 
             Grant-WriteProgress -Activity $activity -Status "Baixando e executando script de instalação..." -PercentComplete 60
             Write-Log "Baixando e executando script oficial de instalação/atualização do PowerShell." -Type Info
@@ -2349,6 +2346,7 @@ function Update-PowerShell {
         }
     }
 }
+
 
 #endregion
 
@@ -6603,5 +6601,3 @@ function Show-MainMenu {
         }
     } while ($true)
 }
-
-
