@@ -71,7 +71,6 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-        LogFilePath = Join-Path $PSScriptRoot "ScriptSupremo.log"
         ConfirmBeforeDestructive = $true
         UpdateServer = $env:SCRIPT_UPDATE_SERVER
         Cleanup = @{
@@ -117,9 +116,6 @@ $ScriptConfig = @{
         HideOneDriveFolder = $true
     }
 }
-
-# Inicializa o arquivo de log
-Set-Content -Path $ScriptConfig.LogFilePath -Value "" -Encoding UTF8 -ErrorAction SilentlyContinue | Out-Null
 
 # Configura TLS 1.2 para downloads seguros
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -6601,3 +6597,4 @@ function Show-MainMenu {
         }
     } while ($true)
 }
+
