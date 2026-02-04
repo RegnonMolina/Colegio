@@ -174,7 +174,6 @@ function Write-Log {
         if (-not (Test-Path $logBaseDirectory)) {
             New-Item -Path $logBaseDirectory -ItemType Directory -Force | Out-Null
             Write-Host "Diretório de log '$logBaseDirectory' criado." -ForegroundColor DarkGreen
-        }
     } catch {
         # Se falhar ao criar o diretório, logar isso no console (não há arquivo de log ainda)
         Write-Host "ERRO CRÍTICO: Não foi possível criar o diretório de log '$logBaseDirectory'. As mensagens serão apenas no console. Verifique se o script está rodando como Administrador e se há permissões de escrita. Erro: $($_.Exception.Message)" -ForegroundColor Red
@@ -6603,3 +6602,4 @@ function Show-MainMenu {
         }
     } while ($true)
 }
+
