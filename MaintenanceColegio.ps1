@@ -4867,19 +4867,19 @@ try {
     # 3) Rodar remoção de bloatware
     if ($RunBloatwareRemoval -or $RunAllCleanup) {
         Write-Log -Message "Iniciando remoção de bloatware..." -Type Info 
-        Invoke-Bloatware @($WhatIf ? @{WhatIf=$true} : @{}) 
+        Invoke-Bloatware @($WhatIf @{WhatIf=$true} : @{}) 
     }
 
     # 4) Rodar ajustes de privacidade
     if ($RunPrivacyTweaks -or $RunAllCleanup) {
         Write-Log -Message "Aplicando tweaks de privacidade..." -Type Info 
-        Grant-PrivacyTweaks @($WhatIf ? @{WhatIf=$true} : @{}) 
+        Grant-PrivacyTweaks @($WhatIf @{WhatIf=$true} : @{}) 
     }
 
     # 5) Rodar otimização de rede
     if ($RunNetworkOptimization -or $RunAllCleanup) {
         Write-Log -Message "Aplicando otimizações de rede..." -Type Info
-        Optimize-NetworkPerformance @($WhatIf ? @{WhatIf=$true} : @{})
+        Optimize-NetworkPerformance @($WhatIf @{WhatIf=$true} : @{})
     }
 
     # 6) Instalar aplicativos (se solicitado) - Assumindo que Install-Applications existe em outro trecho
@@ -4891,7 +4891,7 @@ try {
     # 7) Rodar diagnósticos (se solicitado)
     if ($RunDiagnostics) {
         Write-Log -Message "Executando diagnósticos do sistema..." -Type Info
-        Invoke-All-DiagnosticsAdvanced @($WhatIf ? @{WhatIf=$true} : @{})
+        Invoke-All-DiagnosticsAdvanced @($WhatIf @{WhatIf=$true} : @{})
     }
 
     # 8) Remover Copilot (se solicitado)
@@ -4904,19 +4904,19 @@ try {
     # 9) Desativar Recall (se solicitado)
     if ($DisableRecall) {
         Write-Log -Message "Desativando Windows Recall..." -Type Info
-        Disable-WindowsRecall @($WhatIf ? @{WhatIf=$true} : @{})
+        Disable-WindowsRecall @($WhatIf @{WhatIf=$true} : @{})
     }
 
     # 10) Executar Windows Update (se solicitado)
     if ($RunWindowsUpdate) {
         Write-Log -Message "Iniciando gerenciamento de atualizações do Windows..." -Type Info
-        Grant-WindowsUpdates @($WhatIf ? @{WhatIf=$true} : @{})
+        Grant-WindowsUpdates @($WhatIf @{WhatIf=$true} : @{})
     }
 
     # 11) Aplicar plano de energia otimizado (se solicitado)
     if ($ApplyOptimizedPowerPlan) {
         Write-Log -Message "Aplicando plano de energia otimizado..." -Type Info
-        Set-OptimizedPowerPlan @($WhatIf ? @{WhatIf=$true} : @{})
+        Set-OptimizedPowerPlan @($WhatIf @{WhatIf=$true} : @{})
     }
 
     Write-Log -Message "Script concluído com sucesso." -Type Success
@@ -6597,4 +6597,5 @@ function Show-MainMenu {
         }
     } while ($true)
 }
+
 
