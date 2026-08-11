@@ -62,7 +62,12 @@ Write-Host "--------------------------------------------------------------------
 # =========================================================================
 
 # Configurações globais do PowerShell
-$global:ConfirmPreference = 'None'
+# CORREÇÃO #2 (auditoria): 'None' desligava TODAS as confirmações e anulava o
+# ShouldProcess das funções de remoção (a "segurança" ficava só cosmética).
+# Revertido para o comportamento padrão do PowerShell: operações destrutivas com
+# ConfirmImpact='High' passam a pedir confirmação.
+# >>> Para rodar 100% silencioso de novo (como era antes), descomente a linha abaixo:
+# $global:ConfirmPreference = 'None'
 $global:ProgressPreference = 'Continue'
 $global:ErrorActionPreference = 'Continue'
 $global:WarningPreference = 'Continue'
@@ -71,9 +76,9 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-        ConfirmBeforeDestructive = $true
-        UpdateServer = $env:SCRIPT_UPDATE_SERVER
-        Cleanup = @{
+    LogFilePath = Join-Path $PSScriptRoot "ScriptSupremo.log"
+    ConfirmBeforeDestructive = $true
+    Cleanup = @{
         CleanTemporaryFiles = $true
         CleanWUCache = $true
         OptimizeVolumes = $true
@@ -117,6 +122,9 @@ $ScriptConfig = @{
     }
 }
 
+# Inicializa o arquivo de log
+Set-Content -Path $ScriptConfig.LogFilePath -Value "" -Encoding UTF8 -ErrorAction SilentlyContinue | Out-Null
+
 # Configura TLS 1.2 para downloads seguros
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
@@ -155,20 +163,27 @@ function Write-Log {
     # Obter o nome do computador
     $computerName = $env:COMPUTERNAME # ou [System.Environment]::MachineName
 
-    # Definir o caminho completo do arquivo de log
-    if ($null -ne $ScriptConfig -and $ScriptConfig.LogFilePath) {
-        $logFilePath = $ScriptConfig.LogFilePath
-        $logBaseDirectory = Split-Path $logFilePath -Parent
-    } else {
-        # Fallback para diretório padrão caso ScriptConfig não exista
-        $logBaseDirectory = "C:\ScriptsLogs" # <--- DIRETÓRIO ESPECIFICADO PELO USUÁRIO
-        $logFilePath = "$logBaseDirectory\$computerName-ScriptLog.log"
-    }
+    # Definir o diretório base para os logs conforme sua preferência
+    $logBaseDirectory = "C:\ScriptsLogs" # <--- DIRETÓRIO ESPECIFICADO PELO USUÁRIO
+
+    # Definir o caminho completo do arquivo de log, incluindo o nome do computador
+    $logFilePath = "$logBaseDirectory\$computerName-ScriptLog.log"
 
     # Criar o diretório de log se ele não existir
     try {
         if (-not (Test-Path $logBaseDirectory)) {
             New-Item -Path $logBaseDirectory -ItemType Directory -Force | Out-Null
+            # CORREÇÃO #12 (auditoria): conceder permissão de escrita explícita ao usuário atual,
+            # evitando falha silenciosa de log por ACL herdada restritiva.
+            try {
+                $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+                $acl = Get-Acl $logBaseDirectory
+                $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($currentUser, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+                $acl.AddAccessRule($rule)
+                Set-Acl -Path $logBaseDirectory -AclObject $acl
+            } catch {
+                Write-Host "AVISO: diretório de log criado, mas não foi possível ajustar permissões: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
             Write-Host "Diretório de log '$logBaseDirectory' criado." -ForegroundColor DarkGreen
         }
     } catch {
@@ -227,8 +242,8 @@ function Write-Log {
 
     # Imprime no console com a cor definida
     Write-Host $logEntry -ForegroundColor $consoleColor
-
 }
+
 # endregion
 
 # --- Funções Auxiliares de Interação ---
@@ -266,8 +281,6 @@ function Test-RequiredFunctions {
     } else {
         Write-Log "`n✔️ Todas as funções estão disponíveis. Continuando execução..." -Type Info 
     }
-
-    return $allGood
 }
 
 function Update-SystemErrorMessage {
@@ -300,13 +313,21 @@ function Update-SystemErrorMessage {
 function Invoke-Cleanup {
     Write-Log "Iniciando o orquestrador de Limpeza e Manutenção Completa..." -Type Info
 
-   			# dentro do Invoke-Cleanup (mantendo seu estilo de try/catch e Write-Log):
-			try { Clear-Prefetch -ErrorAction Stop }        catch { Write-Log "ERRO: Clear-Prefetch: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-			try { Clear-PrintSpooler -ErrorAction Stop }    catch { Write-Log "ERRO: Clear-PrintSpooler: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-			try { Clear-TemporaryFiles -ErrorAction Stop }  catch { Write-Log "ERRO: Clear-TemporaryFiles: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-			try { Clear-WUCache -ErrorAction Stop }         catch { Write-Log "ERRO: Clear-WUCache: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-			try { Optimize-Volumes -ErrorAction Stop }      catch { Write-Log "ERRO: Optimize-Volumes: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-			try { Remove-WindowsOld -ErrorAction Stop }     catch { Write-Log "ERRO: Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    # Chame cada função dentro de seu próprio try/catch
+    try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-PrintSpooler -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-PrintSpooler: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-TemporaryFiles -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-TemporaryFiles: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-EmptyFilesAndFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-EmptyFilesAndFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-WUCache -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WUCache: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-WinSxS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WinSxS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-Cleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-Cleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Backup-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Backup-Registry: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Invoke-DISM-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-DISM-Scan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Invoke-SFC-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-SFC-Scan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { New-ChkDsk -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-ChkDsk: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
 
     Write-Log "Todas as rotinas de limpeza e manutenção foram concluídas pelo orquestrador." -Type Success
 
@@ -320,9 +341,24 @@ function Invoke-Bloatware {
     try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware : $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-	try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
+    try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
 
     Write-Log "Todas as rotinas de bloatware foram concluídas pelo orquestrador." -Type Success
+
+    Show-SuccessMessage
+}
+
+function Invoke-Diagnose {
+    Write-Log "Iniciando o orquestrador de Diagnósticos..." -Type Info
+
+    try { Invoke-All-DiagnosticsAdvanced -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-All-DiagnosticsAdvanced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Show-DiskUsage -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-DiskUsage: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Show-SystemInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-SystemInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Test-Memory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Test-Memory: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+
+    Write-Log "Todas as rotinas de diagnósticos foram concluídas pelo orquestrador." -Type Success
 
     Show-SuccessMessage
 }
@@ -391,7 +427,7 @@ function Invoke-Undo {
     Write-Log "Iniciando o orquestrador de Restauração..." -Type Info
 
     try { Grant-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ActionCenter-Notifications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Restore-SystemDefaults -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-SystemDefaults: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Restore-ControlPanelTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-ControlPanelTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Restore-DefaultIPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-DefaultIPv6: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Restore-DefaultUAC -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-DefaultUAC: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Restore-OfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-OfficeMacros: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -405,32 +441,71 @@ function Invoke-Undo {
     Show-SuccessMessage
 }
 
-function Invoke-All-DiagnosticsAdvanced {
-    Write-Log "Iniciando orquestrador de Diagnósticos Avançados..." -Type Info
-
-    try { Show-SystemInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-SystemInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-DiskUsage -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-DiskUsage: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-NetworkInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-NetworkInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Invoke-SFC-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-SFC-Scan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Invoke-DISM-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-DISM-Scan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Test-SMART-Drives -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Test-SMART-Drives: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Test-Memory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Test-Memory: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-SuccessMessage -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-SuccessMessage: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Função que você chamou e agora está definida
-
-    Write-Log "Todas as rotinas de diagnósticos avançados foram concluídas." -Type Success
-
-    Show-SuccessMessage
-}
-
 function Invoke-Colegio {
     Write-Log "Iniciando rotina completa de manutenção do Colégio..." -Type Info
-	
-	try { Invoke-NetworkUtilities -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-NetworkUtilities: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-	try { Invoke-Tweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-Tweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-	try { Invoke-Bloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-Bloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-	try { Invoke-Cleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-Cleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-	
-    Show-SuccessMessage
+
+    # CORREÇÃO #13 (auditoria): ponto de restauração criado ANTES de qualquer limpeza
+    # destrutiva (Windows.old, WinSxS, etc.). A chamada original continua mais abaixo,
+    # mas esta garante o checkpoint no início, quando ele realmente serve pra reverter.
+    try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "AVISO: Não foi possível criar ponto de restauração no início da rotina: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning }
+
+    # CORREÇÃO #6 (auditoria): backup do registro ANTES de qualquer alteração/remoção de
+    # chaves na rotina. A chamada alfabética original (Backup-Registry) continua mais abaixo.
+    try { Backup-Registry -ErrorAction Stop } catch { Write-Log "AVISO: Não foi possível fazer backup do registro no início da rotina: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning }
+
+	try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+	try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Add-WiFiNetwork -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Add-WiFiNetwork: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Backup-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Backup-Registry: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-ARP -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-ARP: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-DNS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DNS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-TemporaryFiles -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-TemporaryFiles: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-EmptyFilesAndFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-EmptyFilesAndFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-WUCache -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WUCache: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Clear-WinSxS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WinSxS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Disable-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-ActionCenter-Notifications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Disable-IPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-IPv6: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-ClassicContextMenu -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClassicContextMenu: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-ClipboardHistory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClipboardHistory: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-DarkTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-DarkTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-OtherMicrosoftUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-OtherMicrosoftUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-PowerOptions -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PowerOptions: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-PrivacyHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PrivacyHardening: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-RestartAppsAfterReboot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-RestartAppsAfterReboot: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-Sudo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-Sudo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-TaskbarEndTask -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarEndTask: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-TaskbarSeconds -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarSeconds: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-WindowsHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsHardening: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Enable-WindowsUpdateFast -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsUpdateFast: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-Cleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-Cleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-ControlPanelTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ControlPanelTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-ExtraTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ExtraTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-GPORegistrySettings -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-GPORegistrySettings: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-HardenOfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-HardenOfficeMacros: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-PrivacyAndBloatwarePrevention -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyAndBloatwarePrevention: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-PrivacyTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-SystemOptimizations -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-SystemOptimizations: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-UITweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-UITweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-WindowsUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { New-FolderForced -Path "C:\SCript" -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Optimize-NetworkPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-NetworkPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Optimize-Volumes -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-Volumes: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
+    try { Set-DnsGoogleCloudflare -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-DnsGoogleCloudflare: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Set-OptimizedPowerPlan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-OptimizedPowerPlan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Set-VisualPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-VisualPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Show-NetworkInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-NetworkInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+	try { Install-Applications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Install-Applications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+
     Write-Log "Todas as rotinas de manutenção do Colégio foram concluídas." -Type Success
 
     Show-SuccessMessage
@@ -443,183 +518,254 @@ function Invoke-Colegio {
 function Clear-TemporaryFiles {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param()
-    Write-Log "Iniciando limpeza rápida de temporários..." -Type Info
-    $activity = "Limpeza de Temporários"
-    $targets  = @("$env:TEMP\*", "$env:SystemRoot\Temp\*")
-    $i=0; $total=$targets.Count
+    Write-Log "Iniciando limpeza de arquivos temporários..." -Type Info
+    $activity = "Limpeza de Arquivos Temporários"
+    $currentStep = 1
+    $totalSteps = 2
 
     if ($PSCmdlet.ShouldProcess("arquivos temporários", "limpar")) {
-        foreach ($path in $targets) {
-            $i++; Grant-WriteProgress -Activity $activity -Status "Removendo itens em $path" -PercentComplete ([int](($i/$total)*100))
-            if (Test-Path $path) {
-                Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                    try { Remove-Item $_.FullName -Force -Recurse -ErrorAction Stop }
-                    catch { Write-Log "Não foi possível remover '$($_.FullName)': $($_.Exception.Message)" -Type Warning }
+        try {
+            Grant-WriteProgress -Activity $activity -Status "Verificando configuração do cleanmgr e executando..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            Write-Log "Verificando configuração do cleanmgr /sageset:1 e executando /sagerun:1 (pode levar vários minutos ou mais, por favor aguarde)..." -Type Warning # Aviso mais proeminente
+            if (-not $WhatIf) {
+                # Verifica se o perfil 1 existe, senão configura
+                $cleanMgrReg = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
+                if (-not (Test-Path "$cleanMgrReg\Temporary Files\LastActiveSetup")) {
+                    Write-Log "Configurando cleanmgr /sageset:1..." -Type Info # Mudado para Info
+                    Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sageset:1" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
+                }
+                Write-Log "Executando cleanmgr /sagerun:1. Isso pode demorar bastante dependendo do sistema..." -Type Info # Mensagem adicional
+                $process = Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -WindowStyle Hidden -Wait -PassThru # Adicionado -PassThru para verificar ExitCode
+                if ($process.ExitCode -ne 0) {
+                    Write-Log "AVISO: cleanmgr /sagerun:1 pode ter terminado com erros (código de saída: $($process.ExitCode))." -Type Warning
+                }
+            } else {
+                Write-Log "Modo WhatIf: cleanmgr /sageset:1 e /sagerun:1 seriam executados." -Type Debug
+            }
+            $currentStep++
+
+            Grant-WriteProgress -Activity $activity -Status "Removendo arquivos temporários adicionais..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            Write-Log "Removendo arquivos temporários adicionais ($env:TEMP e $env:SystemRoot\Temp) - isso pode demorar um pouco..." -Type Info # Aviso adicional
+            $tempPaths = @(
+                "$env:TEMP\*",
+                "$env:SystemRoot\Temp\*"
+            )
+            foreach ($path in $tempPaths) {
+                if (Test-Path $path) {
+                    Write-Log "Removendo itens em $path" -Type Debug
+                    if (-not $WhatIf) {
+                        # Iterar e remover individualmente para lidar melhor com arquivos em uso
+                        Get-ChildItem -Path $path -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+                            try {
+                                Remove-Item $_.FullName -Force -ErrorAction Stop
+                            } catch {
+                                Write-Log "AVISO: Não foi possível remover '$($_.FullName)': $($_.Exception.Message)" -Type Warning
+                            }
+                        }
+                    } else {
+                        Write-Log "Modo WhatIf: Itens em $path seriam removidos." -Type Debug
+                    }
                 }
             }
+            Write-Log "Limpeza de temporários concluída." -Type Success
+        } catch {
+            Write-Log "ERRO ao limpar arquivos temporários: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        } finally {
+            Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
         }
-        Write-Log "Temporários limpos." -Type Success
-    } else {
-        Write-Log "WhatIf: temporários seriam limpos." -Type Debug
     }
-    Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+}
+
+function Clear-EmptyFilesAndFolders {
+    <#
+    .SYNOPSIS
+        Detecta e remove arquivos de 0 byte e pastas vazias dentro dos caminhos informados.
+    .DESCRIPTION
+        Por segurança, age APENAS nos caminhos passados em -Path (padrão: pastas de
+        temporários — nunca o disco inteiro). Pula symlinks/junctions (ReparsePoint),
+        protege marcadores legítimos de 0 byte (.gitkeep, desktop.ini, etc.) e remove as
+        pastas vazias de baixo pra cima, em várias passadas (uma pasta pode ficar vazia
+        só depois que a subpasta vazia é removida). Suporta -WhatIf/-Confirm.
+    .PARAMETER Path
+        Lista de pastas-raiz onde procurar. Padrão: $env:TEMP e $env:SystemRoot\Temp.
+    .PARAMETER IncludeEmptyFiles
+        Se $true (padrão), também remove arquivos de 0 byte. Se $false, só pastas vazias.
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [string[]]$Path = @("$env:TEMP", "$env:SystemRoot\Temp"),
+        [switch]$IncludeEmptyFiles = $true
+    )
+    Write-Log "Iniciando detecção e remoção de arquivos e pastas vazias..." -Type Info
+    $activity = "Limpeza de Arquivos e Pastas Vazias"
+
+    # Arquivos de 0 byte que NUNCA devem ser removidos (marcadores/config legítimos)
+    $protectedFileNames = @('.gitkeep', '.keep', '.placeholder', 'desktop.ini', 'index.php', 'index.html')
+
+    if ($PSCmdlet.ShouldProcess(($Path -join ', '), "remover arquivos e pastas vazias")) {
+        $filesRemoved   = 0
+        $foldersRemoved = 0
+
+        foreach ($root in $Path) {
+            if (-not (Test-Path -LiteralPath $root)) {
+                Write-Log "Caminho não encontrado, ignorando: $root" -Type Warning
+                continue
+            }
+            Write-Log "Analisando: $root" -Type Info
+
+            try {
+                # --- ETAPA 1: remover arquivos de 0 byte ---
+                if ($IncludeEmptyFiles) {
+                    Grant-WriteProgress -Activity $activity -Status "Procurando arquivos vazios em $root..." -PercentComplete 30
+                    Get-ChildItem -LiteralPath $root -File -Recurse -Force -ErrorAction SilentlyContinue |
+                        Where-Object {
+                            $_.Length -eq 0 -and
+                            -not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and
+                            ($protectedFileNames -notcontains $_.Name)
+                        } | ForEach-Object {
+                            try {
+                                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                                $filesRemoved++
+                            } catch {
+                                Write-Log "AVISO: arquivo vazio não removido '$($_.FullName)': $($_.Exception.Message)" -Type Warning
+                            }
+                        }
+                }
+
+                # --- ETAPA 2: remover pastas vazias (de baixo pra cima, em passadas) ---
+                Grant-WriteProgress -Activity $activity -Status "Procurando pastas vazias em $root..." -PercentComplete 70
+                $passada = 0
+                do {
+                    $removidasNestaPassada = 0
+                    $vazias = Get-ChildItem -LiteralPath $root -Directory -Recurse -Force -ErrorAction SilentlyContinue |
+                        Where-Object {
+                            -not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and
+                            ((Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0)
+                        } | Sort-Object { $_.FullName.Length } -Descending
+
+                    foreach ($dir in $vazias) {
+                        try {
+                            Remove-Item -LiteralPath $dir.FullName -Force -ErrorAction Stop
+                            $foldersRemoved++
+                            $removidasNestaPassada++
+                        } catch {
+                            Write-Log "AVISO: pasta vazia não removida '$($dir.FullName)': $($_.Exception.Message)" -Type Warning
+                        }
+                    }
+                    $passada++
+                } while ($removidasNestaPassada -gt 0 -and $passada -lt 10)
+
+            } catch {
+                Write-Log "ERRO ao limpar vazios em '$root': $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+            }
+        }
+
+        Write-Log "Limpeza de vazios concluída. Arquivos de 0 byte removidos: $filesRemoved | Pastas vazias removidas: $foldersRemoved" -Type Success
+        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    }
 }
 
 function Clear-WUCache {
     [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-    Write-Log "Limpando cache do Windows Update..." -Type Info
-    $activity = "Limpeza WU Cache"
+    param(
+
+    )
+    Write-Log "Iniciando limpeza de cache do Windows Update..." -Type Info
+    $activity = "Limpeza de Cache do Windows Update"
+    $currentStep = 1
+    $totalSteps = 3
 
     if ($PSCmdlet.ShouldProcess("cache do Windows Update", "limpar")) {
-        Grant-WriteProgress -Activity $activity -Status "Parando serviços..." -PercentComplete 25
-        Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
-        Stop-Service bits     -Force -ErrorAction SilentlyContinue
+        try {
+            Grant-WriteProgress -Activity $activity -Status "Parando serviço 'wuauserv'..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            Write-Log "Parando serviço 'wuauserv'..." -Type Info
+            if (-not $WhatIf) {
+                # CORREÇÃO #9 (auditoria): -ErrorAction Stop para que uma falha real
+                # ao parar o serviço seja capturada pelo catch (antes era silenciosa).
+                Stop-Service wuauserv -Force -ErrorAction Stop
+            } else {
+                Write-Log "Modo WhatIf: Serviço 'wuauserv' seria parado." -Type Debug
+            }
+            $currentStep++
 
-        Grant-WriteProgress -Activity $activity -Status "Removendo SoftwareDistribution\Download..." -PercentComplete 50
-        $p = "$env:SystemRoot\SoftwareDistribution\Download\*"
-        if (Test-Path $p) { Remove-Item $p -Recurse -Force -ErrorAction SilentlyContinue }
+            Grant-WriteProgress -Activity $activity -Status "Removendo conteúdo de 'SoftwareDistribution\Download'..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            Write-Log "Removendo conteúdo de '$env:SystemRoot\SoftwareDistribution\Download\'..." -Type Info
+            if (-not $WhatIf) {
+                # CORREÇÃO #9: -ErrorAction Stop — se a pasta estiver bloqueada, o erro
+                # é registrado em vez de deixar o WU num estado inconsistente sem aviso.
+                Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction Stop
+            } else {
+                Write-Log "Modo WhatIf: Conteúdo de 'SoftwareDistribution\Download' seria removido." -Type Debug
+            }
+            $currentStep++
 
-        Grant-WriteProgress -Activity $activity -Status "Iniciando serviços..." -PercentComplete 75
-        Start-Service bits     -ErrorAction SilentlyContinue
-        Start-Service wuauserv -ErrorAction SilentlyContinue
+            Grant-WriteProgress -Activity $activity -Status "Iniciando serviço 'wuauserv'..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            Write-Log "Iniciando serviço 'wuauserv'..." -Type Info
+            if (-not $WhatIf) {
+                Start-Service wuauserv -ErrorAction SilentlyContinue
+            } else {
+                Write-Log "Modo WhatIf: Serviço 'wuauserv' seria iniciado." -Type Debug
+            }
+            Write-Log "Cache do Windows Update limpo." -Type Success
 
-        Write-Log "Cache do Windows Update limpo." -Type Success
-        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-    } else {
-        Write-Log "WhatIf: cache do Windows Update seria limpo." -Type Debug
+        } catch {
+            Write-Log "ERRO ao limpar cache do Windows Update: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+        } finally {
+            # CORREÇÃO #9: garantir que o serviço wuauserv seja SEMPRE religado, mesmo que
+            # a remoção acima tenha falhado (evita deixar o Windows Update parado/quebrado).
+            if (-not $WhatIf) {
+                try { if ((Get-Service wuauserv -ErrorAction SilentlyContinue).Status -ne 'Running') { Start-Service wuauserv -ErrorAction SilentlyContinue } } catch {}
+            }
+            Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+        }
     }
 }
 
 function Optimize-Volumes {
     [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
+    param(
 
-    Write-Log "Iniciando otimização de volumes (Defrag/ReTrim)..." -Type Info
+    )
+    Write-Log "Iniciando otimização de volumes (desfragmentação/retrim)..." -Type Info
     $activity = "Otimização de Volumes"
-    $volumes  = Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -match '^[A-Z]$' }
-    $total    = [math]::Max(1, $volumes.Count)
-    $i        = 0
+    $volumes = Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter }
+    $totalVolumes = $volumes.Count
+    $volumeCount = 0
 
-    foreach ($vol in $volumes) {
-        $i++
-        $percent = [int](($i / $total) * 100)
-        $target  = '{0}:' -f $vol.DriveLetter
-        $status  = "Otimizando volume $target"
+    if ($PSCmdlet.ShouldProcess("volumes do disco", "otimizar")) {
+        try {
+            foreach ($vol in $volumes) {
+                $volumeCount++
+                $percentComplete = ($volumeCount / $totalVolumes) * 100
+                $statusMessage = "Otimizando volume $($vol.DriveLetter):\"
 
-        Grant-WriteProgress -Activity $activity -Status $status -PercentComplete $percent
-        Write-Log "Otimizando ${target} (FS: $($vol.FileSystem))" -Type Info
+                Grant-WriteProgress -Activity $activity -Status $statusMessage "Volume: $($vol.DriveLetter):\" -PercentComplete $percentComplete
+                Write-Log "Otimizando volume $($vol.DriveLetter):\" -Type Info
 
-        if ($PSCmdlet.ShouldProcess($target, "Optimize-Volume")) {
-            try {
-                if ($vol.FileSystem -eq "NTFS") {
-                    Optimize-Volume -DriveLetter $vol.DriveLetter -Defrag -Verbose:$false -ErrorAction Stop
-                    Optimize-Volume -DriveLetter $vol.DriveLetter -ReTrim -Verbose:$false -ErrorAction SilentlyContinue
+                if (-not $WhatIf) {
+                    if ($vol.FileSystem -eq "NTFS") {
+                        Write-Log "Desfragmentando volume NTFS: $($vol.DriveLetter):\" -Type Debug
+                        Optimize-Volume -DriveLetter $vol.DriveLetter -Defrag -Verbose:$false -ErrorAction Stop
+                    } elseif ($vol.FileSystem -eq "FAT32" -or $vol.FileSystem -eq "exFAT") {
+                        Write-Log "Volume $($vol.DriveLetter): é ${$vol.FileSystem}. Desfragmentação/ReTrim não aplicável via Optimize-Volume. Pulando." -Type Warning
+                    } else { # Assume SSDs ou outros sistemas de arquivo que se beneficiam de ReTrim
+                        Write-Log "Executando ReTrim em volume: $($vol.DriveLetter):\" -Type Debug
+                        Optimize-Volume -DriveLetter $vol.DriveLetter -ReTrim -Verbose:$false -ErrorAction Stop
+                    }
                 } else {
-                    Optimize-Volume -DriveLetter $vol.DriveLetter -Analyze -Verbose:$false -ErrorAction Stop
-                }
-                Write-Log "Otimização concluída em ${target}." -Type Success
-            } catch {
-                Write-Log "Falha ao otimizar ${target}: $($_.Exception.Message)" -Type Warning
-            }
-        } else {
-            Write-Log "WhatIf: ${target} seria otimizado." -Type Debug
-        }
-    }
-
-    Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-}
-
-function Enable-WindowsDefenderHardening {
-    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='Medium')]
-    param(
-        [switch]$EnableControlledFolderAccess
-    )
-
-    Write-Log "Iniciando reforço do Microsoft Defender..." -Type Info
-    if ($PSCmdlet.ShouldProcess("Microsoft Defender", "Ativar, reforçar e atualizar")) {
-        try {
-            foreach ($svc in @('WinDefend','wscsvc','WdNisSvc')) {
-                try {
-                    $s = Get-Service -Name $svc -ErrorAction Stop
-                    if ($s.Status -ne 'Running') { Start-Service $svc -ErrorAction SilentlyContinue }
-                    Set-Service $svc -StartupType Automatic -ErrorAction SilentlyContinue
-                    Write-Log "Serviço '$svc' em execução e automático." -Type Success
-                } catch {
-                    Write-Log "Não foi possível ajustar serviço '$svc': $($_.Exception.Message)" -Type Warning
+                    Write-Log "Modo WhatIf: Volume $($vol.DriveLetter): seria otimizado (Defrag para NTFS, ReTrim para outros)." -Type Debug
                 }
             }
+            Write-Log "Otimização de volumes concluída." -Type Success
 
-            Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction SilentlyContinue
-            Set-MpPreference -DisableIOAVProtection $false -ErrorAction SilentlyContinue
-            Set-MpPreference -DisableBehaviorMonitoring $false -ErrorAction SilentlyContinue
-            Set-MpPreference -DisableScriptScanning $false -ErrorAction SilentlyContinue
-            Set-MpPreference -PUAProtection 1 -ErrorAction SilentlyContinue
-            Set-MpPreference -CloudBlockLevel 2 -ErrorAction SilentlyContinue
-            Set-MpPreference -MAPSReporting 2 -ErrorAction SilentlyContinue
-            Set-MpPreference -SubmitSamplesConsent 1 -ErrorAction SilentlyContinue
-
-            if ($EnableControlledFolderAccess) {
-                try {
-                    Set-MpPreference -EnableControlledFolderAccess Enabled -ErrorAction Stop
-                    Write-Log "Controlled Folder Access: habilitado." -Type Success
-                } catch {
-                    Write-Log "Falha ao habilitar Controlled Folder Access: $($_.Exception.Message)" -Type Warning
-                }
-            }
-
-            try {
-                Update-MpSignature -ErrorAction Stop
-                Write-Log "Assinaturas do Defender atualizadas." -Type Success
-            } catch {
-                Write-Log "Falha ao atualizar assinaturas: $($_.Exception.Message)" -Type Warning
-            }
-
-            try {
-                Start-MpScan -ScanType QuickScan -ErrorAction SilentlyContinue | Out-Null
-                Write-Log "Varredura rápida solicitada (em background)." -Type Info
-            } catch {
-                Write-Log "Não foi possível iniciar varredura rápida: $($_.Exception.Message)" -Type Warning
-            }
-
-            Write-Log "Defender reforçado/ativado com sucesso." -Type Success
         } catch {
-            Write-Log "ERRO no reforço do Defender: $($_.Exception.Message)" -Type Error
+            Write-Log "ERRO ao otimizar volumes: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+            Write-Log "Verifique se o PowerShell está rodando como Administrador e se os volumes não estão bloqueados." -Type Info
+        } finally {
+            Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
         }
-    }
-}
-
-function Set-PowerOptionsByPowerSource {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-        [int]$BatterySleepMinutes = 60
-    )
-    Write-Log "Aplicando política de energia: AC (sem suspender/hibernar) | DC (suspender em $BatterySleepMinutes min)..." -Type Info
-
-    if ($PSCmdlet.ShouldProcess("Planos de energia", "Ajustar standby/hibernar")) {
-        try {
-            powercfg -change -standby-timeout-ac 0   | Out-Null
-            powercfg -change -hibernate-timeout-ac 0 | Out-Null
-            Write-Log "Energia (AC): standby e hibernação desativados." -Type Success
-        } catch {
-            Write-Log "Falha ajustando timeouts em AC: $($_.Exception.Message)" -Type Warning
-        }
-
-        try {
-            powercfg -change -standby-timeout-dc $BatterySleepMinutes | Out-Null
-            Write-Log "Bateria (DC): standby após $BatterySleepMinutes minutos." -Type Success
-        } catch {
-            Write-Log "Falha ajustando timeout de standby em DC: $($_.Exception.Message)" -Type Warning
-        }
-
-        try {
-            $active = (powercfg -getactivescheme) 2>$null
-            if ($active) { Write-Log "Plano ativo permanece: $active" -Type Debug }
-        } catch {}
-
-        Write-Log "Política de energia aplicada." -Type Success
-    } else {
-        Write-Log "WhatIf: ajustes de energia seriam aplicados." -Type Debug
     }
 }
 
@@ -795,6 +941,7 @@ function Clear-DeepSystemCleanup {
     }
 }
 
+
 function Clear-PrintSpooler {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param()
@@ -874,6 +1021,7 @@ function Clear-PrintSpooler {
     }
 }
 
+
 function Clear-Prefetch {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param()
@@ -886,6 +1034,10 @@ function Clear-Prefetch {
             $prefetchPath = "$env:SystemRoot\Prefetch"
 
             if (Test-Path $prefetchPath) {
+                # Excluir o layout.ini, que é protegido e não deve ser removido
+                # Para evitar erros desnecessários e garantir que ele não tente remover a pasta inteira
+                $excludePath = Join-Path $prefetchPath "Layout.ini"
+
                 Grant-WriteProgress -Activity $activity -Status "Removendo arquivos Prefetch (excluindo Layout.ini)..." -PercentComplete 50
                 Write-Log "Removendo arquivos em '$prefetchPath\' (exceto Layout.ini) - isso pode demorar um pouco em sistemas com muitos arquivos..." -Type Info
 
@@ -1037,47 +1189,47 @@ function Grant-Cleanup {
             # Acompanhe o progresso geral
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions
+            Grant-WriteProgress -Activity $activity -Status "Limpeza de cache ARP..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Clear-ARP -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Limpeza de cache DNS..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Clear-DNS -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Limpeza de Prefetch..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Clear-Prefetch -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Limpeza do spooler de impressão..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Clear-PrintSpooler -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Limpeza de arquivos temporários..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Clear-TemporaryFiles -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Limpeza do cache do Windows Update..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Clear-WUCache -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Limpeza do WinSxS..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Clear-WinSxS -WhatIf:$WhatIf
 
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Limpeza profunda do sistema (logs, etc.)..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Clear-DeepSystemCleanup -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Verificando/removendo Windows.old..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Remove-WindowsOld -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Agendando ChkDsk para o próximo reboot..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             New-ChkDsk -WhatIf:$WhatIf
             
             $completedFunctions++
-            Grant-TrackProgress -Activity $activity -CurrentStep $completedFunctions -TotalSteps $totalFunctions            
+            Grant-WriteProgress -Activity $activity -Status "Otimizando volumes do disco..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
             Optimize-Volumes -WhatIf:$WhatIf
 
             Write-Log "Todas as rotinas de limpeza e otimização foram concluídas." -Type Success
@@ -1093,536 +1245,6 @@ function Grant-Cleanup {
 # endregion
 
 #region → FUNÇÕES DE REMOÇÃO DE BLOATWARE (AJUSTADAS)
-
-function Remove-SystemBloatware{
-    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
-    param(
-        # Lista de padrões de aplicativos AppX/UWP a serem removidos.
-        # Geralmente são os nomes das famílias de pacotes ou partes deles.
-        [Parameter(Mandatory=$false)]
-        [string[]]$AppxBloatwareToRemove = @(
-            "*Bing*",
-            "*Edge*", # Cuidado: desinstala o Edge
-            "*News*",
-            "*Weather*",
-            "*GetHelp*",
-            "*GetStarted*",
-            "*Maps*",
-            "*SkypeApp*",
-            "*SolitaireCollection*",
-            "*StickyNotes*",
-            "*Wallet*",
-            "*YourPhone*",
-            "*WindowsFeedback*",
-            "*Xbox*",
-            "*ZuneMusic*",
-            "*ZuneVideo*",
-            "*AppInstaller*",
-            "*VP9VideoExtensions*",
-            "*WebMediaExtensions*",
-            "*HEVCVideoExtension*",
-            "*MSN.",
-            "*OfficeHub*",
-            "*OneNote*",
-            "*Paint3D*",
-            "*People*",
-            "*Print3D*",
-            "*ScreenSketch*",
-            "*MixedRealityPortal*",
-            "*ConnectivityStore*",
-            "*DolbyAccess*",
-            "*DolbyLaboratories.DolbyAccess*",
-            "*Netflix*",
-            "*Spotify*",
-            "*TikTok*",
-            "*Instagram*",
-            "*Facebook*",
-            "*Twitter*",
-            "*Microsoft.StorePurchaseApp*",
-            "*WindowsDefaultLockScreen*",
-            "*WindowsMaps*",
-            "*WindowsMail*",
-            "*Microsoft.GamingApp*",
-            "*GamingServices*",
-            "*Windows.ContactSupport*",
-            "*Microsoft.Windows.Photos.Addon*",
-            "*LinkedIn*",
-            "*OutlookForWindows*"
-        ),
-        # Lista de aplicativos AppX/UWP a serem MANTIDOS, mesmo que correspondam a um padrão em $AppxBloatwareToRemove.
-        [Parameter(Mandatory=$false)]
-        [string[]]$AppxWhitelist = @(
-            "Microsoft.DesktopAppInstaller",
-            "Microsoft.LockApp",
-            "Microsoft.NET.Native.Framework.2.2", # Exemplo de versão, você pode precisar ajustar para *
-            "Microsoft.NET.Native.Runtime.2.2", # Exemplo de versão, você pode precisar ajustar para *
-            "Microsoft.Paint",
-            "Microsoft.Store",
-            "Microsoft.UI.Xaml.2.8", # Exemplo de versão, você pode precisar ajustar para *
-            "Microsoft.VCLibs.140.00", # Exemplo de versão, você pode precisar ajustar para *
-            "Microsoft.Windows.Photos",
-            "Microsoft.Windows.SecHealthUI",
-            "Microsoft.Windows.ShellExperienceHost",
-            "Microsoft.Windows.StartMenuExperienceHost",
-            "Microsoft.WindowsAlarms",
-            "Microsoft.WindowsCalculator",
-            "Microsoft.WindowsCamera",
-            "Microsoft.WindowsNotepad",
-            "Microsoft.WindowsSoundRecorder",
-            "Microsoft.WindowsTerminal"
-        ),
-        # Lista de nomes de exibição de aplicativos específicos a serem desinstalados (AppX ou Win32 via Winget)
-        # Copilot e Teams estão aqui, e serão tratados de forma específica internamente.
-        [Parameter(Mandatory=$false)]
-        [string[]]$SpecificApplicationsToUninstall = @(
-            "Assistência para Jogos", # Xbox Game Bar / Gaming Services
-            "Clipchamp",
-            "Copilot", # Sua lógica de remoção será integrada
-            "Microsoft Teams",
-            "Microsoft To Do",
-            "Notas Autoadesivas",
-            "Outlook", # Novo Outlook para Windows (UWP)
-            "Paleta de Comandos", # Assumindo Windows Terminal
-            "Solitaire Collection",
-            "Xbox" # Diversos apps Xbox
-            # Adicione outros apps que você queira desinstalar especificamente via Winget ou AppX se não forem pegos pelos padrões genéricos
-        ),
-        # Se True, tenta remover o OneDrive completamente.
-        [Parameter(Mandatory=$false)]
-        [switch]$RemoveOneDrive,
-        # Se True, tenta desabilitar o Windows Recall (se presente).
-        [Parameter(Mandatory=$false)]
-        [switch]$DisableWindowsRecall,
-        # Se True, tenta desativar/remover tarefas agendadas de bloatware/telemetria.
-        [Parameter(Mandatory=$false)]
-        [switch]$RemoveScheduledTasks,
-        # Se True, tenta remover os pins do Menu Iniciar e Barra de Tarefas.
-        [Parameter(Mandatory=$false)]
-        [switch]$RemoveStartAndTaskbarPins
-    )
-
-    Write-Log "Iniciando processo de remoção de bloatware do sistema unificado..." -Type Info
-    $activity = "Remoção de Bloatware do Sistema"
-    $overallStep = 1
-    $totalOverallSteps = 5 # Contabilizando as grandes seções: Processos, OneDrive, AppX, Específicos/Copilot/Recall, Tarefas, Pins
-
-    # Função auxiliar para o progresso (assumindo que Safe-WriteProgress está disponível)
-    # Se você ainda usa Grant-WriteProgress, renomeie-o aqui.
-    if (-not (Get-Command Safe-WriteProgress -ErrorAction SilentlyContinue)) {
-        Write-Log "Função 'Safe-WriteProgress' não encontrada. O progresso não será exibido." -Type Warning
-        function Safe-WriteProgress { param($Activity,$Status,$PercentComplete) Write-Host "$Activity - $Status ($PercentComplete%)" }
-    }
-
-    if ($PSCmdlet.ShouldProcess("bloatware do sistema", "remover")) {
-        try {
-            # --- SEÇÃO 1: Encerrar Processos de Bloatware (Lógica de Remove-SystemBloatware) ---
-            Safe-WriteProgress -Activity $activity -Status "Encerrando processos dispensáveis em segundo plano..." -PercentComplete (($overallStep / $totalOverallSteps) * 100)
-            Write-Log "Encerrando processos dispensáveis em segundo plano..." -Type Info
-            $processesToStop = @(
-                "OneDrive",
-                "YourPhone",
-                "XboxAppServices",
-                "GameBar",
-                "GameBarFTServer",
-                "GameBarPresenceWriter",
-                "FeedbackHub",
-                "PeopleApp",
-                "SkypeApp",
-                "Teams",
-                "Clipchamp",
-                "Microsoft.Copilot" # Nome potencial de processo para Copilot
-            )
-            $procCount = 0
-            foreach ($proc in $processesToStop) {
-                $procCount++
-                try {
-                    if (-not $WhatIf) {
-                        Get-Process -Name "$proc*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-                        if ($LASTEXITCODE -eq 0) {
-                            Write-Log "Processo '$proc' encerrado." -Type Verbose
-                        }
-                    } else {
-                        Write-Log "Modo WhatIf: Processo '$proc' seria encerrado." -Type Debug
-                    }
-                } catch {
-                    Write-Log "ERRO ao encerrar processo '$proc': $($_.Exception.Message)" -Type Warning
-                }
-            }
-            Write-Log "Encerramento de processos dispensáveis concluído." -Type Success
-            $overallStep++
-
-            # --- SEÇÃO 2: Remover OneDrive (Lógica de Remove-SystemBloatware) ---
-            if ($RemoveOneDrive) {
-                Safe-WriteProgress -Activity $activity -Status "Removendo OneDrive completamente..." -PercentComplete (($overallStep / $totalOverallSteps) * 100)
-                Write-Log "Iniciando remoção completa do OneDrive..." -Type Info
-
-                # --- Verificação de confirmação (se $ScriptConfig.ConfirmationRequired estiver definido e for True) ---
-                # A variável $ScriptConfig não foi fornecida nas funções, então assumo que é global ou definida externamente.
-                # Se não for, esta verificação será ignorada ou causará um erro de variável indefinida.
-                if ((Get-Variable -Name ScriptConfig -ErrorAction SilentlyContinue) -and $ScriptConfig.ConfirmationRequired) {
-                    Write-Log "AVISO: A remoção do OneDrive é irreversível e pode afetar a sincronização de arquivos." -Type Warning
-                    $confirm = Read-Host "Tem certeza que deseja prosseguir com a remoção do OneDrive? (s/n)"
-                    if ($confirm -ne 's') {
-                        Write-Log "Remoção do OneDrive cancelada pelo usuário." -Type Info
-                        # Pula o restante da remoção do OneDrive e vai para a próxima seção
-                        $overallStep++ # Para garantir que o progresso continue
-                        continue
-                    }
-                }
-
-                $onedriveSubSteps = 3 # Desinstalar, Remover pastas, Limpar registro
-                $currentOnedriveStep = 1
-
-                # Desinstalando OneDrive via setup
-                Safe-WriteProgress -Activity $activity -Status "Desinstalando OneDrive via setup..." -PercentComplete (($currentOnedriveStep / $onedriveSubSteps) * 100)
-                Write-Log "Desinstalando OneDrive para todas as arquiteturas." -Type Info
-                $onedriveSetupPath_x64 = "$env:SystemRoot\SysWOW64\OneDriveSetup.exe"
-                $onedriveSetupPath_x86 = "$env:SystemRoot\System32\OneDriveSetup.exe"
-                if (-not $WhatIf) {
-                    if (Test-Path $onedriveSetupPath_x64) {
-                        Write-Log "Desinstalando OneDrive (x64)..." -Type Debug
-                        Start-Process -FilePath $onedriveSetupPath_x64 -ArgumentList "/uninstall" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
-                    } elseif (Test-Path $onedriveSetupPath_x86) {
-                        Write-Log "Desinstalando OneDrive (x86)..." -Type Debug
-                        Start-Process -FilePath $onedriveSetupPath_x86 -ArgumentList "/uninstall" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
-                    } else {
-                        Write-Log "Instalador do OneDrive não encontrado. Pulando desinstalação via setup." -Type Warning
-                    }
-                } else {
-                    Write-Log "Modo WhatIf: OneDrive seria desinstalado via setup." -Type Debug
-                }
-                $currentOnedriveStep++
-
-                # Removendo pastas de dados e vestígios
-                Safe-WriteProgress -Activity $activity -Status "Removendo pastas de dados e vestígios do OneDrive..." -PercentComplete (($currentOnedriveStep / $onedriveSubSteps) * 100)
-                Write-Log "Removendo pastas de dados e vestígios do OneDrive." -Type Info
-                $userProfiles = Get-ChildItem -Path "$env:SystemDrive\Users" -Directory -ErrorAction SilentlyContinue
-                foreach ($userProfile in $userProfiles) {
-                    $onedriveUserPath = Join-Path -Path $userProfile.FullName -ChildPath "OneDrive"
-                    $onedriveLocalAppData = Join-Path -Path $userProfile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
-                    if (-not $WhatIf) {
-                        if (Test-Path $onedriveUserPath) {
-                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue
-                            Write-Log "Removido pasta OneDrive de $($userProfile.BaseName)." -Type Debug
-                        }
-                        if (Test-Path $onedriveLocalAppData) {
-                            Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
-                            Write-Log "Removido AppData de OneDrive de $($userProfile.BaseName)." -Type Debug
-                        }
-                    } else {
-                        Write-Log "Modo WhatIf: Pastas OneDrive e AppData de $($userProfile.BaseName) seriam removidas." -Type Debug
-                    }
-                }
-                $currentOnedriveStep++
-
-                # Limpando entradas de registro do OneDrive
-                Safe-WriteProgress -Activity $activity -Status "Limpando entradas de registro do OneDrive..." -PercentComplete (($currentOnedriveStep / $onedriveSubSteps) * 100)
-                Write-Log "Limpando registro do OneDrive e desativando início automático." -Type Info
-                $regPaths = @(
-                    "HKLM:\SOFTWARE\Classes\CLSID\{018D5C66-4533-4307-9B53-2ad65C87B14B}", # OneDrive no painel de navegação
-                    "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-2ad65C87B14B}",
-                    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FolderDescriptions\{A52BBA46-A28D-493B-B034-2AFB6F3AD90C}",
-                    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager\OneDrive!*"
-                )
-                foreach ($path in $regPaths) {
-                    try {
-                        if (Test-Path $path) {
-                            if (-not $WhatIf) {
-                                Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
-                                Write-Log "Limpado registro: $path" -Type Debug
-                            } else {
-                                Write-Log "Modo WhatIf: Registro $path seria limpo." -Type Debug
-                            }
-                        }
-                    } catch {
-                        Write-Log "Falha ao limpar registro do OneDrive ($path): $($_.Exception.Message)" -Type Warning
-                    }
-                }
-                if (-not $WhatIf) {
-                    try {
-                        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "OneDrive" -Value "" -ErrorAction SilentlyContinue
-                        Write-Log "Desativado início automático do OneDrive." -Type Debug
-                    } catch { Write-Log "Falha ao desativar início automático do OneDrive: $($_.Exception.Message)" -Type Warning }
-                } else {
-                    Write-Log "Modo WhatIf: Início automático do OneDrive seria desativado." -Type Debug
-                }
-                Write-Log "Remoção completa do OneDrive concluída." -Type Success
-            } # End if $RemoveOneDrive
-            $overallStep++
-
-            # --- SEÇÃO 3: Remover AppX/UWP genéricos (Lógica de Remove-SystemBloatware, com Remove-SystemBloatwareintegrada) ---
-            Safe-WriteProgress -Activity $activity -Status "Processando remoção de AppX/UWP genéricos..." -PercentComplete (($overallStep / $totalOverallSteps) * 100)
-            Write-Log "Iniciando remoção de bloatware AppX/UWP genéricos." -Type Info
-
-            $appxSubSteps = 2
-            $currentAppxSubStep = 1
-
-            # Remover pacotes instalados para usuários existentes
-            Safe-WriteProgress -Activity $activity -Status "Removendo AppX/UWP genéricos para usuários..." -PercentComplete (($currentAppxSubStep / $appxSubSteps) * 50)
-            foreach ($appPattern in $AppxBloatwareToRemove) {
-                Write-Log "Processando AppX (Remove-AppxPackage): '$appPattern'" -Type Verbose
-                # Lógica de Remove-SystemBloatware integrada:
-                # Verifica se o pacote NÃO está na whitelist.
-                if ($AppxWhitelist -notcontains $appPattern) {
-                    try {
-                        $packages = Get-AppxPackage -AllUsers -Name "*$appPattern*" -ErrorAction SilentlyContinue
-                        if ($null -ne $packages -and $packages.Count -gt 0) {
-                            foreach ($pkg in $packages) {
-                                Write-Log "Removendo AppX $($pkg.Name) (Full Name: $($pkg.PackageFullName)) para todos os usuários..." -Type Info
-                                if (-not $WhatIf) {
-                                    Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-                                    if ($LASTEXITCODE -ne 0) {
-                                        Write-Log "Falha ao remover AppX $($pkg.Name)." -Type Warning
-                                    }
-                                }
-                            }
-                        } else {
-                            Write-Log "Aplicativo AppX '$appPattern' não encontrado para remoção (Get-AppxPackage)." -Type Debug
-                        }
-                    } catch {
-                        Write-Log "ERRO (Get/Remove-AppxPackage) para '$appPattern': $($_.Exception.Message)" -Type Error
-                    }
-                } else {
-                    Write-Log "Aplicativo AppX '$appPattern' está na whitelist. Pulando remoção (Get-AppxPackage)." -Type Info
-                }
-            }
-            $currentAppxSubStep++
-
-            # Remover provisionamento para novos usuários
-            Safe-WriteProgress -Activity $activity -Status "Removendo provisionamento de AppX/UWP genéricos..." -PercentComplete (($currentAppxSubStep / $appxSubSteps) * 50 + 50)
-            foreach ($appPattern in $AppxBloatwareToRemove) {
-                Write-Log "Processando provisionamento (Remove-AppxProvisionedPackage): '$appPattern'" -Type Verbose
-                # Lógica de Remove-SystemBloatware integrada para provisionamento
-                if ($AppxWhitelist -notcontains $appPattern) {
-                    try {
-                        $provisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object DisplayName -like "*$appPattern*"
-                        if ($null -ne $provisioned -and $provisioned.Count -gt 0) {
-                            foreach ($prov in $provisioned) {
-                                Write-Log "Removendo provisionamento $($prov.DisplayName) (PackageName: $($prov.PackageName))..." -Type Info
-                                if (-not $WhatIf) {
-                                    Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction SilentlyContinue
-                                    if ($LASTEXITCODE -ne 0) {
-                                        Write-Log "Falha ao remover provisionamento $($prov.DisplayName)." -Type Warning
-                                    }
-                                }
-                            }
-                        } else {
-                            Write-Log "Provisionamento de AppX '$appPattern' não encontrado para remoção (Get-AppxProvisionedPackage)." -Type Debug
-                        }
-                    } catch {
-                        Write-Log "ERRO (Get/Remove-AppxProvisionedPackage) para '$appPattern': $($_.Exception.Message)" -Type Error
-                    }
-                } else {
-                    Write-Log "Aplicativo AppX '$appPattern' está na whitelist. Pulando provisionamento." -Type Info
-                }
-            }
-            Write-Log "Remoção de bloatware AppX/UWP genéricos concluída." -Type Success
-            $overallStep++
-
-            # --- SEÇÃO 4: Desinstalar Aplicativos Específicos e Desabilitar Recall ---
-            Safe-WriteProgress -Activity $activity -Status "Processando aplicativos específicos e Windows Recall..." -PercentComplete (($overallStep / $totalOverallSteps) * 100)
-            Write-Log "Iniciando desinstalação de aplicativos específicos e desativação do Windows Recall." -Type Info
-
-            # --- Desinstalação de aplicativos da lista $SpecificApplicationsToUninstall ---
-            foreach ($appDisplayName in $SpecificApplicationsToUninstall) {
-                Write-Log "Tentando desinstalar aplicativo específico: $($appDisplayName)" -Type Info
-
-                # Mapeamento de nomes de exibição para padrões de pacotes AppX/Winget IDs
-                $appxNamePattern = switch ($appDisplayName) {
-                    "Assistência para Jogos" { "*XboxGameBar*" ; "*XboxGamingOverlay*" ; "*GamingServices*" }
-                    "Clipchamp"             { "*Clipchamp*" }
-                    "Copilot"               { "*Microsoft.Windows.Copilot*" ; "*MicrosoftWindows.Client.AI.Copilot*" ; "*Microsoft.549981C3F5F10*" }
-                    "Microsoft Teams"       { "*MSTeams*" ; "*MicrosoftTeams*" }
-                    "Microsoft To Do"       { "*MicrosoftToDo*" }
-                    "Notas Autoadesivas"    { "*Microsoft.MicrosoftStickyNotes*" }
-                    "Outlook"               { "*Microsoft.OutlookForWindows*" }
-                    "Paleta de Comandos"    { "*Microsoft.WindowsTerminal*" }
-                    "Solitaire Collection"  { "*MicrosoftSolitaireCollection*" }
-                    "Xbox"                  { "*Microsoft.XboxApp*" ; "*Microsoft.XboxGamingOverlay*" ; "*Microsoft.XboxIdentityProvider*" ; "*Microsoft.XboxSpeechToTextOverlay*" ; "*Microsoft.GamingServices*" }
-                    default                 { "*$appDisplayName*" }
-                }
-
-                # Tenta desinstalar como AppX
-                try {
-                    $packagesToRemoveSpecific = @()
-                    foreach ($pattern in $appxNamePattern) {
-                        $packagesToRemoveSpecific += Get-AppxPackage -AllUsers -Name $pattern -ErrorAction SilentlyContinue
-                    }
-                    $packagesToRemoveSpecific = $packagesToRemoveSpecific | Select-Object -Unique PackageFullName
-
-                    if ($null -ne $packagesToRemoveSpecific -and $packagesToRemoveSpecific.Count -gt 0) {
-                        foreach ($pkg in $packagesToRemoveSpecific) {
-                            Write-Log "Removendo AppX específico $($pkg.Name) (Full Name: $($pkg.PackageFullName)) para todos os usuários..." -Type Verbose
-                            if (-not $WhatIf) {
-                                Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-                                if ($LASTEXITCODE -ne 0) { Write-Log "Falha ao remover AppX específico $($pkg.Name)." -Type Warning }
-                            }
-                        }
-                    } else { Write-Log "Nenhum pacote AppX específico encontrado para '$appDisplayName'." -Type Debug }
-                } catch { Write-Log "ERRO (Remove-AppxPackage específico) para '$appDisplayName': $($_.Exception.Message)" -Type Error }
-
-                # Tenta remover provisionamento de AppX específicos
-                try {
-                    $provisionedPackagesToRemoveSpecific = @()
-                    foreach ($pattern in $appxNamePattern) {
-                        $provisionedPackagesToRemoveSpecific += Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object DisplayName -like $pattern
-                    }
-                    $provisionedPackagesToRemoveSpecific = $provisionedPackagesToRemoveSpecific | Select-Object -Unique PackageName
-
-                    if ($null -ne $provisionedPackagesToRemoveSpecific -and $provisionedPackagesToRemoveSpecific.Count -gt 0) {
-                        foreach ($prov in $provisionedPackagesToRemoveSpecific) {
-                            Write-Log "Removendo provisionamento de aplicativo específico $($prov.DisplayName) (PackageName: $($prov.PackageName))..." -Type Verbose
-                            if (-not $WhatIf) {
-                                Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction SilentlyContinue
-                                if ($LASTEXITCODE -ne 0) { Write-Log "Falha ao remover provisionamento de aplicativo específico $($prov.DisplayName)." -Type Warning }
-                            }
-                        }
-                    } else { Write-Log "Nenhum provisionamento de aplicativo específico encontrado para '$appDisplayName'." -Type Debug }
-                } catch { Write-Log "ERRO (Remove-AppxProvisionedPackage específico) para '$appDisplayName': $($_.Exception.Message)" -Type Error }
-
-                # Tenta desinstalação via Winget
-                try {
-                    if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
-                        $wingetId = switch ($appDisplayName) {
-                            "Microsoft Teams" { "Microsoft.Teams" ; "Microsoft.Teams.Classic" }
-                            "Outlook"         { "Microsoft.Outlook" }
-                            default           { $appDisplayName }
-                        }
-                        foreach ($id in $wingetId) {
-                            Write-Log "Tentando desinstalar '$id' via Winget para '$appDisplayName'..." -Type Verbose
-                            $wingetResult = winget uninstall $id --silent --force -e -h -ErrorAction SilentlyContinue
-                            if ($LASTEXITCODE -eq 0) {
-                                Write-Log "'$id' desinstalado via Winget com sucesso." -Type Success
-                            } elseif ($wingetResult -like "*No installed package found matching the input criteria*") {
-                                Write-Log "'$id' não encontrado via Winget." -Type Debug
-                            } else {
-                                Write-Log "Winget falhou ou encontrou um erro para '$id': $wingetResult" -Type Warning
-                            }
-                        }
-                    } else { Write-Log "Winget não encontrado. Pulando tentativa de desinstalação via Winget para '$appDisplayName'." -Type Debug }
-                } catch { Write-Log "ERRO (Winget específico) para '$appDisplayName': $($_.Exception.Message)" -Type Error }
-
-                # Mensagens Específicas / Manuais para Copilot e Xbox/Gaming
-                if ($appDisplayName -eq "Copilot") {
-                    Write-Log "A remoção completa do Copilot pode exigir etapas adicionais (registry tweaks), que serão tentadas agora." -Type Info
-                    try {
-                        $regPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-                        if ($PSCmdlet.ShouldProcess($regPath, "desativar botão Copilot")) {
-                            Set-ItemProperty -Path $regPath -Name "ShowCopilotButton" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-                            Write-Log -Message "Botão do Copilot desativado no registro." -Type Success
-                        }
-                    } catch { Write-Log -Message "Erro ao desativar Copilot no registro: $($_.Exception.Message)" -Type Error }
-                }
-                if ($appDisplayName -eq "Assistência para Jogos" -or $appDisplayName -eq "Xbox") {
-                    Write-Log "A desinstalação de componentes Xbox/Jogos pode afetar outros jogos e funcionalidades. Reinstalações de jogos podem ser necessárias." -Type Warning
-                }
-            }
-
-            # --- Desabilitar Windows Recall (Lógica de Disable-WindowsRecall) ---
-            if ($DisableWindowsRecall) {
-                Write-Log "Iniciando desativação do Windows Recall." -Type Info
-                try {
-                    # Desabilitar Recall (Windows 11 24H2+)
-                    $regPathRecall = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\Recall"
-                    if (-not (Test-Path $regPathRecall)) { New-Item -Path $regPathRecall -Force -ErrorAction SilentlyContinue | Out-Null }
-                    Set-ItemProperty -Path $regPathRecall -Name "Debugger" -Value "cmd.exe /k echo Recall is disabled && exit" -Force -ErrorAction SilentlyContinue
-
-                    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "RecallEnabled" -Value 0 -Force -ErrorAction SilentlyContinue
-
-                    New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI" -ErrorAction SilentlyContinue | Out-Null
-                    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI" -Name "DisableRecall" -Value 1 -Force -ErrorAction SilentlyContinue
-
-                    Write-Log "Ajustes de registro para Windows Recall aplicados." -Type Success
-                } catch { Write-Log "ERRO durante a desativação do Windows Recall: $($_.Exception.Message)" -Type Error }
-                Write-Log "Windows Recall desativado com sucesso." -Type Success
-            } # End if $DisableWindowsRecall
-            $overallStep++
-
-
-            # --- SEÇÃO 5: Desativar/Remover Tarefas Agendadas (Lógica unificada de Remove-SystemBloatwaree Remove-SystemBloatware) ---
-            if ($RemoveScheduledTasks) {
-                Safe-WriteProgress -Activity $activity -Status "Desativando/Removendo tarefas agendadas de bloatware/telemetria..." -PercentComplete (($overallStep / $totalOverallSteps) * 100)
-                Write-Log "Removendo tarefas agendadas de bloatware/telemetria (modo agressivo)..." -Type Info
-                $tasksToManage = @(
-                    "\Microsoft\Windows\Application Experience\ProgramDataUpdater",
-                    "\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
-                    "\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
-                    "\Microsoft\Windows\Feedback\Siuf\DmClient",
-                    "\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
-                    "\Microsoft\Windows\Windows Error Reporting\QueueReporting",
-                    "\Microsoft\Windows\OneDrive\Standalone Update Task", # Mesmo que OneDrive seja removido, a tarefa pode persistir
-                    "\Microsoft\Windows\Feedback\FeedbackUpload",
-                    "\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
-                    "\Microsoft\Windows\Application Experience\StartupAppTask",
-                    "\Microsoft\Windows\Clip\License Validation",
-                    "\Microsoft\Windows\HelloFace\FODCleanupTask",
-                    "\Microsoft\Windows\Maps\MapsToastTask",
-                    "\Microsoft\Windows\Maps\MapsUpdateTask",
-                    "\MicrosoftEdgeUpdateTaskCore", # Tarefas de atualização do Edge
-                    "\MicrosoftEdgeUpdateTaskUA", # Tarefas de atualização do Edge
-                    "\Microsoft\Windows\Customer Experience Improvement Program\KernelCeipTask",
-                    "\Microsoft\Windows\InstallService\WakeUpTask" # Outra tarefa comum
-                    # Adicione outras tarefas que você queira gerenciar
-                )
-                foreach ($task in $tasksToManage) {
-                    $taskName = $task -replace '^.*\\' # Extrai apenas o nome da tarefa
-                    try {
-                        if ($PSCmdlet.ShouldProcess("tarefa agendada '$task'", "desativar/remover")) {
-                            if (-not $WhatIf) {
-                                # Tenta desativar primeiro (menos destrutivo)
-                                $disableResult = schtasks.exe /change /TN $task /DISABLE 2>&1
-                                if ($LASTEXITCODE -ne 0 -and $disableResult -notlike "*Task does not exist*") {
-                                    Write-Log "Aviso: Falha ao desativar tarefa '$task' (pode não existir ou ter erro): $disableResult" -Type Warning
-                                }
-
-                                # Tenta remover
-                                $deleteResult = schtasks.exe /delete /TN $task /f 2>&1
-                                if ($LASTEXITCODE -ne 0 -and $deleteResult -notlike "*Task does not exist*") {
-                                    Write-Log "Aviso: Falha ao remover tarefa '$task' (pode não existir ou ter erro): $deleteResult" -Type Warning
-                                } else {
-                                    Write-Log "Tarefa '$task' desativada e removida (se existia)." -Type Success
-                                }
-                            } else {
-                                Write-Log "Modo WhatIf: Tarefa '$task' seria desativada e removida." -Type Debug
-                            }
-                        }
-                    } catch {
-                        Write-Log "ERRO ao processar tarefa '$task': $($_.Exception.Message)" -Type Error
-                    }
-                }
-                Write-Log "Desativação/remoção de tarefas agendadas concluída." -Type Success
-            } # End if $RemoveScheduledTasks
-            $overallStep++
-
-            # --- SEÇÃO 6: Remover Pins do Menu Iniciar e Barra de Tarefas (Lógica de Remove-SystemBloatware) ---
-            if ($RemoveStartAndTaskbarPins) {
-                Safe-WriteProgress -Activity $activity -Status "Removendo pins do Menu Iniciar e Barra de Tarefas..." -PercentComplete (($overallStep / $totalOverallSteps) * 100)
-                Write-Log "Removendo pins do Menu Iniciar e Barra de Tarefas..." -Type Info
-                $startLayout = "$env:LOCALAPPDATA\Microsoft\Windows\Shell\LayoutModification.xml"
-                if (Test-Path $startLayout) {
-                    if (-not $WhatIf) {
-                        Remove-Item $startLayout -Force -ErrorAction SilentlyContinue
-                        Write-Log "Arquivo LayoutModification.xml removido." -Type Success
-                        Write-Log "Pins removidos (pode ser necessário reiniciar o Explorer para ver as mudanças)." -Type Warning
-                    } else {
-                        Write-Log "Modo WhatIf: Arquivo LayoutModification.xml seria removido." -Type Debug
-                    }
-                } else {
-                    Write-Log "Arquivo LayoutModification.xml não encontrado. Nenhuma ação necessária." -Type Info
-                }
-            } # End if $RemoveStartAndTaskbarPins
-            $overallStep++ # Fim da última seção para garantir 100% de progresso final
-
-            Write-Log "Processo completo de remoção de bloatware do sistema concluído." -Type Success
-
-        } catch {
-            Write-Log "ERRO GERAL crítico durante a remoção de bloatware do sistema: $($_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-        } finally {
-            Safe-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-        }
-    }
-}
 
 function Enable-ClassicContextMenu {
     [CmdletBinding(SupportsShouldProcess=$true)]
@@ -1905,20 +1527,20 @@ function Remove-SystemBloatware {
                 Safe-WriteProgress -Activity $activity -Status "Removendo pastas de dados e vestígios do OneDrive..." -PercentComplete (($currentOnedriveStep / $onedriveSubSteps) * 100)
                 Write-Log "Removendo pastas de dados e vestígios do OneDrive." -Type Info
                 $userProfiles = Get-ChildItem -Path "$env:SystemDrive\Users" -Directory -ErrorAction SilentlyContinue
-                foreach ($userProfile in $userProfiles) {
-                    $onedriveUserPath = Join-Path -Path $userProfile.FullName -ChildPath "OneDrive"
-                    $onedriveLocalAppData = Join-Path -Path $userProfile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
+                foreach ($profile in $userProfiles) {
+                    $onedriveUserPath = Join-Path -Path $profile.FullName -ChildPath "OneDrive"
+                    $onedriveLocalAppData = Join-Path -Path $profile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
                     if (-not $WhatIf) {
                         if (Test-Path $onedriveUserPath) {
                             Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue
-                            Write-Log "Removido pasta OneDrive de $($userProfile.BaseName)." -Type Debug
+                            Write-Log "Removido pasta OneDrive de $($profile.BaseName)." -Type Debug
                         }
                         if (Test-Path $onedriveLocalAppData) {
                             Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
-                            Write-Log "Removido AppData de OneDrive de $($userProfile.BaseName)." -Type Debug
+                            Write-Log "Removido AppData de OneDrive de $($profile.BaseName)." -Type Debug
                         }
                     } else {
-                        Write-Log "Modo WhatIf: Pastas OneDrive e AppData de $($userProfile.BaseName) seriam removidas." -Type Debug
+                        Write-Log "Modo WhatIf: Pastas OneDrive e AppData de $($profile.BaseName) seriam removidas." -Type Debug
                     }
                 }
                 $currentOnedriveStep++
@@ -2239,68 +1861,80 @@ function Remove-SystemBloatware {
 function Install-Applications {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-        [string[]]$AppId  # IDs a instalar; se vazio, instala tudo
-    )
-
+       
+            )
     Write-Log "Iniciando instalação de aplicativos..." -Type Info
     $activity = "Instalação de Aplicativos via Winget"
 
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Write-Log "Winget não está instalado. Pulando instalação de aplicativos." -Type Error
-        return
-    }
-
-    # Lista mestra de apps
-    $apps = @(
-        @{ Name = "7-Zip";            Id = "7zip.7zip" },
-        @{ Name = "AnyDesk";          Id = "AnyDesk.AnyDesk" },
-        @{ Name = "AutoHotkey";       Id = "AutoHotkey.AutoHotkey" },
-        @{ Name = "Foxit Reader";     Id = "Foxit.FoxitReader" },
-        @{ Name = "Google Chrome";    Id = "Google.Chrome" },
-        @{ Name = "Google Drive";     Id = "Google.GoogleDrive" },
-        @{ Name = "Greenshot";        Id = "Greenshot.Greenshot" },
-        @{ Name = "K-Lite Codec Pack";Id = "CodecGuide.K-LiteCodecPack.Full" },
-        @{ Name = "Microsoft Office"; Id = "Microsoft.Office" },
-        @{ Name = "PowerToys";        Id = "Microsoft.PowerToys" },
-        @{ Name = "Notepad++";        Id = "Notepad++.Notepad++" },
-        @{ Name = "VLC Media Player"; Id = "VideoLAN.VLC" }
-    )
-
-    # Se receberam IDs, filtramos a lista
-    if ($AppId) {
-        $apps = $apps | Where-Object { $AppId -contains $_.Id }
-        if (-not $apps) {
-            Write-Log "Nenhum aplicativo corresponde aos IDs: $AppId" -Type Warning
-            return
-        }
-    }
-
-    $totalApps     = $apps.Count
-    $installedCount = 0
-
-    foreach ($app in $apps) {
-        $installedCount++
-        $percentComplete = [int](($installedCount / $totalApps) * 100)
-        Grant-WriteProgress -Activity $activity -Status "Instalando $($app.Name)..." -PercentComplete $percentComplete
-
-        if ($PSCmdlet.ShouldProcess("Instalar $($app.Name)", "$($app.Id)")) {
-            try {
-                $result = winget install --id $app.Id -e --accept-package-agreements --accept-source-agreements 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Log "$($app.Name) instalado ou já presente." -Type Success
-                } elseif ($result -match "already installed|already exists") {
-                    Write-Log "$($app.Name) já está instalado. Pulando." -Type Info
-                } else {
-                    Write-Log "Falha ao instalar $($app.Name): $result" -Type Error
-                }
-            } catch {
-                Write-Log "Erro instalando $($app.Name): $($_.Exception.Message)" -Type Error
+    if ($PSCmdlet.ShouldProcess("aplicativos", "instalar")) {
+        try {
+            Grant-WriteProgress -Activity $activity -Status "Verificando instalação do Winget..." -PercentComplete 5
+            if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+                Write-Log "Winget não está instalado. Pulando instalação de aplicativos." -Type Error
+                Write-Log "Por favor, instale o Winget manualmente ou via Microsoft Store para usar esta função." -Type Info
+                return
             }
+            Write-Log "Winget encontrado. Prosseguindo com a instalação." -Type Success
+
+            $apps = @(
+                @{Name = "7-Zip"; Id = "7zip.7zip"},
+				@{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
+				@{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
+				@{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
+                @{Name = "Google Chrome"; Id = "Google.Chrome"},
+                @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
+				@{Name = "CodecGuide.K-LiteCodecPack.Full"; Id = "CodecGuide.K-LiteCodecPack.Full"},
+                @{Name = "Microsoft Office"; Id = "Microsoft.Office"},
+                @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
+                @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
+                @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"}
+            )
+            $totalApps = $apps.Count
+            $installedCount = 0
+
+            foreach ($app in $apps) {
+                $installedCount++
+                $percentComplete = (($installedCount / $totalApps) * 100)
+                $statusMessage = "Instalando $($app.Name)..."
+
+                Grant-WriteProgress -Activity $activity -Status $statusMessage "App: $($app.Name) (ID: $($app.Id))" -PercentComplete $percentComplete
+
+                try {
+                    Write-Log "Tentando instalar $($app.Name) (ID: $($app.Id))..." -Type Info
+                    if (-not $WhatIf) {
+                        # A Winget pode retornar um exit code diferente de 0 mesmo em caso de sucesso (ex: se o app já está instalado)
+                        # Redirecionar stderr para stdout para capturar todas as mensagens
+                        $installResult = (winget install --id $app.Id -e --accept-package-agreements --accept-source-agreements 2>&1)
+                        
+                        # Verificar o $LASTEXITCODE para sucesso (0) ou falha. 
+                        # Muitos instaladores Winget retornam 0 mesmo se o software já estiver instalado ou se não houve alteração.
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Log "$($app.Name) instalado ou já presente com sucesso." -Type Success
+                        } else {
+                            # Tentar identificar se o erro é 'já instalado' ou um erro real
+                            if ($installResult -like "*already installed*" -or $installResult -like "*already exists*") {
+                                Write-Log "$($app.Name) já está instalado. Pulando." -Type Info
+                            } else {
+                                Write-Log "Falha ao instalar $($app.Name): Winget retornou erro. Detalhes: $($installResult | Out-String)" -Type Error
+                            }
+                        }
+                    } else {
+                        Write-Log "Modo WhatIf: $($app.Name) (ID: $($app.Id)) seria instalado." -Type Debug
+                    }
+                } catch {
+                    Write-Log "ERRO inesperado ao tentar instalar $($app.Name): $($_.Exception.Message)" -Type Error
+                    Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+                }
+            }
+            Write-Log "Instalação de aplicativos concluída." -Type Success
+
+        } catch {
+            Write-Log "ERRO GERAL durante a instalação de aplicativos: $($_.Exception.Message)" -Type Error
+            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+        } finally {
+            Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
         }
     }
-
-    Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-    Write-Log "Instalação de aplicativos concluída." -Type Success
 }
 
 function Update-PowerShell {
@@ -2316,9 +1950,9 @@ function Update-PowerShell {
             Grant-WriteProgress -Activity $activity -Status "Definindo política de execução..." -PercentComplete 30
             Write-Log "Definindo política de execução para 'Unrestricted' no escopo CurrentUser para permitir scripts." -Type Info
             if (-not $WhatIf) {
-                # O script baixado pode necessitar de conexão com a internet
-                Invoke-RemoteScript -Uri "https://aka.ms/install-powershell.ps1" -Arguments @("-UseMSI")
-                Write-Log "Script de instalação/atualização do PowerShell executado. Por favor, verifique a saída para detalhes." -Type Success
+                Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Force -ErrorAction Stop
+            } else {
+                Write-Log "Modo WhatIf: Política de execução seria definida para 'Unrestricted'." -Type Debug
             }
 
             Grant-WriteProgress -Activity $activity -Status "Baixando e executando script de instalação..." -PercentComplete 60
@@ -2343,7 +1977,6 @@ function Update-PowerShell {
     }
 }
 
-
 #endregion
 
 #region → FUNÇÕES DE REDE E IMPRESSORAS (AJUSTADAS)
@@ -2354,6 +1987,33 @@ function Add-WiFiNetwork {
     Write-Log -Message "Iniciando configuração da rede Wi-Fi 'VemProMundo - Adm'..." -Type Info
     $profilePath = "$env:TEMP\VemProMundo_-_Adm.xml"
     $wifiName = "VemProMundo - Adm"
+
+    # SEGURANÇA (scrub p/ GitHub): a senha do Wi-Fi NÃO fica mais no código-fonte.
+    # É lida nesta ordem: 1) variável de ambiente CMS_WIFI_KEY; 2) arquivo git-ignored
+    # 'WiFi.local.json' na pasta do script (formato { "WiFiKey": "..." }); 3) digitação.
+    $wifiKey = $env:CMS_WIFI_KEY
+    if (-not $wifiKey) {
+        $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+        $localSecret = Join-Path $scriptDir 'WiFi.local.json'
+        if (Test-Path $localSecret) {
+            try { $wifiKey = (Get-Content $localSecret -Raw -ErrorAction Stop | ConvertFrom-Json).WiFiKey }
+            catch { Write-Log "AVISO: falha ao ler WiFi.local.json: $($_.Exception.Message)" -Type Warning }
+        }
+    }
+    if (-not $wifiKey) {
+        Write-Log "Chave do Wi-Fi não encontrada (env CMS_WIFI_KEY nem WiFi.local.json). Solicitando digitação..." -Type Warning
+        $sec = Read-Host "Digite a senha do Wi-Fi '$wifiName'" -AsSecureString
+        if ($sec -and $sec.Length -gt 0) {
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+            try { $wifiKey = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr) }
+            finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+        }
+    }
+    if (-not $wifiKey) {
+        Write-Log "Sem chave do Wi-Fi; configuração da rede '$wifiName' abortada." -Type Error
+        return
+    }
+
     try {
         # Perfil Wi-Fi com segurança genérica (substitua pela chave real e tipo de autenticação)
         $wifiProfile = @"
@@ -2373,7 +2033,7 @@ function Add-WiFiNetwork {
             <sharedKey>
                 <keyType>passPhrase</keyType>
                 <protected>false</protected>
-                <keyMaterial>!MUnd0CoC@7281%</keyMaterial>
+                <keyMaterial>$wifiKey</keyMaterial>
             </sharedKey>
         </security>
     </MSM>
@@ -2551,15 +2211,14 @@ function Test-InternetSpeed {
     if ($PSCmdlet.ShouldProcess("velocidade da internet", "testar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Verificando instalação do Winget..." -PercentComplete 10
-            if (-not (Test-CommandExists -Command "winget")) {
+            if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
                 Write-Log "Winget não está disponível neste sistema. Não é possível instalar o Speedtest CLI." -Type Error
                 Write-Log "Por favor, instale o Winget para usar esta função ou instale o Speedtest CLI manualmente." -Type Info
                 return
             }
 
             Grant-WriteProgress -Activity $activity -Status "Verificando instalação do Speedtest CLI..." -PercentComplete 30
-            $speedtestCommand = Get-Command speedtest -CommandType Application -ErrorAction SilentlyContinue
-            if (-not $speedtestCommand) {
+            if (-not (Get-Command speedtest -ErrorAction SilentlyContinue)) {
                 Write-Log "Speedtest CLI não encontrado. Tentando instalar via Winget..." -Type Info
                 if (-not $WhatIf) {
                     Write-Log "Instalando Ookla.Speedtest..." -Type Info
@@ -2568,7 +2227,6 @@ function Test-InternetSpeed {
                 } else {
                     Write-Log "Modo WhatIf: Ookla.Speedtest seria instalado via Winget." -Type Debug
                 }
-                $speedtestCommand = Get-Command speedtest -CommandType Application -ErrorAction SilentlyContinue
             } else {
                 Write-Log "Speedtest CLI já está instalado." -Type Info
             }
@@ -2576,10 +2234,7 @@ function Test-InternetSpeed {
             Grant-WriteProgress -Activity $activity -Status "Executando teste de velocidade..." -PercentComplete 70
             Write-Log "Executando comando 'speedtest'. Isso pode demorar um pouco..." -Type Info
             if (-not $WhatIf) {
-                if (-not $speedtestCommand) {
-                    throw "Speedtest CLI não disponível após tentativa de instalação."
-                }
-                & $speedtestCommand.Source
+                speedtest -ErrorAction Stop
                 Write-Log "Teste de velocidade concluído." -Type Success
             } else {
                 Write-Log "Modo WhatIf: Comando 'speedtest' seria executado." -Type Debug
@@ -3088,7 +2743,7 @@ function Set-SystemTweaks {
         [switch]$ApplyExtraTweaks,
 
         [Parameter(Mandatory=$false)]
-        [switch]$RestoreDefaults # Usaremos a função Restore-SystemDefaults para isso
+        [switch]$RestoreDefaults # Usaremos a função Restore-ControlPanelTweaks para isso
     )
 
     Write-Log "Iniciando aplicação/restauração de tweaks no sistema..." -Type Info
@@ -3103,7 +2758,7 @@ function Set-SystemTweaks {
     # ---- Se o usuário quer restaurar padrões, chame a função específica de restauração ----
     if ($RestoreDefaults) {
         Write-Log "Executando restauração de configurações padrão..." -Type Info
-        Restore-SystemDefaults # Chama a função que você já tem para restauração
+        Restore-ControlPanelTweaks # Chama a função que você já tem para restauração
         return # Termina a função após a restauração
     }
 
@@ -3223,7 +2878,8 @@ function Set-SystemTweaks {
             foreach ($path in $allGrantTweaks.Keys) {
                 $currentChange++
                 $percentComplete = ($currentChange / $totalChanges) * 100
-				Grant-WriteProgress -Activity $activity -Status "Processando caminho: $path" -PercentComplete $percentComplete
+                Grant-WriteProgress -Activity $activity -Status "Processando caminho: $path" -PercentComplete $percentComplete "Caminho: $path"
+
                 if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
                     Write-Log "Verificando/Criando caminho de registro: $path" -Type Debug
                     try {
@@ -3260,70 +2916,12 @@ function Set-SystemTweaks {
             Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
         } finally {
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-            }
- }
-}
-
-function Invoke-RemoteScript {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param(
-        [Parameter(Mandatory = $true)][string]$Uri,
-        [string[]]$Arguments = @()
-    )
-
-    $tempFile = Join-Path $env:TEMP ("remote_script_{0}.ps1" -f ([guid]::NewGuid()))
-
-    try {
-        Write-Log "Baixando script remoto: $Uri" -Type Info
-        $scriptContent = Invoke-RestMethod -Uri $Uri -ErrorAction Stop
-        Set-Content -Path $tempFile -Value $scriptContent -Encoding UTF8
-
-        if ($PSCmdlet.ShouldProcess($Uri, "Executar script remoto")) {
-            & $tempFile @Arguments
-        }
-    } catch {
-        Write-Log "Erro ao baixar/executar script remoto: $($_.Exception.Message)" -Type Error
-    } finally {
-        if (Test-Path $tempFile) {
-            Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
         }
     }
 }
 
-function Grant-PrivacyTweaks {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-    Write-Log "Aplicando tweaks de privacidade..." -Type Info
-    if ($PSCmdlet.ShouldProcess("tweaks de privacidade", "aplicar")) {
-        Set-SystemTweaks -ApplyPrivacyTweaks
-    }
-}
-
-function Grant-ControlPanelTweaks {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-    Write-Log "Aplicando tweaks de Painel de Controle/Explorer..." -Type Info
-    if ($PSCmdlet.ShouldProcess("tweaks de Painel de Controle/Explorer", "aplicar")) {
-        Set-SystemTweaks -ApplyControlPanelTweaks
-    }
-}
-
-function Grant-ExtraTweaks {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-    Write-Log "Aplicando tweaks extras..." -Type Info
-    if ($PSCmdlet.ShouldProcess("tweaks extras", "aplicar")) {
-        Set-SystemTweaks -ApplyExtraTweaks
-    }
-}
-
-function Invoke-Diagnose {
-    Write-Log "Executando diagnósticos avançados..." -Type Info
-    Invoke-All-DiagnosticsAdvanced
-}
-
-function Enable-PrivacyHardening {    
-[CmdletBinding(SupportsShouldProcess=$true)]
+function Enable-PrivacyHardening {
+    [CmdletBinding(SupportsShouldProcess=$true)]
     param(
        
             )
@@ -4193,24 +3791,24 @@ function Rename-Notebook {
     Write-Log "Deseja renomear este notebook? (S/N)" -Type Warning
     $timeout = 15
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    $newNameInput = $null
+    $input = $null
 Write-Log "Digite o novo nome do notebook e pressione ENTER (ou aguarde $timeout segundos para cancelar):" -Type Info
-    while ($sw.Elapsed.TotalSeconds -lt $timeout -and !$newNameInput) {
+    while ($sw.Elapsed.TotalSeconds -lt $timeout -and !$input) {
         if ([System.Console]::KeyAvailable) {
-            $newNameInput = Read-Host
+            $input = Read-Host
         } else {
             Start-Sleep -Milliseconds 200
         }
     }
     $sw.Stop()
-    if ([string]::IsNullOrWhiteSpace($newNameInput)) {
+    if ([string]::IsNullOrWhiteSpace($input)) {
         Write-Log "Tempo esgotado. Renomeação cancelada." -Type Error
         Start-Sleep -Seconds 2
         return
     }
     try {
-        Rename-Computer -NewName $newNameInput -Force
-        Write-Log "Nome do notebook alterado para: $newNameInput. Reinicie para aplicar." -Type Success
+        Rename-Computer -NewName $input -Force
+        Write-Log "Nome do notebook alterado para: $input. Reinicie para aplicar." -Type Success
     } catch {
         Write-Log "Erro ao renomear o notebook: $_" -Type Error
     }
@@ -4271,7 +3869,12 @@ if ($plan) {
 #endregion
 
 function Remove-OneDrive-AndRestoreFolders {
+    # CORREÇÃO #8 (auditoria): esta função destrutiva era a única de remoção SEM ShouldProcess.
+    # Agora suporta -WhatIf/-Confirm e pede confirmação por ser de alto impacto.
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
+    param()
     Write-Log "Removendo OneDrive e restaurando pastas padrão..." -Type Warning
+    if (-not $PSCmdlet.ShouldProcess("OneDrive (todos os perfis)", "remover")) { return }
     try {
         taskkill.exe /F /IM "OneDrive.exe"
     } 
@@ -4293,6 +3896,27 @@ Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:systemdrive\OneD
 # check if directory is empty before removing:
 If ((Get-ChildItem "$env:userprofile\OneDrive" -Recurse | Measure-Object).Count -eq 0) {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:userprofile\OneDrive"
+}
+
+# CORREÇÃO #10 (auditoria): estender a limpeza de sobras do OneDrive para TODOS os
+# perfis de usuário, de forma SEGURA. A pasta "OneDrive" de cada perfil só é apagada
+# se estiver VAZIA (evita destruir arquivos ainda sincronizados). As sobras de cache
+# em AppData\Local\Microsoft\OneDrive são seguras de remover.
+Write-Output "Removendo sobras do OneDrive de todos os perfis de usuario (seguro, so pasta vazia)"
+Get-ChildItem -Path "$env:SystemDrive\Users" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+    $profileOneDrive = Join-Path $_.FullName "OneDrive"
+    $profileAppData  = Join-Path $_.FullName "AppData\Local\Microsoft\OneDrive"
+    try {
+        if ((Test-Path $profileOneDrive) -and ((Get-ChildItem $profileOneDrive -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0)) {
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $profileOneDrive
+            Write-Log "OneDrive (vazio) removido do perfil $($_.BaseName)" -Type Success
+        }
+        if (Test-Path $profileAppData) {
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $profileAppData
+        }
+    } catch {
+        Write-Log "AVISO ao limpar OneDrive do perfil $($_.BaseName): $($_.Exception.Message)" -Type Warning
+    }
 }
 
 Write-Output "Disable OneDrive via Group Policies"
@@ -4351,7 +3975,7 @@ function Invoke-WindowsActivator {
 Write-Log "==== ATIVAÇÃO DO WINDOWS ====" -Type Info
 Write-Log "Executando script de ativação oficial (get.activated.win)..." -Type Warning
     try {
-        Invoke-RemoteScript -Uri "https://get.activated.win"
+        irm https://get.activated.win | iex
         Write-Log "Script de ativação executado com sucesso." -Type Success
     } catch {
         Write-Log "Erro ao executar o script de ativação: $_" -Type Error
@@ -4364,80 +3988,28 @@ function Invoke-ChrisTitusToolbox {
 Write-Log "==== CHRIS TITUS TOOLBOX ====" -Type Info
 Write-Log "Executando toolbox oficial do site christitus.com..." -Type Warning
     try {
-        Invoke-RemoteScript -Uri "https://christitus.com/win"
+        irm christitus.com/win | iex
         Write-Log "Chris Titus Toolbox executado com sucesso." -Type Success
     } catch {
         Write-Log "Erro ao executar o script do Chris Titus: $_" -Type Error
     }
 }
 
-
-function Invoke-PowerShellProfile {
-    param (
-        [string]$FonteProfile = "G:\Drives compartilhados\MundoCOC\Tecnologia\Powershell\Perfil Powershell\Microsoft.PowerShell_profile.ps1"
-    )
-
-    $usuarios = Get-ChildItem "C:\Users" -Directory | Where-Object {
-        Test-Path "$($_.FullName)\Documents"
-    }
-
-    foreach ($user in $usuarios) {
-        $destinoPasta = "$($user.FullName)\Documents\PowerShell"
-        $destinoProfile = "$destinoPasta\Microsoft.PowerShell_profile.ps1"
-
-        # Cria a pasta se não existir
-        if (-not (Test-Path $destinoPasta)) {
-            New-Item -ItemType Directory -Path $destinoPasta -Force | Out-Null
-            Write-Host "Criada a pasta: $destinoPasta"
-        }
-
-        # Copia o profile
-        Copy-Item -Path $FonteProfile -Destination $destinoProfile -Force
-        Write-Host "Profile copiado para: $destinoProfile"
-    }
-    Write-Host "Distribuição concluída para todos os usuários encontrados em C:\Users." -ForegroundColor Green
-	try {
-		Invoke-RemoteScript -Uri "https://raw.githubusercontent.com/CrazyWolf13/unix-pwsh/main/Microsoft.PowerShell_profile.ps1"
-		Write-Log "Perfil executado com sucesso." -Type Success
-    } catch {
-        Write-Log "Erro ao executar o script do Perfil do PowerShell: $_" -Type Error
-    }
-}
-
-
 function Update-ScriptFromCloud {
-    param(
-        [string]$UpdateServer = $ScriptConfig.UpdateServer
-    )
     Clear-Host
 Write-Log "=======================" -Type Info
 Write-Log "ATUALIZANDO SCRIPT..." -Type Info
 Write-Log "=======================" -Type Info
 
-    if ([string]::IsNullOrWhiteSpace($UpdateServer)) {
-        Write-Log "Servidor de atualização não configurado. Defina SCRIPT_UPDATE_SERVER ou informe o parâmetro UpdateServer." -Type Error
-        return
-    }
-
-    $updateHost = $UpdateServer
-    try {
-        $updateHost = ([uri]$UpdateServer).Host
-        if ([string]::IsNullOrWhiteSpace($updateHost)) {
-            $updateHost = $UpdateServer
-        }
-    } catch {
-        $updateHost = $UpdateServer
-    }
-
     try {
         Write-Log "Verificando conexão com servidor..." -Type Warning
-        if (-not (Test-Connection -ComputerName $updateHost -Count 1 -Quiet)) {
+        if (-not (Test-Connection -ComputerName "script.colegiomundodosaber.com.br" -Count 1 -Quiet)) {
             Write-Log "❌ Sem conexão. Atualização abortada." -Type Error
             return
         }
 
         Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." -Type Warning
-        Invoke-RemoteScript -Uri $UpdateServer
+        irm script.colegiomundodosaber.com.br | iex
         Write-Log "✅ Script atualizado com sucesso!" -Type Success
         Show-SuccessMessage
     } catch {
@@ -4652,16 +4224,6 @@ function Restore-BloatwareSafe {
     Show-SuccessMessage
 }
 
-function Restore-ControlPanelTweaks {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-
-    Write-Log "Restaurando tweaks do Painel de Controle/Explorer para padrões..." -Type Warning
-    if ($PSCmdlet.ShouldProcess("configurações do sistema", "restaurar padrões")) {
-        Restore-SystemDefaults
-    }
-}
-
 function Restore-SystemDefaults {
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
     param()
@@ -4671,7 +4233,7 @@ function Restore-SystemDefaults {
     # Dicionário de alterações de registro para restaurar padrões
     # ATENÇÃO: Os valores aqui devem ser os valores PADRÃO do Windows ou os valores que reabilitam funcionalidades.
     $restoreDefaults = @{
-        # --- Configurações de Explorer e Visual FX (origem: Grant-ControlPanelTweaks e parte de Restore-SystemDefaults) ---
+        # --- Configurações de Explorer e Visual FX (origem: Grant-ControlPanelTweaks e parte de Restore-ControlPanelTweaks) ---
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" = @{NoControlPanel = 0; NoViewContextMenu = 0; NoDesktop = 0; NoFind = 0};
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{
             Start_JumpListsItems = 10; # Padrão é 10 atalhos recentes
@@ -4945,35 +4507,59 @@ function Stop-ComputerConfirmation {
 
 function Show-FullMaintenance {
     Clear-Host
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "        INICIANDO MANUTENÇÃO COMPLETA        " -ForegroundColor Cyan
-Write-Host "=============================================" -ForegroundColor Cyan
-    Write-Host "Iniciando Manutenção Completa..." Yellow
-    Write-Host "Executando: Menu de Instalação de Programas (Opção 1 - Todas as Ferramentas)..." -ForegroundColor Green
+Write-Log "=============================================" -Type Info
+Write-Log "        INICIANDO MANUTENÇÃO COMPLETA        " -Type Info
+Write-Log "=============================================" -Type Info
+    Write-Log "Iniciando Manutenção Completa..." Yellow
+
+    # Sequência lógica de chamadas aos novos menus e funções
+    # A maioria dos menus já tem sua própria opção de "Executar Todos" (Opção 1)
+    # Então, vamos simular a seleção da Opção 1 dentro de cada submenu
+    # Nota: Show-MainMenu não tem "Executar Todos", suas opções são os submenus em si.
+
+Write-Log "Executando: Menu de Instalação de Programas (Opção 1 - Todas as Ferramentas)..." -Type Success
     # Chamando a função Install-Applications que está dentro de Show-InstallationMenu opção 1
     Install-Applications
-    Write-Host "Executando: Menu de Rede e Impressoras (Opção 1 - Todas as Configurações de Rede)..." -ForegroundColor Green
+    # Se Show-InstallationMenu tivesse outras funções que não estivessem em Install-Applications,
+    # ou uma opção de "Executar Todas" mais abrangente, chamaria essa opção aqui.
+    Start-Sleep 2
+
+Write-Log "Executando: Menu de Rede e Impressoras (Opção 1 - Todas as Configurações de Rede)..." -Type Success
+    # Chamando as funções que estão dentro de Show-NetworkMenu opção 1
     Install-NetworkPrinters
     Optimize-NetworkPerformance
-	Write-Host "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as Configurações)..." -ForegroundColor Green
+    Start-Sleep 2
+
+Write-Log "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as Configurações)..." -Type Success
+    # Chamando as funções que estão dentro de Show-AdvancedSettingsMenu opção 1
     Disable-SMBv1
     Grant-HardenOfficeMacros
-	Write-Host "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -ForegroundColor Green
+    Start-Sleep 2
+
+Write-Log "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -Type Success
+    # Chamando as funções que estão dentro de Show-UtilitiesMenu opção 1
     Remove-SystemBloatware
+
     Remove-OneDrive-AndRestoreFolders
     Invoke-Cleanup
+    
     Grant-PrivacyTweaks
     Grant-ControlPanelTweaks
     Grant-ExtraTweaks
     Disable-Cortana-AndSearch
-	Write-Host "Executando: Menu de Diagnóstico e Informações (Opção 1 - Todas as Verificações)..." -ForegroundColor Green
-    ;sfc /scannow
-    ;Dism /Online /Cleanup-Image /RestoreHealth
+    Start-Sleep 2
 
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "        MANUTENÇÃO COMPLETA CONCLUÍDA!       " -ForegroundColor Cyan
-Write-Host "=============================================" -ForegroundColor Cyan
-    Write-Host "Manutenção Completa Concluída." Green
+Write-Log "Executando: Menu de Diagnóstico e Informações (Opção 1 - Todas as Verificações)..." -Type Success
+    # Chamando as funções que estão dentro de Show-DiagnosticsMenu opção 1
+    sfc /scannow
+    Dism /Online /Cleanup-Image /RestoreHealth
+    # Chkdsk é omitido aqui por requerer reboot
+    Start-Sleep 2
+
+Write-Log "=============================================" -Type Info
+Write-Log "        MANUTENÇÃO COMPLETA CONCLUÍDA!       " -Type Info
+Write-Log "=============================================" -Type Info
+    Write-Log "Manutenção Completa Concluída." Green
     Show-SuccessMessage
     [Console]::ReadKey($true) | Out-Null
 }
@@ -4981,42 +4567,29 @@ Write-Host "=============================================" -ForegroundColor Cyan
 function Show-PersonalizationTweaksMenu {
     do {
         Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host "   MENU DE PERSONALIZAÇÃO E NOVOS RECURSOS   " -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Ativar 'Finalizar Tarefa' na barra de tarefas"
-        Write-Host " B) Ativar atualizações antecipadas do Windows Update"
-        Write-Host " C) Ativar modo escuro"
-        Write-Host " D) Ativar histórico da área de transferência"
-        Write-Host " E) Restauração de apps após reinício"
-        Write-Host " F) Mostrar segundos no relógio"
-        Write-Host " G) Updates para outros produtos Microsoft"
-        Write-Host " H) Habilitar sudo embutido (Windows 11 24H2+)"
-        Write-Host " I) Reforçar e ativar Microsoft Defender"      # NOVO
-        Write-Host " J) Política de Energia (AC nunca; DC 60 min)" # NOVO
-        Write-Host " K) Menu clássico de aparência"
-        Write-Host ""
-        Write-Host " X) Voltar ao Menu Anterior"    -ForegroundColor Red
-		Write-Host " Z) Executar Todos (Sequência)" -ForegroundColor Green
-        Write-Host "=============================================" -ForegroundColor Cyan
+Write-Log "=============================================" -Type Info
+Write-Log "   MENU DE PERSONALIZAÇÃO E NOVOS RECURSOS   " -Type Info
+Write-Log "=============================================" -Type Info
+        Write-Log "Exibindo menu de Personalização e Novos Recursos..." Blue
 
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        Write-Log "Opção no menu de Personalização: $key" -ForegroundColor Cyan
+Write-Log " A. Executar Todos os Ajustes de Personalização (Sequência)" -Type Success
+Write-Log " B. Ativar 'Finalizar tarefa' na barra de tarefas"
+Write-Log " C. Ativar atualizações antecipadas do Windows Update"
+Write-Log " D. Ativar modo escuro"
+Write-Log " E. Ativar histórico da área de transferência"
+Write-Log " F. Restauração de apps após reinício"
+Write-Log " G. Mostrar segundos no relógio"
+Write-Log " H. Updates para outros produtos Microsoft"
+Write-Log " I. Habilitar sudo embutido (Windows 11 24H2+)"
+Write-Log "`n X. Voltar ao Menu Anterior"
+Write-Log "=============================================" -Type Info
+
+        $key = [Console]::ReadKey($true).Key
+        Write-Log "Opção escolhida no menu de Personalização: $key" Blue
 
         switch ($key) {
-            'A' { Enable-TaskbarEndTask;            Show-SuccessMessage }
-            'B' { Enable-WindowsUpdateFast;         Show-SuccessMessage }
-            'C' { Enable-DarkTheme;                 Show-SuccessMessage }
-            'D' { Enable-ClipboardHistory;          Show-SuccessMessage }
-            'E' { Enable-RestartAppsAfterReboot;    Show-SuccessMessage }
-            'F' { Enable-TaskbarSeconds;            Show-SuccessMessage }
-            'G' { Enable-OtherMicrosoftUpdates;     Show-SuccessMessage }
-            'H' { Enable-Sudo;                      Show-SuccessMessage }
-            'I' { Enable-WindowsDefenderHardening;  Show-SuccessMessage } # NOVO
-            'J' { Set-PowerOptionsByPowerSource -BatterySleepMinutes 60; Show-SuccessMessage } # NOVO
-            'K' { Show-PersonalizationMenu }
-            'Z' {
-                Write-Log "Executando sequência completa de Personalização..." -ForegroundColor Red
+            'A' {
+Write-Log "Executando: Todos os Ajustes de Personalização..." -Type Warning
                 Enable-TaskbarEndTask
                 Enable-WindowsUpdateFast
                 Enable-DarkTheme
@@ -5025,15 +4598,22 @@ function Show-PersonalizationTweaksMenu {
                 Enable-TaskbarSeconds
                 Enable-OtherMicrosoftUpdates
                 Enable-Sudo
-                Enable-WindowsDefenderHardening
-                Set-PowerOptionsByPowerSource -BatterySleepMinutes 60
-                Show-PersonalizationMenu
-                Show-SuccessMessage
+Write-Log "Todos os Ajustes de Personalização Concluídos!" -Type Success
+                [Console]::ReadKey($true) | Out-Null
             }
+            'B' { Enable-TaskbarEndTask; Show-SuccessMessage }
+            'C' { Enable-WindowsUpdateFast; Show-SuccessMessage }
+            'D' { Enable-DarkTheme; Show-SuccessMessage }
+            'E' { Enable-ClipboardHistory; Show-SuccessMessage }
+            'F' { Enable-RestartAppsAfterReboot; Show-SuccessMessage }
+            'G' { Enable-TaskbarSeconds; Show-SuccessMessage }
+            'H' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
+            'I' { Enable-Sudo; Show-SuccessMessage }
+            'x' { return }
             'X' { return }
             default {
-                Write-Log "Opção inválida (Personalização)." -ForegroundColor Red
-                Start-Sleep 1
+Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
+                [Console]::ReadKey($true) | Out-Null
             }
         }
     } while ($true)
@@ -5043,7 +4623,7 @@ function Show-AdvancedSettingsMenu {
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host "         MENU: CONFIGURAÇÕES AVANÇADAS        " -ForegroundColor Cyan
+        Write-Host " MENU: CONFIGURAÇÕES AVANÇADAS" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " A) Aplicar Configurações de GPO e Registro"
         Write-Host " B) Ajustar Tema para Desempenho"
@@ -5053,203 +4633,37 @@ function Show-AdvancedSettingsMenu {
         Write-Host " F) Habilitar Opções de Energia Avançadas"
         Write-Host " G) Habilitar SMBv1 (se necessário para redes antigas)"
         Write-Host " H) Habilitar Sudo (se disponível e desejado)"
-        Write-Host " I) Habilitar 'Finalizar tarefa' na Barra de Tarefas"
-        Write-Host " J) Mostrar Segundos na Barra de Tarefas"
-        Write-Host " K) Reforço de Segurança do Windows (Hardening)"
+        Write-Host " I) Habilitar Fim de Tarefa na Barra de Tarefas"
+        Write-Host " J) Habilitar Segundos na Barra de Tarefas"
+        Write-Host " K) Habilitar Reforço de Segurança do Windows"
         Write-Host " L) Otimizar Desempenho do Explorer"
         Write-Host " M) Otimizar Volumes (Desfragmentar/ReTrim)"
         Write-Host " N) Otimizações Gerais de Sistema"
         Write-Host " O) Renomear Notebook"
-        Write-Host " P) Menu de Login Automático"
-        Write-Host " Q) Reforçar Microsoft Defender"             # NOVO
-        Write-Host " R) Política de Energia (AC nunca; DC 60 min)" # NOVO
-        Write-Host ""
-        Write-Host " X) Voltar ao menu anterior"                    -ForegroundColor Red
-        Write-Host " Z) Rotina Completa (Executa A–R em sequência)" -ForegroundColor Green
-		Write-Host "=============================================" -ForegroundColor Cyan
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        Write-Log "Opção no menu Avançado: $key" -ForegroundColor Cyan
-
-        switch ($key) {
-            'A' { Grant-GPORegistrySettings;      Show-SuccessMessage }
-            'B' { Set-PerformanceTheme;           Show-SuccessMessage }
-            'C' { Disable-UAC;                    Show-SuccessMessage }
-            'D' { Enable-ClassicContextMenu;      Show-SuccessMessage }
-            'E' { Enable-ClipboardHistory;        Show-SuccessMessage }
-            'F' { Enable-PowerOptions;            Show-SuccessMessage }
-            'G' { Enable-SMBv1;                   Show-SuccessMessage }
-            'H' { Enable-Sudo;                    Show-SuccessMessage }
-            'I' { Enable-TaskbarEndTask;          Show-SuccessMessage }
-            'J' { Enable-TaskbarSeconds;          Show-SuccessMessage }
-            'K' { Enable-WindowsHardening;        Show-SuccessMessage }
-            'L' { Optimize-ExplorerPerformance;   Show-SuccessMessage }
-            'M' { Optimize-Volumes;               Show-SuccessMessage }
-            'N' { Grant-SystemOptimizations;      Show-SuccessMessage }
-            'O' { Rename-Notebook;                Show-SuccessMessage }
-            'P' { Show-AutoLoginMenu } # já exibe sua própria UI
-            'Q' { Enable-WindowsDefenderHardening;                      Show-SuccessMessage } # NOVO
-            'R' { Set-PowerOptionsByPowerSource -BatterySleepMinutes 60; Show-SuccessMessage } # NOVO
-
-            'Z' {
-                Write-Log "Executando sequência completa de Configurações Avançadas..." -ForegroundColor Red
-                Grant-GPORegistrySettings
-                Set-PerformanceTheme
-                Disable-UAC
-                Enable-ClassicContextMenu
-                Enable-ClipboardHistory
-                Enable-PowerOptions
-                Enable-SMBv1
-                Enable-Sudo
-                Enable-TaskbarEndTask
-                Enable-TaskbarSeconds
-                Enable-WindowsHardening
-                Optimize-ExplorerPerformance
-                Optimize-Volumes
-                Grant-SystemOptimizations
-                Rename-Notebook
-                # Show-AutoLoginMenu é interativo — deixe por último se quiser incluir
-                Enable-WindowsDefenderHardening
-                Set-PowerOptionsByPowerSource -BatterySleepMinutes 60
-                Show-SuccessMessage
-            }
-            'X' { return }
-            default {
-                Write-Log "Opção inválida (Avançado)." -ForegroundColor Red
-                Start-Sleep 1
-            }
-        }
-    } while ($true)
-}
-
-function Show-SecurityMenu {
-    do {
-        Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host "              MENU: SEGURANÇA               " -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Endurecimento de privacidade"
-        Write-Host " B) Hardening do Windows"
-        Write-Host " C) Reforçar Microsoft Defender"
-        Write-Host " D) Harden Office (bloquear macros)"
-        Write-Host " E) Desfazer privacidade agressiva"
-        Write-Host " F) Restaurar macros do Office"
-        Write-Host ""
-        Write-Host " X) Voltar ao Menu Anterior" -ForegroundColor Red
-        Write-Host " Z) Executar Tudo (Sequência)" -ForegroundColor Green
-        Write-Host "=============================================" -ForegroundColor Cyan
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        Write-Log "Opção no menu Segurança: $key" -ForegroundColor Cyan
-
-        switch ($key) {
-            'A' { Enable-PrivacyHardening;       Show-SuccessMessage }
-            'B' { Enable-WindowsHardening;       Show-SuccessMessage }
-            'C' { Enable-WindowsDefenderHardening; Show-SuccessMessage }
-            'D' { Grant-HardenOfficeMacros;      Show-SuccessMessage }
-            'E' { Undo-PrivacyHardening;         Show-SuccessMessage }
-            'F' { Restore-OfficeMacros;          Show-SuccessMessage }
-            'Z' {
-                Write-Log "Executando sequência completa de Segurança..." -ForegroundColor Red
-                Enable-PrivacyHardening
-                Enable-WindowsHardening
-                Enable-WindowsDefenderHardening
-                Grant-HardenOfficeMacros
-                Show-SuccessMessage
-            }
-            'X' { return }
-            default {
-                Write-Log "Opção inválida (Segurança)." -ForegroundColor Red
-                Start-Sleep 1
-            }
-        }
-    } while ($true)
-}
-
-function Show-UpdatesMenu {
-    do {
-        Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host "             MENU: ATUALIZAÇÕES             " -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Windows Update (PSWindowsUpdate)"
-        Write-Host " B) Updates para outros produtos Microsoft"
-        Write-Host " C) Atualizar Windows + Drivers (winget)"
-        Write-Host " D) Atualizar PowerShell"
-        Write-Host ""
-        Write-Host " X) Voltar ao Menu Anterior" -ForegroundColor Red
-        Write-Host " Z) Executar Tudo (Sequência)" -ForegroundColor Green
-        Write-Host "=============================================" -ForegroundColor Cyan
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        Write-Log "Opção no menu Atualizações: $key" -ForegroundColor Cyan
-
-        switch ($key) {
-            'A' { Grant-WindowsUpdates;      Show-SuccessMessage }
-            'B' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
-            'C' { Update-WindowsAndDrivers;  Show-SuccessMessage }
-            'D' { Update-PowerShell;         Show-SuccessMessage }
-            'Z' {
-                Write-Log "Executando sequência completa de Atualizações..." -ForegroundColor Red
-                Grant-WindowsUpdates
-                Enable-OtherMicrosoftUpdates
-                Update-WindowsAndDrivers
-                Update-PowerShell
-                Show-SuccessMessage
-            }
-            'X' { return }
-            default {
-                Write-Log "Opção inválida (Atualizações)." -ForegroundColor Red
-                Start-Sleep 1
-            }
-        }
-    } while ($true)
-}
-
-function Show-DiagnosticsMenu {
-    do {
-        Clear-Host
-        Write-Host "`n[DIAGNÓSTICOS]" -ForegroundColor Cyan
-        Write-Host " A) SFC /SCANNOW"
-        Write-Host " B) DISM /RestoreHealth"
-        Write-Host " C) SMART dos Discos"
-        Write-Host " D) Teste de Memória"
-        Write-Host " E) Informações do Sistema"
-        Write-Host ""
-        Write-Host " X) Voltar" -ForegroundColor Cyan
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        switch ($key) {
-            'A' { Invoke-SFC-Scan }
-            'B' { Invoke-DISM-Scan }
-            'C' { Test-SMART-Drives }
-            'D' { Test-Memory }
-            'E' { Show-SystemInfo }
-            'X' { return }
-        }
-        Show-SuccessMessage
-    } while ($true)
-}
-
-function Show-AppsMenu {
-    do {
-        Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " MENU: INSTALAÇÃO E FERRAMENTAS" -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Selecionar Aplicativos para Instalar"
-        Write-Host " B) Gerenciar Programas e Recursos (Abrir)"
-        Write-Host " C) Desinstalar Aplicativos UWP (Microsoft Store)"
-        Write-Host ""
+        Write-Host " P) Mostrar Menu de Login Automático"
+        Write-Host " Z) Rotina Completa (Executa todas as opções acima)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
-        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
-		Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Show-InstallAppsMenu }
-            'B' { Start-Process "appwiz.cpl"; Show-SuccessMessage }
-            'C' { Start-Process "ms-settings:appsfeatures"; Show-SuccessMessage }
-            'Z' { Install-Applications; Show-SuccessMessage }
+            'A' { Grant-GPORegistrySettings; Show-SuccessMessage }
+            'B' { Set-PerformanceTheme; Show-SuccessMessage }
+            'C' { Disable-UAC; Show-SuccessMessage }
+            'D' { Enable-ClassicContextMenu; Show-SuccessMessage }
+            'E' { Enable-ClipboardHistory; Show-SuccessMessage }
+            'F' { Enable-PowerOptions; Show-SuccessMessage }
+            'G' { Enable-SMBv1; Show-SuccessMessage }
+            'H' { Enable-Sudo; Show-SuccessMessage }
+            'I' { Enable-TaskbarEndTask; Show-SuccessMessage }
+            'J' { Enable-TaskbarSeconds; Show-SuccessMessage }
+            'K' { Enable-WindowsHardening; Show-SuccessMessage }
+            'L' { Optimize-ExplorerPerformance; Show-SuccessMessage }
+            'M' { Optimize-Volumes; Show-SuccessMessage }
+            'N' { Grant-SystemOptimizations; Show-SuccessMessage }
+            'O' { Rename-Notebook; Show-SuccessMessage }
+            'P' { Show-AutoLoginMenu } # Esta função já tem sua própria UI
+            'Z' { Invoke-Tweaks; Show-SuccessMessage } # Chama o orquestrador de tweaks
             'X' { return }
             default {
                 Write-Host 'Opção inválida. Pressione qualquer tecla para continuar...' -ForegroundColor Yellow
@@ -5259,50 +4673,29 @@ function Show-AppsMenu {
     } while ($true)
 }
 
-function Show-InstallAppsMenu {
-    $appsToInstall = @(
-        @{ Key = '1'; Name = '7-Zip';                  Id = '7zip.7zip' },
-        @{ Key = '2'; Name = 'AnyDesk';                Id = 'AnyDesk.AnyDesk' },
-        @{ Key = '3'; Name = 'AutoHotKey';             Id = 'AutoHotkey.AutoHotkey' },
-        @{ Key = '4'; Name = 'Foxit Reader';           Id = 'Foxit.FoxitReader' },
-        @{ Key = '5'; Name = 'Google Chrome';          Id = 'Google.Chrome' },
-        @{ Key = '6'; Name = 'Google Drive';           Id = 'Google.GoogleDrive' },
-        @{ Key = '7'; Name = 'Greenshot';              Id = 'Greenshot.Greenshot' },
-        @{ Key = '8'; Name = 'K-Lite Codec Pack Full'; Id = 'CodecGuide.K-LiteCodecPack.Full' },
-        @{ Key = '9'; Name = 'Microsoft Office';       Id = 'Microsoft.Office' },
-        @{ Key = 'A'; Name = 'Microsoft PowerToys';    Id = 'Microsoft.PowerToys' },
-        @{ Key = 'B'; Name = 'Notepad++';              Id = 'Notepad++.Notepad++' },
-        @{ Key = 'C'; Name = 'VLC Media Player';       Id = 'VideoLAN.VLC' }
-    )
-
+function Show-AppsMenu {
     do {
         Clear-Host
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " SUBMENU: Seleção de Aplicativos" -ForegroundColor Cyan
+        Write-Host " MENU: INSTALAÇÃO E FERRAMENTAS" -ForegroundColor Cyan
+        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " A) Instalar Aplicativos Definidos"
+        Write-Host " B) Gerenciar Programas e Recursos (Abrir)"
+        Write-Host " C) Desinstalar Aplicativos UWP (Microsoft Store)"
+        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
 
-        foreach ($app in $appsToInstall) {
-            Write-Host " $($app.Key)) $($app.Name)"
-        }
-        Write-Host " Z) Voltar ao menu de Aplicativos" -ForegroundColor Red
-        Write-Host " X) Voltar ao menu principal" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
-
-        $choice = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        $selected = $appsToInstall | Where-Object Key -EQ $choice
-
-        if ($selected) {
-            Install-Applications -AppId $selected.Id
-            Show-SuccessMessage
-        }
-        else {
-            switch ($choice) {
-                'Z' { return }        # Volta ao menu anterior (Show-AppsMenu)
-                'X' { return }        # Volta ao menu principal
-                default {
-                    Write-Host 'Opção inválida. Pressione qualquer tecla para continuar...' -ForegroundColor Yellow
-                    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-                }
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        switch ($key) {
+            'A' { Install-Applications; Show-SuccessMessage }
+            'B' { Start-Process "appwiz.cpl"; Show-SuccessMessage } # Abre "Programas e Recursos"
+            'C' { Start-Process "ms-settings:appsfeatures"; Show-SuccessMessage } # Abre "Aplicativos e Recursos" (UWP)
+            'Z' { Invoke-AppsAndTools; Show-SuccessMessage } # Chama o orquestrador
+            'X' { return }
+            default {
+                Write-Host 'Opção inválida. Pressione qualquer tecla para continuar...' -ForegroundColor Yellow
+                $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             }
         }
     } while ($true)
@@ -5318,9 +4711,8 @@ function Show-DiagnosticsMenu {
         Write-Host " B) Mostrar Uso de Disco"
         Write-Host " C) Mostrar Informações do Sistema"
         Write-Host " D) Testar Memória"
-        Write-Host ""
-		Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
-		Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+        Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -5355,10 +4747,9 @@ function Show-NetworkMenu {
         Write-Host " H) Configurar DNS Google/Cloudflare"
         Write-Host " I) Mostrar Informações de Rede"
         Write-Host " J) Testar Velocidade da Internet"
-		Write-Host ""
-        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
-	    Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
+        Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
@@ -5391,18 +4782,12 @@ function Show-ExternalScriptsMenu {
         Write-Host " A) Rodar Ativador get.activated.win"
         Write-Host " B) Executar Chris Titus Toolbox"
         Write-Host " C) Atualizar Script Supremo pela URL"
-		Write-Host " D) Atualizar PowerShell"
-        Write-Host " E) Script pra perfil PowerShell"
-		Write-Host ""
         Write-Host " X) Voltar" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
-		$key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-WindowsActivator }
             'B' { Invoke-ChrisTitusToolbox }
             'C' { Update-ScriptFromCloud }
-			'D' { Update-PowerShell }
-			'E' { Invoke-PowerShellProfile }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5426,12 +4811,8 @@ function Show-RestoreMenu {
         Write-Host " I) Restaurar macros Office"
         Write-Host " J) Restaurar IPv6"
         Write-Host " K) Reabilitar notificações Action Center"
-        Write-Host " L) Orquestrador de restauração (completo)"
-        Write-Host " M) Restaurar configurações padrão do sistema"
-		Write-Host ""
         Write-Host " X) Voltar" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
-		$key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { New-SystemRestorePoint }
             'B' { Backup-Registry }
@@ -5444,8 +4825,6 @@ function Show-RestoreMenu {
             'I' { Restore-OfficeMacros }
             'J' { Restore-DefaultIPv6 }
             'K' { Grant-ActionCenter-Notifications }
-            'L' { Invoke-Undo }
-            'M' { Restore-SystemDefaults }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5455,66 +4834,71 @@ function Show-RestoreMenu {
 function Show-UtilitiesMenu {
     do {
         Clear-Host
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "       MENU DE UTILITÁRIOS DO SISTEMA        " -ForegroundColor Cyan
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "Exibindo menu de Utilitários do Sistema..."  -ForegroundColor Blue
-Write-Host " A. Executar Todas as Tarefas de Otimização (Sequência)" -ForegroundColor Green
-Write-Host " B. Gerenciar Bloatware"
-Write-Host " C. Limpeza e Otimização de Disco"
-Write-Host " D. Aplicar Otimizações de Desempenho e Privacidade"
-Write-Host " E. Desativar Cortana e Pesquisa Online"
-Write-Host ""
-Write-Host "`n X. Voltar ao Menu Principal" -ForegroundColor Red
-Write-Host "=============================================" -ForegroundColor Cyan
+Write-Log "=============================================" -Type Info
+Write-Log "       MENU DE UTILITÁRIOS DO SISTEMA        " -Type Info
+Write-Log "=============================================" -Type Info
+        Write-Log "Exibindo menu de Utilitários do Sistema..." Blue
+
+Write-Log " A. Executar Todas as Tarefas de Otimização (Sequência)" -Type Success
+Write-Log " B. Gerenciar Bloatware"
+Write-Log " C. Limpeza e Otimização de Disco"
+Write-Log " D. Aplicar Otimizações de Desempenho e Privacidade"
+Write-Log " E. Desativar Cortana e Pesquisa Online"
+Write-Log "`n X. Voltar ao Menu Principal"
+Write-Log "=============================================" -Type Info
 
         $key = [Console]::ReadKey($true).Key
-        Write-Log "Opção escolhida no menu de Utilitários: $key" -ForegroundColor Blue
+        Write-Log "Opção escolhida no menu de Utilitários: $key" Blue
 
         switch ($key) {
             'A' {
-Write-Log "Executando: Todas as Tarefas de Otimização..." -ForegroundColor Red
+Write-Log "Executando: Todas as Tarefas de Otimização..." -Type Warning
                 Remove-SystemBloatware
+
                 Remove-OneDrive-AndRestoreFolders
                 Invoke-Cleanup
+                
                 Grant-PrivacyTweaks
                 Grant-ControlPanelTweaks
                 Grant-ExtraTweaks
                 Disable-Cortana-AndSearch
                 Show-PersonalizationTweaksMenu # NOVO: CHAMA O MENU DE PERSONALIZAÇÃO COMPLETO
-Write-Log "Todas as Tarefas de Otimização Concluídas!" -ForegroundColor Green
+Write-Log "Todas as Tarefas de Otimização Concluídas!" -Type Success
                 [Console]::ReadKey($true) | Out-Null
             }
             'B' {
                 do {
                     Clear-Host
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -ForegroundColor Cyan
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host " Exibindo submenu de Bloatware..." -ForegroundColor Blue
-Write-Host " A. Remover Bloatware (Todos em sequência)"
-Write-Host " B. Remover Aplicativos Pré-instalados (Bloatware)"
-Write-Host " C. Remover OneDrive e Restaurar Pastas"
-Write-Host ""
-Write-Host "`n X. Voltar ao Menu Anterior" -ForegroundColor Red
-Write-Host "=============================================" -ForegroundColor Cyan
+Write-Log "=============================================" -Type Info
+Write-Log "       SUBMENU DE GERENCIAMENTO DE BLOATWARE        " -Type Info
+Write-Log "=============================================" -Type Info
+                    Write-Log "Exibindo submenu de Bloatware..." Blue
+
+Write-Log " A. Remover Bloatware (Todos em sequência)"
+Write-Log " B. Remover Aplicativos Pré-instalados (Bloatware)"
+Write-Log " C. Remover OneDrive e Restaurar Pastas"
+Write-Log "`n X. Voltar ao Menu Anterior"
+Write-Log "=============================================" -Type Info
 
                     $subChoice = [Console]::ReadKey($true).Key
-                    Write-Log "Opção escolhida no submenu de Bloatware: $subChoice" -ForegroundColor Blue
+                    Write-Log "Opção escolhida no submenu de Bloatware: $subChoice" Blue
 
                     switch ($subChoice) {
                         'A' {
-Write-Host "Executando: Remover Bloatware (Todos em sequência)..." -ForegroundColor Red
+Write-Log "Executando: Remover Bloatware (Todos em sequência)..." -Type Warning
                             Remove-SystemBloatware
-                            Remove-OneDrive-AndRestoreFolders Write-Log "Remoção de Bloatware Concluída!" -ForegroundColor Green
+
+                            Remove-OneDrive-AndRestoreFolders
+Write-Log "Remoção de Bloatware Concluída!" -Type Success
                             [Console]::ReadKey($true) | Out-Null
                         }
-                        'B' { Remove-SystemBloatware; Show-SuccessMessage }
+                        'B' { Remove-SystemBloatware
+; Show-SuccessMessage }
                         'C' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
                         'x' { return }
                         'X' { return }
                         default {
-Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
                             [Console]::ReadKey($true) | Out-Null
                         }
                     }
@@ -5523,26 +4907,26 @@ Write-Host "`nOpção inválida! Pressione qualquer tecla para continuar." -Fore
             'C' {
                 do {
                     Clear-Host
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "      SUBMENU DE LIMPEZA E OTIMIZAÇÃO DE DISCO      " -ForegroundColor Cyan
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "Exibindo submenu de Limpeza e Otimização..." -ForegroundColor Blue
-Write-Host " A. Executar Todas as Tarefas de Limpeza e Otimização"
-Write-Host " B. Limpeza de Arquivos Temporários"
-Write-Host " C. Desfragmentar/Otimizar Drives"
-Write-Host ""
-Write-Host "`n X. Voltar ao Menu Anterior"
-Write-Host "=============================================" -ForegroundColor Cyan
+Write-Log "=============================================" -Type Info
+Write-Log "      SUBMENU DE LIMPEZA E OTIMIZAÇÃO DE DISCO      " -Type Info
+Write-Log "=============================================" -Type Info
+                    Write-Log "Exibindo submenu de Limpeza e Otimização..." Blue
+
+Write-Log " A. Executar Todas as Tarefas de Limpeza e Otimização"
+Write-Log " B. Limpeza de Arquivos Temporários"
+Write-Log " C. Desfragmentar/Otimizar Drives"
+Write-Log "`n X. Voltar ao Menu Anterior"
+Write-Log "=============================================" -Type Info
 
                     $subChoice = [Console]::ReadKey($true).Key
-                    Write-Log "Opção escolhida no submenu de Limpeza: $subChoice" -ForegroundColor Blue
+                    Write-Log "Opção escolhida no submenu de Limpeza: $subChoice" Blue
 
                     switch ($subChoice) {
                         'A' {
-Write-Log "Executando: Todas as Tarefas de Limpeza e Otimização..." -ForegroundColor Red
+Write-Log "Executando: Todas as Tarefas de Limpeza e Otimização..." -Type Warning
                             Invoke-Cleanup
                             
-Write-Log "Limpeza e Otimização Concluídas!" -ForegroundColor Green
+Write-Log "Limpeza e Otimização Concluídas!" -Type Success
                             [Console]::ReadKey($true) | Out-Null
                         }
                         'B' { Invoke-Cleanup; Show-SuccessMessage }
@@ -5550,7 +4934,7 @@ Write-Log "Limpeza e Otimização Concluídas!" -ForegroundColor Green
                         'x' { return }
                         'X' { return }
                         default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
                             [Console]::ReadKey($true) | Out-Null
                         }
                     }
@@ -5559,31 +4943,30 @@ Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Foreg
             'D' { # Otimizações de Desempenho e Privacidade
                 do {
                     Clear-Host
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "    SUBMENU DE OTIMIZAÇÕES DE DESEMPENHO E PRIVACIDADE    " -ForegroundColor Cyan
-Write-Host "=============================================" -ForegroundColor Cyan
-                    Write-Host "Exibindo submenu de Otimizações de Desempenho e Privacidade..." Blue
+Write-Log "=============================================" -Type Info
+Write-Log "    SUBMENU DE OTIMIZAÇÕES DE DESEMPENHO E PRIVACIDADE    " -Type Info
+Write-Log "=============================================" -Type Info
+                    Write-Log "Exibindo submenu de Otimizações de Desempenho e Privacidade..." Blue
 
-Write-Host " A. Aplicar Todas as Otimizações de Desempenho e Privacidade"
-Write-Host " B. Aplicar Tweaks de Privacidade"
-Write-Host " C. Ajustar Painel de Controle e Explorer"
-Write-Host " D. Aplicar Tweaks Extras"
-Write-Host " E. Outros Ajustes e Personalização" -ForegroundColor Green
-
-Write-Host "`n X. Voltar ao Menu Anterior"
-Write-Host "=============================================" -ForegroundColor Cyan
+Write-Log " A. Aplicar Todas as Otimizações de Desempenho e Privacidade"
+Write-Log " B. Aplicar Tweaks de Privacidade"
+Write-Log " C. Ajustar Painel de Controle e Explorer"
+Write-Log " D. Aplicar Tweaks Extras"
+Write-Log " E. Outros Ajustes e Personalização" -Type Success
+Write-Log "`n X. Voltar ao Menu Anterior"
+Write-Log "=============================================" -Type Info
 
                     $subChoice = [Console]::ReadKey($true).Key
                     Write-Log "Opção escolhida no submenu de Desempenho e Privacidade: $subChoice" Blue
 
                     switch ($subChoice) {
                         'A' {
-Write-Log "Executando: Todas as Otimizações de Desempenho e Privacidade..." -ForegroundColor Red
+Write-Log "Executando: Todas as Otimizações de Desempenho e Privacidade..." -Type Warning
                             Grant-PrivacyTweaks
                             Grant-ControlPanelTweaks
                             Grant-ExtraTweaks
                             Show-PersonalizationTweaksMenu # NOVO: CHAMA O MENU DE PERSONALIZAÇÃO COMPLETO
-Write-Log "Otimizações de Desempenho e Privacidade Concluídas!" -ForegroundColor Green
+Write-Log "Otimizações de Desempenho e Privacidade Concluídas!" -Type Success
                             [Console]::ReadKey($true) | Out-Null
                         }
                         'B' { Grant-PrivacyTweaks; Show-SuccessMessage }
@@ -5593,7 +4976,7 @@ Write-Log "Otimizações de Desempenho e Privacidade Concluídas!" -ForegroundCo
                         'x' { return }
                         'X' { return }
                         default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
                             [Console]::ReadKey($true) | Out-Null
                         }
                     }
@@ -5603,7 +4986,7 @@ Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Foreg
             'x' { return }
             'X' { return }
             default {
-Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -ForegroundColor Red
+Write-Log "`nOpção inválida! Pressione qualquer tecla para continuar." -Type Error
                 [Console]::ReadKey($true) | Out-Null
             }
         }
@@ -5627,10 +5010,8 @@ function Show-CleanupMenu {
         Write-Host " I) Iniciar Verificação DISM"
         Write-Host " J) Iniciar Verificação SFC"
         Write-Host " K) Agendar ChkDsk no Reboot"
-        Write-Host " L) Rotina agrupada (Grant-Cleanup)"
-        Write-Host ""
-        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -5646,7 +5027,6 @@ function Show-CleanupMenu {
             'I' { Invoke-DISM-Scan; Show-SuccessMessage }
             'J' { Invoke-SFC-Scan; Show-SuccessMessage }
             'K' { New-ChkDsk; Show-SuccessMessage }
-            'L' { Grant-Cleanup; Show-SuccessMessage }
             'Z' { Invoke-Cleanup; Show-SuccessMessage } # Chama o orquestrador de Limpeza
             'X' { return }
             default {
@@ -5673,9 +5053,8 @@ function Show-BloatwareMenu {
         Write-Host " H) Remover Pastas de Bloatware Seguras"
         Write-Host " I) Parar Processos de Bloatware em Execução"
         Write-Host " J) Aplicar Prevenção de Bloatware e Privacidade"
-        Write-Host ""
-        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -5711,9 +5090,8 @@ function Show-SystemPerformanceMenu {
         Write-Host " C) Ajustar Efeitos Visuais para Desempenho"
         Write-Host " D) Realizar Otimizações Gerais do Sistema"
         Write-Host " E) Criar Ponto de Restauração do Sistema"
-        Write-Host ""
-        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
+        Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -5736,15 +5114,11 @@ function Show-SystemPerformanceMenu {
 function Show-WindowsFeaturesMenu {
     do {
         Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-		Write-Host "`n[RECURSOS DO WINDOWS]" -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host "`n[RECURSOS DO WINDOWS]" -ForegroundColor Cyan
         Write-Host " A) Remover Copilot"
         Write-Host " B) Desativar Recall"
         Write-Host " C) Aplicar plano de energia otimizado"
-		Write-Host ""
-        Write-Host " X) Voltar" -ForegroundColor Red
-        Write-Host "=============================================" -ForegroundColor Cyan
+        Write-Host " X) Voltar"
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Remove-SystemBloatware}
@@ -5755,6 +5129,8 @@ function Show-WindowsFeaturesMenu {
         Show-SuccessMessage
     } while ($true)
 }
+
+# === MENU PRINCIPAL ===
 
 function Show-MainMenu {
     do {
@@ -5767,39 +5143,34 @@ function Show-MainMenu {
         Write-Host " C) Privacidade e Segurança" -ForegroundColor Yellow
         Write-Host " D) Rede e Outros" -ForegroundColor Yellow
         Write-Host " E) Sistema e Desempenho" -ForegroundColor Yellow
-        Write-Host " F) Scripts Externos" -ForegroundColor Yellow
-        Write-Host " G) Menu de Utilidades" -ForegroundColor Yellow
+		Write-Host " F) Scripts Externos" -ForegroundColor Yellow
+		Write-Host " G) Restaurações" -ForegroundColor Yellow
         Write-Host " H) Rotina Colégio" -ForegroundColor Green
-        Write-Host " I) Manutenção Completa" -ForegroundColor Magenta
-        Write-Host " J) Diagnósticos do Sistema" -ForegroundColor Magenta
-        Write-Host " K) Limpeza do Sistema" -ForegroundColor Magenta
-        Write-Host " L) Recursos do Windows" -ForegroundColor Magenta
-        Write-Host " M) Ajustes de Personalização" -ForegroundColor Magenta
-        Write-Host " N) Restaurações" -ForegroundColor Magenta
-        Write-Host "---------------------------------------------" -ForegroundColor Gray
-        Write-Host " X) Sair do Script" -ForegroundColor Red
-        Write-Host " Y) Reiniciar o Sistema" -ForegroundColor Blue
-        Write-Host " Z) Desligar o Sistema" -ForegroundColor Blue
+		Write-Host " R) Reiniciar" -ForegroundColor Blue
+        Write-Host " S) Desligar" -ForegroundColor Blue
+        Write-Host " X) Sair" -ForegroundColor Red
         Write-Host "==============================================="
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Show-AdvancedSettingsMenu }
-            'B' { Show-AppsMenu }
-            'C' { Show-BloatwareMenu }
-            'D' { Show-NetworkMenu }
-            'E' { Show-SystemPerformanceMenu }
-            'F' { Show-ExternalScriptsMenu }
-            'G' { Show-UtilitiesMenu }
-            'H' { Invoke-Colegio }
-            'I' { Show-FullMaintenance }
-            'J' { Show-DiagnosticsMenu }
-            'K' { Show-CleanupMenu }
-            'L' { Show-WindowsFeaturesMenu }
-            'M' { Show-PersonalizationTweaksMenu }
-            'N' { Show-RestoreMenu }
-            'Y' { Restart-ComputerConfirmation }
-            'Z' { Stop-ComputerConfirmation }
+            'B' { Show-AppsMenu } # Mapeado para o antigo "Aplicativos"
+            'C' { Show-BloatwareMenu } # Mapeado para o antigo "Remoção de Bloatware"
+            'D' { Show-NetworkMenu } # Mapeado para o antigo "Rede e Impressoras"
+            'E' { Show-SystemPerformanceMenu } # Mapeado para a função de desempenho
+			'F' { Show-ExternalScriptsMenu }
+			'G' { Invoke-Undo }
+			'H' { Invoke-Colegio }
+            'R' {
+                Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
+                Restart-Computer -Force
+                # O script será encerrado aqui, pois o computador será reiniciado.
+            }
+            'S' {
+                Write-Host 'Desligando o sistema...' -ForegroundColor Cyan
+                Stop-Computer -Force
+                # O script será encerrado aqui, pois o computador será desligado.
+            }
             'X' {
                 Write-Host "Saindo do script. Pressione qualquer tecla para fechar..." -ForegroundColor Magenta
                 [void][System.Console]::ReadKey($true) # Espera por qualquer tecla
@@ -5811,27 +5182,18 @@ function Show-MainMenu {
             }
         }
     } while ($true)
-}# -------------------------------------------------------------------------
+}
 
+# -------------------------------------------------------------------------
 # 🔧 Função principal: ponto de entrada do script
 function Start-ScriptSupremo {
     Write-Log "`n🛠️ Iniciando o script de manutenção..." -Type Info
-    $requiredFunctions = @(
-        "Show-MainMenu",
-        "Invoke-Cleanup",
-        "Invoke-Tweaks",
-        "Invoke-NetworkUtilities",
-        "Invoke-All-DiagnosticsAdvanced"
-    )
-    if (-not (Test-RequiredFunctions -FunctionList $requiredFunctions)) {
-        Suspend-Script
-    }
 
     try {
         Write-Log "⚙️ Chamando o menu principal..." -Type Warning
         Show-MainMenu
     } catch {
-    Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Error
+        Write-Log "❌ Erro ao executar o menu principal: $($_.Exception.Message)" -Type Error
     }
 }
 
@@ -5840,15 +5202,29 @@ function Start-ScriptSupremo {
 # -------------------------------------------------------------------------
 
 function Grant-WriteProgress {
-    [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string]$Activity,
-        [Parameter(Mandatory)][string]$Status,
-        [Parameter(Mandatory)][int]$PercentComplete
+        [string]$Activity,
+        [string]$Status,
+        [int]$PercentComplete
     )
-    try { Write-Progress -Activity $Activity -Status $Status -PercentComplete $PercentComplete } catch {
-        Write-Log "Falha Write-Progress: $($_.Exception.Message)" -Type Debug
+    if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('WhatIf')) {
+        # Não exibe Write-Progress em modo WhatIf para não poluir a saída de debug
+    } else {
+        Write-Progress -Activity $Activity -Status $Status -PercentComplete $PercentComplete
     }
+}
+
+# CORREÇÃO #3 (auditoria): unifica os dois nomes históricos (Safe-WriteProgress e
+# Grant-WriteProgress) numa única implementação. Assim as ~181 chamadas existentes de
+# QUALQUER um dos nomes passam a usar a MESMA lógica, sem precisar renomear cada chamada
+# nem depender do fallback aninhado dentro de Remove-SystemBloatware.
+function Safe-WriteProgress {
+    param(
+        [string]$Activity,
+        [string]$Status,
+        [int]$PercentComplete
+    )
+    Grant-WriteProgress -Activity $Activity -Status $Status -PercentComplete $PercentComplete
 }
 
 function Grant-TrackProgress {
@@ -5898,702 +5274,3 @@ function Test-CommandExists {
 # -------------------------------------------------------------------------
 # Ativa o script (CHAMADA PRINCIPAL NO FINAL)
 Start-ScriptSupremo
-
-function Safe-WriteProgress {
-    param([string]$Activity,[string]$Status,[int]$PercentComplete)
-    try { Write-Progress -Activity $Activity -Status $Status -PercentComplete $PercentComplete } catch {}
-}
-
-function Remove-ItemRobust {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [int]$Retries = 3,
-        [int]$DelayMs = 250
-    )
-    for($i=1; $i -le $Retries; $i++){
-        try {
-            if (Test-Path -LiteralPath $Path) {
-                Remove-Item -LiteralPath $Path -Force -Recurse -ErrorAction Stop
-            }
-            return $true
-        } catch {
-            Start-Sleep -Milliseconds $DelayMs
-            if ($i -eq $Retries) {
-                Write-Log "Falha ao remover '$Path': $($_.Exception.Message)" -Type Warning
-                return $false
-            }
-        }
-    }
-}
-
-function Stop-ServiceGracefully {
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Name,[int]$TimeoutSec=20)
-    try {
-        $svc = Get-Service -Name $Name -ErrorAction Stop
-        if ($svc.Status -ne 'Stopped') {
-            Stop-Service -Name $Name -Force -ErrorAction SilentlyContinue
-            $sw=[Diagnostics.Stopwatch]::StartNew()
-            while($sw.Elapsed.TotalSeconds -lt $TimeoutSec){
-                $svc.Refresh()
-                if ($svc.Status -eq 'Stopped'){ break }
-                Start-Sleep -Milliseconds 400
-            }
-        }
-        return $true
-    } catch {
-        Write-Log "Não foi possível parar o serviço '$Name': $($_.Exception.Message)" -Type Warning
-        return $false
-    }
-}
-
-function Start-ServiceSafe {
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Name)
-    try { Start-Service -Name $Name -ErrorAction SilentlyContinue } catch {}
-}
-
-
-function Clear-TemporaryFiles {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    $activity = "Limpeza de Temporários"
-    Write-Log "Iniciando limpeza rápida de temporários..." -Type Info
-    $targets = @("$env:TEMP\*","$env:SystemRoot\Temp\*")
-    $i=0; $total=[Math]::Max(1,$targets.Count)
-    foreach($path in $targets){
-        $i++; Safe-WriteProgress -Activity $activity -Status "Limpando $path" -PercentComplete ([int](($i/$total)*100))
-        if (Test-Path $path -PathType Any){
-            if ($PSCmdlet.ShouldProcess($path,"Remove-Item")){
-                Get-ChildItem -Path $path -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                    try { Remove-ItemRobust -Path $_.FullName | Out-Null }
-                    catch { Write-Log "Temp: falha '$($_.FullName)': $($_.Exception.Message)" -Type Warning }
-                }
-            }
-        }
-    }
-    Safe-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-    Write-Log "Temporários limpos." -Type Success
-}
-
-
-function Clear-WUCache {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    $root = Join-Path $env:SystemRoot "SoftwareDistribution\Download"
-    $bak  = "$root.bak_{0}" -f (Get-Date -Format "yyyyMMdd_HHmmss")
-    Write-Log "Limpando cache do Windows Update (método rápido por rename)..." -Type Info
-    if (-not (Test-Path $root)) { Write-Log "Pasta não encontrada: $root" -Type Warning; return }
-    if ($PSCmdlet.ShouldProcess($root, "Limpar WU cache por rename")){
-        Stop-ServiceGracefully -Name bits     | Out-Null
-        Stop-ServiceGracefully -Name wuauserv | Out-Null
-        try {
-            Rename-Item -LiteralPath $root -NewName (Split-Path -Leaf $bak) -ErrorAction Stop
-            Write-Log "Renomeado para $bak (remoção assíncrona)." -Type Success
-        } catch {
-            Write-Log "Rename falhou, tentando remoção direta: $($_.Exception.Message)" -Type Warning
-            Remove-ItemRobust -Path "$root\*"
-        } finally {
-            Start-ServiceSafe -Name bits
-            Start-ServiceSafe -Name wuauserv
-        }
-        # Limpa sobras antigas para não acumular
-        Get-ChildItem (Join-Path $env:SystemRoot "SoftwareDistribution") -Directory -Filter "Download.bak_*" -ErrorAction SilentlyContinue |
-            Where-Object { ($_.LastWriteTime -lt (Get-Date).AddDays(-3)) } |
-            ForEach-Object { Remove-ItemRobust -Path $_.FullName | Out-Null }
-        Write-Log "Cache do Windows Update limpo (rápido)." -Type Success
-    }
-}
-
-
-function Clear-Prefetch {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    $path = Join-Path $env:SystemRoot "Prefetch"
-    Write-Log "Limpando Prefetch (exclui Layout.ini)..." -Type Info
-    if (-not (Test-Path $path)) { Write-Log "Pasta Prefetch ausente." -Type Info; return }
-    if ($PSCmdlet.ShouldProcess($path,"Limpar Prefetch")){
-        Get-ChildItem -Path "$path\*" -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'Layout.ini' } | ForEach-Object {
-            try { Remove-Item $_.FullName -Force -ErrorAction Stop } catch { Write-Log "Prefetch: falha '$($_.FullName)': $($_.Exception.Message)" -Type Warning }
-        }
-        Get-ChildItem -Path "$path\*" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            Remove-ItemRobust -Path $_.FullName | Out-Null
-        }
-        Write-Log "Prefetch limpo." -Type Success
-    }
-}
-
-
-function Clear-PrintSpooler {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    $queue = Join-Path $env:SystemRoot "System32\spool\PRINTERS"
-    Write-Log "Limpando fila de impressão..." -Type Info
-    if ($PSCmdlet.ShouldProcess("Spooler","Limpar fila")){
-        Stop-ServiceGracefully -Name Spooler | Out-Null
-        if (Test-Path $queue){
-            Get-ChildItem -Path "$queue\*" -ErrorAction SilentlyContinue | ForEach-Object {
-                try { Remove-Item $_.FullName -Force -ErrorAction Stop } catch { Write-Log "Spooler: falha '$($_.FullName)': $($_.Exception.Message)" -Type Warning }
-            }
-        }
-        Start-ServiceSafe -Name Spooler
-        Write-Log "Spooler limpo." -Type Success
-    }
-}
-
-
-function Remove-WindowsOld {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    $path = Join-Path $env:SystemDrive "Windows.old"
-    if (-not (Test-Path $path)) { Write-Log "Windows.old não encontrado." -Type Info; return }
-    Write-Log "Removendo Windows.old (pode demorar)..." -Type Info
-    if ($PSCmdlet.ShouldProcess($path,"Remover Windows.old")){
-        Remove-ItemRobust -Path $path | Out-Null
-        Write-Log "Windows.old removido." -Type Success
-    }
-}
-
-
-function Optimize-Volumes {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-    Write-Log "Iniciando otimização de volumes (Defrag/ReTrim)..." -Type Info
-    $activity = "Otimização de Volumes"
-    $volumes  = Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -match "^[A-Z]$" }
-    $total    = [math]::Max(1, $volumes.Count)
-    $i=0
-    foreach ($vol in $volumes) {
-        $i++; $percent=[int](($i/$total)*100)
-        $target = '{0}:' -f $vol.DriveLetter
-        Safe-WriteProgress -Activity $activity -Status "Otimizando $target" -PercentComplete $percent
-        Write-Log "Otimizando ${target} (FS: $($vol.FileSystem))" -Type Info
-        if ($PSCmdlet.ShouldProcess($target, "Optimize-Volume")) {
-            try {
-                if ($vol.FileSystem -eq "NTFS") {
-                    Optimize-Volume -DriveLetter $vol.DriveLetter -Defrag  -Verbose:$false -ErrorAction Stop
-                    Optimize-Volume -DriveLetter $vol.DriveLetter -ReTrim  -Verbose:$false -ErrorAction SilentlyContinue
-                } else {
-                    Optimize-Volume -DriveLetter $vol.DriveLetter -Analyze -Verbose:$false -ErrorAction Stop
-                }
-                Write-Log "Otimização concluída em ${target}." -Type Success
-            } catch {
-                Write-Log "Falha ao otimizar ${target}: $($_.Exception.Message)" -Type Warning
-            }
-        }
-    }
-    Safe-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-}
-
-
-function Clear-DNS {
-    [CmdletBinding()] param()
-    try { Clear-DnsClientCache -ErrorAction Stop; Write-Log "Cache DNS limpo." -Type Success } catch { Write-Log "Falha Clear-DnsClientCache: $($_.Exception.Message)" -Type Warning }
-}
-function Clear-ARP {
-    [CmdletBinding()] param()
-    try { arp -d * | Out-Null; Write-Log "Cache ARP limpo." -Type Success } catch { Write-Log "Falha limpando ARP: $($_.Exception.Message)" -Type Warning }
-}
-
-
-function Invoke-SFC-Scan {
-    [CmdletBinding()] param()
-    Write-Log "Iniciando SFC /SCANNOW (pode demorar)..." -Type Info
-    try { sfc /scannow | Out-Null; Write-Log "SFC concluído." -Type Success } catch { Write-Log "SFC falhou: $($_.Exception.Message)" -Type Error }
-}
-function Invoke-DISM-Scan {
-    [CmdletBinding()] param()
-    Write-Log "Iniciando DISM /RestoreHealth (pode demorar)..." -Type Info
-    try { Dism /Online /Cleanup-Image /RestoreHealth | Out-Null; Write-Log "DISM concluído." -Type Success } catch { Write-Log "DISM falhou: $($_.Exception.Message)" -Type Error }
-}
-
-
-function Invoke-MaintenanceQuick {
-    Write-Log "== Manutenção Rápida ==" -Type Info
-    Clear-TemporaryFiles
-    Clear-Prefetch
-    Clear-PrintSpooler
-    Clear-WUCache
-    Remove-WindowsOld
-    Optimize-Volumes
-    Write-Log "== Manutenção Rápida concluída ==" -Type Success
-}
-
-# Substitui o Invoke-Cleanup antigo pela versão rápida consolidada
-function Invoke-Cleanup {
-    Invoke-MaintenanceQuick
-}
-
-
-function Invoke-MaintenanceStandard {
-    Write-Log "== Manutenção Padrão ==" -Type Info
-    Clear-TemporaryFiles
-    Clear-Prefetch
-    Clear-PrintSpooler
-    Clear-WUCache
-    Clear-DNS
-    Clear-ARP
-    Optimize-Volumes
-    Write-Log "== Manutenção Padrão concluída ==" -Type Success
-}
-
-
-function Clear-SystemLogsDeep {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-        [int]$RetentionDays = 0  # 0 = remover tudo que casar com os padrões
-    )
-
-    Write-Log "Iniciando limpeza profunda de logs..." -Type Info
-    $activity = "Limpeza Profunda de Logs"
-    $targets = @(
-        "$env:SystemRoot\Logs\CBS\*.log",
-        "$env:SystemRoot\Logs\DISM\*.log",
-        "$env:SystemRoot\Logs\MoSetup\*.log",
-        "$env:SystemRoot\Logs\WindowsUpdate\*.log",
-        "$env:SystemRoot\Temp\*.log",
-        "$env:SystemRoot\Temp\*.tmp",
-        "$env:SystemRoot\Temp\*.etl",
-        "$env:ProgramData\Microsoft\Windows Defender\Scans\History\Service\*.log",
-        "$env:TEMP\*.log",
-        "$env:TEMP\*.tmp",
-        "$env:TEMP\*.etl"
-    )
-
-    $i=0; $total=[math]::Max(1,$targets.Count)
-    foreach($pat in $targets) {
-        $i++; Safe-WriteProgress -Activity $activity -Status "Processando $pat" -PercentComplete ([int](($i/$total)*100))
-        $dir = Split-Path -Path $pat -Parent
-        if (Test-Path $dir) {
-            Get-ChildItem -Path $pat -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                if ($RetentionDays -gt 0) {
-                    if ($_.LastWriteTime -gt (Get-Date).AddDays(-$RetentionDays)) { return }
-                }
-                try {
-                    if ($PSCmdlet.ShouldProcess($_.FullName,"Remove-Item")) {
-                        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
-                    }
-                } catch {
-                    Write-Log "Não foi possível remover '$($_.FullName)': $($_.Exception.Message)" -Type Warning
-                }
-            }
-        }
-    }
-    Safe-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-    Write-Log "Limpeza profunda de logs concluída." -Type Success
-}
-
-
-function Invoke-WinSxSComponentCleanup {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-        [switch]$Aggressive  # usa /ResetBase
-    )
-
-    $dismArgs = "/online /Cleanup-Image /StartComponentCleanup"
-    if ($Aggressive) { $dismArgs += " /ResetBase" }
-
-    Write-Log "Iniciando limpeza de componentes (WinSxS) $(if($Aggressive){"- agressiva"})..." -Type Info
-    if ($PSCmdlet.ShouldProcess("DISM.exe $dismArgs","Start-Process")) {
-        try {
-            $p = Start-Process -FilePath "Dism.exe" -ArgumentList $dismArgs -WindowStyle Hidden -Wait -PassThru
-            if ($p.ExitCode -eq 0) {
-                Write-Log "WinSxS limpo com sucesso." -Type Success
-            } else {
-                Write-Log "DISM retornou código $($p.ExitCode)." -Type Warning
-            }
-        } catch {
-            Write-Log "Erro no DISM: $($_.Exception.Message)" -Type Error
-        }
-    }
-}
-
-
-function Invoke-MaintenanceDeep {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-        [switch]$IncludeLogs,
-        [switch]$IncludeWinSxS,
-        [switch]$Aggressive,      # se usado, aplica WinSxS com /ResetBase
-        [switch]$IncludeSFC,
-        [switch]$IncludeDISM,
-        [switch]$ForceWindowsOld  # tenta remover Windows.old (pode demorar)
-    )
-
-    # Defaults: se nada foi especificado, faz logs + WinSxS leve
-    if (-not ($IncludeLogs -or $IncludeWinSxS -or $IncludeSFC -or $IncludeDISM -or $ForceWindowsOld)) {
-        $IncludeLogs   = $true
-        $IncludeWinSxS = $true
-        $Aggressive    = $false
-    }
-
-    Write-Log "== Manutenção Profunda (custom) ==" -Type Info
-    try {
-        if ($IncludeLogs)   { Clear-SystemLogsDeep }
-        if ($IncludeWinSxS) { Invoke-WinSxSComponentCleanup -Aggressive:$Aggressive }
-        if ($IncludeDISM)   { try { Dism /Online /Cleanup-Image /RestoreHealth | Out-Null; Write-Log "DISM /RestoreHealth concluído." -Type Success } catch { Write-Log "DISM falhou: $($_.Exception.Message)" -Type Error } }
-        if ($IncludeSFC)    { try { sfc /scannow | Out-Null; Write-Log "SFC /SCANNOW concluído." -Type Success } catch { Write-Log "SFC falhou: $($_.Exception.Message)" -Type Error } }
-        if ($ForceWindowsOld) {
-            $w = Join-Path $env:SystemDrive "Windows.old"
-            if (Test-Path $w) {
-                Write-Log "Removendo Windows.old (forçado)..." -Type Info
-                try { Remove-Item -LiteralPath $w -Recurse -Force -ErrorAction Stop; Write-Log "Windows.old removido." -Type Success }
-                catch { Write-Log "Falha removendo Windows.old: $($_.Exception.Message)" -Type Warning }
-            } else {
-                Write-Log "Windows.old não encontrado." -Type Info
-            }
-        }
-        Write-Log "== Manutenção Profunda concluída ==" -Type Success
-    } catch {
-        Write-Log "Erro na manutenção profunda: $($_.Exception.Message)" -Type Error
-    }
-}
-
-
-function Show-DiagnosticsMenu {
-    do {
-        Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host "           MENU: DIAGNÓSTICOS & INFO          " -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) SFC /SCANNOW"
-        Write-Host " B) DISM /RestoreHealth"
-        Write-Host " C) SMART dos Discos"
-        Write-Host " D) Teste de Memória"
-        Write-Host " E) Informações do Sistema"
-        Write-Host " F) Uso de Disco (detalhado)"
-        Write-Host " G) Manutenção Profunda (logs + WinSxS + SFC/DISM)"
-        Write-Host ""
-        Write-Host " X) Voltar"               -ForegroundColor Red
-        Write-Host " Z) Executar Todas (A–F)" -ForegroundColor Green
-        Write-Host "=============================================" -ForegroundColor Cyan
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        Write-Log "Diagnóstico opção: $key" -Type Info
-
-        switch ($key) {
-            'A' { try { sfc /scannow | Out-Null;  Write-Log "SFC concluído." -Type Success } catch { Write-Log "SFC falhou: $($_.Exception.Message)" -Type Error } }
-            'B' { try { Dism /Online /Cleanup-Image /RestoreHealth | Out-Null; Write-Log "DISM concluído." -Type Success } catch { Write-Log "DISM falhou: $($_.Exception.Message)" -Type Error } }
-            'C' { Test-SMART-Drives }
-            'D' { Test-Memory }
-            'E' { Show-SystemInfo }
-            'F' { Show-DiskUsage }
-            'G' {
-                # Preset agressivo: tudo ligado
-                Invoke-MaintenanceDeep -IncludeLogs -IncludeWinSxS -IncludeSFC -IncludeDISM -Aggressive -ForceWindowsOld
-                Show-SuccessMessage
-            }
-            'X' { return }
-            'Z' {
-                # Z mantém a semântica original: A–F (sem o heavy "G")
-                try { sfc /scannow | Out-Null } catch {}
-                try { Dism /Online /Cleanup-Image /RestoreHealth | Out-Null } catch {}
-                Test-SMART-Drives
-                Test-Memory
-                Show-SystemInfo
-                Show-DiskUsage
-                Show-SuccessMessage
-            }
-        }
-    } while ($true)
-}
-
-
-<# ========== Consolidação de Funções de Manutenção (Append-Only) ========== #>
-
-if (-not (Get-Command Stop-ServiceGracefully -ErrorAction SilentlyContinue)) {
-    function Stop-ServiceGracefully {
-        [CmdletBinding()]
-        param([Parameter(Mandatory)][string]$Name,[int]$TimeoutSec=20)
-        try {
-            $svc = Get-Service -Name $Name -ErrorAction Stop
-            if ($svc.Status -ne 'Stopped') {
-                Stop-Service -Name $Name -Force -ErrorAction SilentlyContinue
-                $sw=[Diagnostics.Stopwatch]::StartNew()
-                while($sw.Elapsed.TotalSeconds -lt $TimeoutSec){
-                    $svc.Refresh()
-                    if ($svc.Status -eq 'Stopped'){ break }
-                    Start-Sleep -Milliseconds 400
-                }
-            }
-            return $true
-        } catch {
-            Write-Log "Não foi possível parar o serviço '$Name': $($_.Exception.Message)" -Type Warning
-            return $false
-        }
-    }
-}
-if (-not (Get-Command Start-ServiceSafe -ErrorAction SilentlyContinue)) {
-    function Start-ServiceSafe { [CmdletBinding()] param([string]$Name)
-        try { Start-Service -Name $Name -ErrorAction SilentlyContinue } catch {}
-    }
-}
-
-# 1) Temporários — enxuto e resiliente
-function Clear-TemporaryFiles {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-    $activity = "Limpeza de Temporários"
-    Write-Log "Iniciando limpeza rápida de temporários..." -Type Info
-    $targets = @("$env:TEMP\*","$env:SystemRoot\Temp\*")
-    $i=0; $total=[Math]::Max(1,$targets.Count)
-    foreach($path in $targets){
-        $i++; Safe-WriteProgress -Activity $activity -Status "Limpando $path" -PercentComplete ([int](($i/$total)*100))
-        if (Test-Path $path -PathType Any){
-            if ($PSCmdlet.ShouldProcess($path,"Remove-Item")){
-                Get-ChildItem -Path $path -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                    try { Remove-ItemRobust -Path $_.FullName | Out-Null }
-                    catch { Write-Log "Temp: falha '$($_.FullName)': $($_.Exception.Message)" -Type Warning }
-                }
-            }
-        }
-    }
-    Safe-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-    Write-Log "Temporários limpos." -Type Success
-}
-
-# 2) WU Cache — rápido (rename atômico) + limpeza de sobras antigas
-function Clear-WUCache {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    $root = Join-Path $env:SystemRoot "SoftwareDistribution\Download"
-    $bak  = "$root.bak_{0}" -f (Get-Date -Format "yyyyMMdd_HHmmss")
-    Write-Log "Limpando cache do Windows Update (método rápido por rename)..." -Type Info
-    if (-not (Test-Path $root)) { Write-Log "Pasta não encontrada: $root" -Type Warning; return }
-    if ($PSCmdlet.ShouldProcess($root, "Limpar WU cache por rename")){
-        Stop-ServiceGracefully -Name bits     | Out-Null
-        Stop-ServiceGracefully -Name wuauserv | Out-Null
-        try {
-            Rename-Item -LiteralPath $root -NewName (Split-Path -Leaf $bak) -ErrorAction Stop
-            Write-Log "Renomeado para $bak (remoção assíncrona)." -Type Success
-        } catch {
-            Write-Log "Rename falhou, tentando remoção direta: $($_.Exception.Message)" -Type Warning
-            Remove-ItemRobust -Path "$root\*"
-        } finally {
-            Start-ServiceSafe -Name bits
-            Start-ServiceSafe -Name wuauserv
-        }
-        # Limpa sobras antigas (3+ dias)
-        Get-ChildItem (Join-Path $env:SystemRoot "SoftwareDistribution") -Directory -Filter "Download.bak_*" -ErrorAction SilentlyContinue |
-            Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-3) } |
-            ForEach-Object { Remove-ItemRobust -Path $_.FullName | Out-Null }
-        Write-Log "Cache do Windows Update limpo (rápido)." -Type Success
-    }
-}
-
-# 3) Prefetch — preserva Layout.ini
-function Clear-Prefetch {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    $path = Join-Path $env:SystemRoot "Prefetch"
-    Write-Log "Limpando Prefetch (exclui Layout.ini)..." -Type Info
-    if (-not (Test-Path $path)) { Write-Log "Pasta Prefetch ausente." -Type Info; return }
-    if ($PSCmdlet.ShouldProcess($path,"Limpar Prefetch")){
-        Get-ChildItem -Path "$path\*" -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'Layout.ini' } | ForEach-Object {
-            try { Remove-Item $_.FullName -Force -ErrorAction Stop } catch { Write-Log "Prefetch: falha '$($_.FullName)': $($_.Exception.Message)" -Type Warning }
-        }
-        Get-ChildItem -Path "$path\*" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            Remove-ItemRobust -Path $_.FullName | Out-Null
-        }
-        Write-Log "Prefetch limpo." -Type Success
-    }
-}
-
-# 4) Spooler — para/limpa/inicia com retry
-function Clear-PrintSpooler {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    $queue = Join-Path $env:SystemRoot "System32\spool\PRINTERS"
-    Write-Log "Limpando fila de impressão..." -Type Info
-    if ($PSCmdlet.ShouldProcess("Spooler","Limpar fila")){
-        Stop-ServiceGracefully -Name Spooler | Out-Null
-        if (Test-Path $queue){
-            Get-ChildItem -Path "$queue\*" -ErrorAction SilentlyContinue | ForEach-Object {
-                try { Remove-Item $_.FullName -Force -ErrorAction Stop } catch { Write-Log "Spooler: falha '$($_.FullName)': $($_.Exception.Message)" -Type Warning }
-            }
-        }
-        Start-ServiceSafe -Name Spooler
-        Write-Log "Spooler limpo." -Type Success
-    }
-}
-
-# 5) Windows.old — robusto
-function Remove-WindowsOld {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    $path = Join-Path $env:SystemDrive "Windows.old"
-    if (-not (Test-Path $path)) { Write-Log "Windows.old não encontrado." -Type Info; return }
-    Write-Log "Removendo Windows.old (pode demorar)..." -Type Info
-    if ($PSCmdlet.ShouldProcess($path,"Remover Windows.old")){
-        Remove-ItemRobust -Path $path | Out-Null
-        Write-Log "Windows.old removido." -Type Success
-    }
-}
-
-# 6) Volumes — corrige interpolação e aplica defrag/retrim/analyze
-function Optimize-Volumes {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
-    Write-Log "Iniciando otimização de volumes (Defrag/ReTrim)..." -Type Info
-    $activity = "Otimização de Volumes"
-    $volumes  = Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -match "^[A-Z]$" }
-    $total    = [math]::Max(1, $volumes.Count)
-    $i=0
-    foreach ($vol in $volumes) {
-        $i++; $percent=[int](($i/$total)*100)
-        $target = '{0}:' -f $vol.DriveLetter
-        Safe-WriteProgress -Activity $activity -Status "Otimizando $target" -PercentComplete $percent
-        Write-Log "Otimizando ${target} (FS: $($vol.FileSystem))" -Type Info
-        if ($PSCmdlet.ShouldProcess($target, "Optimize-Volume")) {
-            try {
-                if ($vol.FileSystem -eq "NTFS") {
-                    Optimize-Volume -DriveLetter $vol.DriveLetter -Defrag  -Verbose:$false -ErrorAction Stop
-                    Optimize-Volume -DriveLetter $vol.DriveLetter -ReTrim  -Verbose:$false -ErrorAction SilentlyContinue
-                } else {
-                    Optimize-Volume -DriveLetter $vol.DriveLetter -Analyze -Verbose:$false -ErrorAction Stop
-                }
-                Write-Log "Otimização concluída em ${target}." -Type Success
-            } catch {
-                Write-Log "Falha ao otimizar ${target}: $($_.Exception.Message)" -Type Warning
-            }
-        }
-    }
-    Safe-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-}
-
-# 7) Orquestrações enxutas (mantém nomes usados pelos menus)
-function Invoke-MaintenanceQuick {
-    Write-Log "== Manutenção Rápida ==" -Type Info
-    Clear-TemporaryFiles
-    Clear-Prefetch
-    Clear-PrintSpooler
-    Clear-WUCache
-    Remove-WindowsOld
-    Optimize-Volumes
-    Write-Log "== Manutenção Rápida concluída ==" -Type Success
-}
-function Invoke-MaintenanceStandard {
-    Write-Log "== Manutenção Padrão ==" -Type Info
-    Clear-TemporaryFiles
-    Clear-Prefetch
-    Clear-PrintSpooler
-    Clear-WUCache
-    Optimize-Volumes
-    Write-Log "== Manutenção Padrão concluída ==" -Type Success
-}
-
-# Compat: se menus chamarem Invoke-Cleanup, usa a versão rápida consolidada
-function Invoke-Cleanup { Invoke-MaintenanceQuick }
-
-
-# ========================= Submenu: Manutenção =========================
-# Requer as funções:
-#   Invoke-MaintenanceQuick, Invoke-MaintenanceStandard (Consolidação)
-#   Invoke-MaintenanceDeep (Deep Pack)
-# Se alguma não existir, a opção correspondente será ignorada com aviso.
-
-function Show-MaintenanceMenu {
-    do {
-        Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host "               MENU: MANUTENÇÃO              " -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-
-        # Monta dinamicamente as opções disponíveis
-        $opts = [System.Collections.Generic.List[object]]::new()
-        if (Get-Command Invoke-MaintenanceQuick    -ErrorAction SilentlyContinue) { $opts.Add(@{Key='A';Text='Manutenção Rápida';   Action={ Invoke-MaintenanceQuick }}) }
-        if (Get-Command Invoke-MaintenanceStandard -ErrorAction SilentlyContinue) { $opts.Add(@{Key='B';Text='Manutenção Padrão';   Action={ Invoke-MaintenanceStandard }}) }
-        if (Get-Command Invoke-MaintenanceDeep     -ErrorAction SilentlyContinue) { $opts.Add(@{Key='C';Text='Manutenção Profunda'; Action={ Invoke-MaintenanceDeep -IncludeLogs -IncludeWinSxS -IncludeSFC -IncludeDISM -Aggressive -ForceWindowsOld }}) }
-
-        # Exibe opções em ordem alfabética por Key
-        foreach($o in $opts | Sort-Object Key){
-            Write-Host (" {0}) {1}" -f $o.Key, $o.Text)
-        }
-
-        Write-Host ""
-        Write-Host " X) Voltar"            -ForegroundColor Red
-        Write-Host " Z) Executar Todas"    -ForegroundColor Green
-        Write-Host "=============================================" -ForegroundColor Cyan
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-
-        # Trata X/Z e teclas A..C conforme disponibilidade
-        switch ($key) {
-            'X' { return }
-            'Z' {
-                if ($opts.Count -eq 0) { Write-Host "Nenhuma rotina de manutenção disponível." -ForegroundColor Yellow; Start-Sleep 1; break }
-                foreach($o in $opts | Sort-Object Key){ try { & $o.Action; if (Get-Command Show-SuccessMessage -ea SilentlyContinue){ Show-SuccessMessage } } catch { Write-Host "Falha: $($_.Exception.Message)" -ForegroundColor Yellow } }
-            }
-            default {
-                $sel = $opts | Where-Object { $_.Key -eq $key }
-                if ($sel){
-                    try { & $sel.Action; if (Get-Command Show-SuccessMessage -ea SilentlyContinue){ Show-SuccessMessage } }
-                    catch { Write-Host "Falha: $($_.Exception.Message)" -ForegroundColor Yellow; Start-Sleep 1 }
-                }
-            }
-        }
-    } while ($true)
-}
-
-# ===================== Main Menu (com entrada M) ======================
-# Mantém o padrão visual que combinamos. Caso seu script defina Show-MainMenu,
-# esta definição sobrescreve apenas o "layout" para incluir a opção M.
-# As ações referenciam funções já existentes no seu script.
-function Show-MainMenu {
-    do {
-        Clear-Host
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host "                MENU PRINCIPAL               " -ForegroundColor Cyan
-        Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Limpeza Rápida"
-        Write-Host " B) Diagnóstico"
-        Write-Host " C) Ajustes e Otimizações"
-        Write-Host " D) Personalização"
-        Write-Host " E) Configurações Avançadas"
-        Write-Host " F) Segurança"
-        Write-Host " G) Rede e Impressoras"
-        Write-Host " H) Instalação e Ferramentas"
-        Write-Host " I) Utilitários do Sistema"
-        Write-Host " J) Atualizações e Patches"
-        Write-Host " K) Manutenção Completa"
-        Write-Host " M) Manutenção"  # <== NOVO submenu dedicado
-        Write-Host ""
-        Write-Host " X) Voltar/Sair"               -ForegroundColor Red
-        Write-Host " Z) Executar Todas as Rotinas" -ForegroundColor Green
-        Write-Host "=============================================" -ForegroundColor Cyan
-
-        $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
-        if (Get-Command Write-Log -ErrorAction SilentlyContinue) { Write-Log "MainMenu opção: $key" -Type Info }
-
-        switch ($key) {
-            'A' { if (Get-Command Invoke-Cleanup           -ea SilentlyContinue){ Invoke-Cleanup } else { Write-Host "Invoke-Cleanup não encontrado." -ForegroundColor Yellow } }
-            'B' { if (Get-Command Show-DiagnosticsMenu     -ea SilentlyContinue){ Show-DiagnosticsMenu } }
-            'C' { if (Get-Command Invoke-Tweaks            -ea SilentlyContinue){ Invoke-Tweaks } }
-            'D' { if (Get-Command Show-PersonalizationTweaksMenu -ea SilentlyContinue){ Show-PersonalizationTweaksMenu } }
-            'E' { if (Get-Command Show-AdvancedSettingsMenu -ea SilentlyContinue){ Show-AdvancedSettingsMenu } }
-            'F' { if (Get-Command Show-SecurityMenu        -ea SilentlyContinue){ Show-SecurityMenu } }
-            'G' { if (Get-Command Show-NetworkMenu         -ea SilentlyContinue){ Show-NetworkMenu } }
-            'H' { if (Get-Command Show-AppsMenu            -ea SilentlyContinue){ Show-AppsMenu } }
-            'I' { if (Get-Command Show-UtilitiesMenu       -ea SilentlyContinue){ Show-UtilitiesMenu } }
-            'J' { if (Get-Command Show-UpdatesMenu         -ea SilentlyContinue){ Show-UpdatesMenu } }
-            'K' { if (Get-Command Show-FullMaintenance     -ea SilentlyContinue){ Show-FullMaintenance } }
-            'M' { Show-MaintenanceMenu }
-            'X' { return }
-            'Z' {
-                if (Get-Command Invoke-Cleanup -ea SilentlyContinue){ Invoke-Cleanup }
-                if (Get-Command Show-DiagnosticsMenu -ea SilentlyContinue){ Show-DiagnosticsMenu }
-                if (Get-Command Invoke-Tweaks -ea SilentlyContinue){ Invoke-Tweaks }
-                if (Get-Command Show-PersonalizationTweaksMenu -ea SilentlyContinue){ Show-PersonalizationTweaksMenu }
-                if (Get-Command Show-AdvancedSettingsMenu -ea SilentlyContinue){ Show-AdvancedSettingsMenu }
-                if (Get-Command Show-SecurityMenu -ea SilentlyContinue){ Show-SecurityMenu }
-                if (Get-Command Show-NetworkMenu -ea SilentlyContinue){ Show-NetworkMenu }
-                if (Get-Command Show-AppsMenu -ea SilentlyContinue){ Show-AppsMenu }
-                if (Get-Command Show-UtilitiesMenu -ea SilentlyContinue){ Show-UtilitiesMenu }
-                if (Get-Command Show-UpdatesMenu -ea SilentlyContinue){ Show-UpdatesMenu }
-                if (Get-Command Show-FullMaintenance -ea SilentlyContinue){ Show-FullMaintenance }
-                if (Get-Command Show-SuccessMessage -ea SilentlyContinue){ Show-SuccessMessage }
-            }
-        }
-    } while ($true)
-}

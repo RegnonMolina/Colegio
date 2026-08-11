@@ -1,0 +1,24 @@
+# === Segredos — NUNCA versionar (regra CMS security.md) ===
+*.local.json
+*.local.ps1
+*.local
+WiFi.local.json
+secrets*
+credentials*
+*.env
+.env*
+properties.json
+
+# === Logs e temporários ===
+*.log
+ScriptsLogs/
+Registry-Backup-*.reg
+
+# === Transcripts do Claude Code (não commitar) ===
+.claude/
+*.transcript
+
+# === Backups locais ===
+*-ORIGINAL.ps1
+*-BACKUP.ps1
+*.bak

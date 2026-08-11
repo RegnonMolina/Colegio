@@ -1,0 +1,4 @@
+{
+  "_comentario": "Copie este arquivo para 'WiFi.local.json' (mesma pasta do script) e coloque a senha real. O WiFi.local.json esta no .gitignore e NAO vai pro GitHub.",
+  "WiFiKey": "COLOQUE_A_SENHA_DO_WIFI_AQUI"
+}
