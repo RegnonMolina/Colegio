@@ -49,30 +49,26 @@ jobs:
           }
 
       - name: Checagem AST - funcoes chamadas mas nao definidas (anti-fantasma)
-        # Windows PowerShell 5.1 (nao pwsh 7): e o alvo real do script e tem os cmdlets
-        # exclusivos do Windows (Checkpoint-Computer, Optimize-Volume, Set-MpPreference,
-        # Enable-ComputerRestore, Rename-Computer, ...) que o pwsh 7 nao expoe.
-        shell: powershell
+        # pwsh 7: o parse tem que ser em 7 (o script usa sintaxe compativel com 5.1 e 7).
+        # Resolucao de comandos por SNAPSHOT unico (Get-Command em massa) em vez de Get-Command
+        # por-nome: no Windows o pwsh 7 enumera tambem os modulos do Windows PowerShell
+        # (Checkpoint-Computer, Optimize-Volume, Set-MpPreference, ...), evitando falso-positivo.
+        shell: pwsh
         run: |
           $path = (Resolve-Path $env:TARGET).Path
-          # Cmdlets de modulos externos legitimos que podem nao estar instalados no runner
-          # (nao sao fantasmas do script — sao dependencias opcionais).
-          $allow = @('Get-WindowsUpdate')
+          # Cmdlets de modulos externos/opcionais que podem nao estar no runner (nao sao fantasmas).
+          $allow = @('Get-WindowsUpdate','Set-MpPreference','Get-MpPreference')
           $tokens = $null; $errors = $null
           $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
           if ($errors.Count -gt 0) { Write-Error "Erro de sintaxe em $env:TARGET"; exit 1 }
-          $defined = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) | ForEach-Object { $_.Name } | Sort-Object -Unique
-          $calls = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() } | Where-Object { $_ } | Sort-Object -Unique
-          $phantoms = foreach ($c in $calls) {
-            if ($defined -contains $c) { continue }
-            if ($allow -contains $c) { continue }
-            if ($c -notmatch '^[A-Za-z]+-') { continue }
-            if (Get-Command $c -ErrorAction SilentlyContinue) { continue }
-            $c
-          }
+          $defined = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) | ForEach-Object { $_.Name }
+          $avail = @{}
+          Get-Command -CommandType Cmdlet,Function,Alias,Application -ErrorAction SilentlyContinue | ForEach-Object { $avail[$_.Name] = $true }
+          $calls = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() } | Where-Object { $_ -match '^[A-Za-z]+-' } | Sort-Object -Unique
+          $phantoms = $calls | Where-Object { $defined -notcontains $_ -and $allow -notcontains $_ -and -not $avail.ContainsKey($_) }
           if ($phantoms) {
             Write-Host "Funcoes chamadas mas NAO definidas (nem cmdlet):"
-            $phantoms | Sort-Object -Unique | ForEach-Object { Write-Host "   $_" }
+            $phantoms | ForEach-Object { Write-Host "   $_" }
             Write-Error "Ha funcoes chamadas mas nunca definidas. Corrija antes do merge."
             exit 1
           }

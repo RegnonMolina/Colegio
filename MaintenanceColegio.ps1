@@ -4549,56 +4549,56 @@ try {
     # 3) Rodar remoção de bloatware
     if ($RunBloatwareRemoval -or $RunAllCleanup) {
         Write-Log -Message "Iniciando remoção de bloatware..." -Type Info 
-        Invoke-Bloatware @($WhatIf ? @{WhatIf=$true} : @{}) 
+        Invoke-Bloatware @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} })) 
     }
 
     # 4) Rodar ajustes de privacidade
     if ($RunPrivacyTweaks -or $RunAllCleanup) {
         Write-Log -Message "Aplicando tweaks de privacidade..." -Type Info 
-        Grant-PrivacyTweaks @($WhatIf ? @{WhatIf=$true} : @{}) 
+        Grant-PrivacyTweaks @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} })) 
     }
 
     # 5) Rodar otimização de rede
     if ($RunNetworkOptimization -or $RunAllCleanup) {
         Write-Log -Message "Aplicando otimizações de rede..." -Type Info
-        Optimize-NetworkPerformance @($WhatIf ? @{WhatIf=$true} : @{})
+        Optimize-NetworkPerformance @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
     }
 
     # 6) Instalar aplicativos (se solicitado) - Assumindo que Install-Applications existe em outro trecho
     # if ($RunAppInstallation) {
     #     Write-Log -Message "Iniciando instalação de aplicativos..." -Type Info
-    #     Install-Applications @($WhatIf ? @{WhatIf=$true} : @{})
+    #     Install-Applications @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
     # }
 
     # 7) Rodar diagnósticos (se solicitado)
     if ($RunDiagnostics) {
         Write-Log -Message "Executando diagnósticos do sistema..." -Type Info
-        Invoke-All-DiagnosticsAdvanced @($WhatIf ? @{WhatIf=$true} : @{})
+        Invoke-All-DiagnosticsAdvanced @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
     }
 
     # 8) Remover Copilot (se solicitado)
     if ($RemoveCopilot) {
         Write-Log -Message "Removendo Windows Copilot..." -Type Info
         # Assume que a função Remove-SystemBloatwareexiste e será chamada aqui
-        # Remove-SystemBloatware@($WhatIf ? @{WhatIf=$true} : @{})
+        # Remove-SystemBloatware@($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
     }
 
     # 9) Desativar Recall (se solicitado)
     if ($DisableRecall) {
         Write-Log -Message "Desativando Windows Recall..." -Type Info
-        Disable-WindowsRecall @($WhatIf ? @{WhatIf=$true} : @{})
+        Disable-WindowsRecall @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
     }
 
     # 10) Executar Windows Update (se solicitado)
     if ($RunWindowsUpdate) {
         Write-Log -Message "Iniciando gerenciamento de atualizações do Windows..." -Type Info
-        Grant-WindowsUpdates @($WhatIf ? @{WhatIf=$true} : @{})
+        Grant-WindowsUpdates @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
     }
 
     # 11) Aplicar plano de energia otimizado (se solicitado)
     if ($ApplyOptimizedPowerPlan) {
         Write-Log -Message "Aplicando plano de energia otimizado..." -Type Info
-        Set-OptimizedPowerPlan @($WhatIf ? @{WhatIf=$true} : @{})
+        Set-OptimizedPowerPlan @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
     }
 
     Write-Log -Message "Script concluído com sucesso." -Type Success
