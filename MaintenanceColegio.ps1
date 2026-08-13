@@ -423,6 +423,20 @@ function Invoke-NetworkUtilities {
     Show-SuccessMessage
 }
 
+# IMPLEMENTAÇÃO (antes era função-fantasma, chamada em Show-AppsMenu 'Z' mas nunca definida).
+# Orquestrador da categoria "Instalação e Ferramentas", no mesmo padrão dos demais Invoke-*.
+function Invoke-AppsAndTools {
+    Write-Log "Iniciando o orquestrador de Instalação e Ferramentas..." -Type Info
+
+    try { Install-Applications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Install-Applications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Update-PowerShell -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Update-PowerShell: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Update-WindowsAndDrivers -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Update-WindowsAndDrivers: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+
+    Write-Log "Todas as rotinas de instalação e ferramentas foram concluídas pelo orquestrador." -Type Success
+
+    Show-SuccessMessage
+}
+
 function Invoke-Undo {
     Write-Log "Iniciando o orquestrador de Restauração..." -Type Info
 
@@ -2920,6 +2934,35 @@ function Set-SystemTweaks {
     }
 }
 
+# ---------------------------------------------------------------------------
+# IMPLEMENTAÇÃO das antigas Grant-*Tweaks (antes eram funções-fantasma: chamadas
+# em Invoke-Colegio, Invoke-Tweaks, Show-UtilitiesMenu, Show-FullMaintenage e no
+# bloco EXECUÇÃO PRINCIPAL, porém NUNCA definidas -> quebravam esses caminhos).
+# Reaproveitam integralmente os dicionários de registro já existentes e testados
+# dentro de Set-SystemTweaks, via seus switches -Apply*Tweaks. -Confirm:$false pra
+# não travar as rotinas com o prompt do ConfirmImpact='High' de Set-SystemTweaks.
+# ---------------------------------------------------------------------------
+function Grant-PrivacyTweaks {
+    [CmdletBinding()]
+    param()
+    Write-Log "Aplicando Tweaks de Privacidade (via Set-SystemTweaks)..." -Type Info
+    Set-SystemTweaks -ApplyPrivacyTweaks -Confirm:$false
+}
+
+function Grant-ControlPanelTweaks {
+    [CmdletBinding()]
+    param()
+    Write-Log "Aplicando Tweaks de Painel de Controle/Explorer (via Set-SystemTweaks)..." -Type Info
+    Set-SystemTweaks -ApplyControlPanelTweaks -Confirm:$false
+}
+
+function Grant-ExtraTweaks {
+    [CmdletBinding()]
+    param()
+    Write-Log "Aplicando Tweaks Extras de otimização/segurança (via Set-SystemTweaks)..." -Type Info
+    Set-SystemTweaks -ApplyExtraTweaks -Confirm:$false
+}
+
 function Enable-PrivacyHardening {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
@@ -4224,6 +4267,37 @@ function Restore-BloatwareSafe {
     Show-SuccessMessage
 }
 
+# IMPLEMENTAÇÃO (antes era função-fantasma: chamada em Invoke-Undo e no ramo
+# -RestoreDefaults de Set-SystemTweaks, mas nunca definida). Restore FOCADA apenas
+# das chaves de Painel de Controle/Explorer para o padrão do Windows — os mesmos
+# valores-padrão já autorados na seção "Explorer e Visual FX" de Restore-SystemDefaults.
+function Restore-ControlPanelTweaks {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param()
+    Write-Log "Restaurando configurações de Painel de Controle/Explorer para o padrão..." -Type Warning
+    $cpDefaults = @{
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" = @{NoControlPanel = 0; NoViewContextMenu = 0; NoDesktop = 0; NoFind = 0};
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{Start_JumpListsItems = 10; IconsOnly = 0; ScanNetDrives = 1; HideFileExt = 1; ShowSuperHidden = 0; DisableShake = 0; DontShowNewInstall = 0; LaunchTo = 1; AutoArrange = 1};
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{HubMode = 0; ShowRecent = 1; ShowFrequent = 1; Link = 1};
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Ribbon" = @{QatExclude = 0};
+        "HKCU:\Control Panel\Desktop" = @{WindowArrangementActive = 1; MouseWheelRouting = 1; UserPreferencesMask = 0x9E3E0380};
+        "HKCU:\Control Panel\Desktop\WindowMetrics" = @{MinAnimate = 1};
+    }
+    if ($PSCmdlet.ShouldProcess("Painel de Controle/Explorer", "restaurar para o padrão")) {
+        foreach ($p in $cpDefaults.Keys) {
+            if (-not (Test-Path $p)) {
+                try { New-Item -Path $p -Force -ErrorAction Stop | Out-Null }
+                catch { Write-Log "ERRO ao criar caminho '$p': $($_.Exception.Message)" -Type Error; continue }
+            }
+            foreach ($n in $cpDefaults.$p.Keys) {
+                try { Set-ItemProperty -Path $p -Name $n -Value $cpDefaults.$p.$n -Force -ErrorAction Stop }
+                catch { Write-Log "ERRO ao restaurar '$n' em '$p': $($_.Exception.Message)" -Type Error }
+            }
+        }
+        Write-Log "Configurações de Painel de Controle/Explorer restauradas para o padrão." -Type Success
+    }
+}
+
 function Restore-SystemDefaults {
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
     param()
@@ -4641,6 +4715,7 @@ function Show-AdvancedSettingsMenu {
         Write-Host " N) Otimizações Gerais de Sistema"
         Write-Host " O) Renomear Notebook"
         Write-Host " P) Mostrar Menu de Login Automático"
+        Write-Host " Q) Personalização e Novos Recursos (submenu)"
         Write-Host " Z) Rotina Completa (Executa todas as opções acima)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -4663,6 +4738,7 @@ function Show-AdvancedSettingsMenu {
             'N' { Grant-SystemOptimizations; Show-SuccessMessage }
             'O' { Rename-Notebook; Show-SuccessMessage }
             'P' { Show-AutoLoginMenu } # Esta função já tem sua própria UI
+            'Q' { Show-PersonalizationTweaksMenu } # NOVO: submenu de personalização (antes só acessível via menu órfão)
             'Z' { Invoke-Tweaks; Show-SuccessMessage } # Chama o orquestrador de tweaks
             'X' { return }
             default {
@@ -4817,6 +4893,7 @@ function Show-RestoreMenu {
         Write-Host " K) Reabilitar notificações Action Center"
         Write-Host " L) Restaurar Registro a partir de Backup (pasta)"
         Write-Host " M) Desfazer Reforço de Privacidade Agressivo"
+        Write-Host " N) Restaurar TODOS os Padrões do Sistema (reverte tweaks)"
         Write-Host " Z) Desfazer Tudo (Rotina completa de Restauração)" -ForegroundColor Green
         Write-Host " X) Voltar" -ForegroundColor Red
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
@@ -4834,6 +4911,7 @@ function Show-RestoreMenu {
             'K' { Grant-ActionCenter-Notifications }
             'L' { Restore-Registry-FromBackup }   # NOVO: função órfã, agora acessível
             'M' { Undo-PrivacyHardening }          # NOVO: função órfã, agora acessível
+            'N' { Restore-SystemDefaults }         # NOVO: função órfã, agora acessível
             'Z' { Invoke-Undo }                    # Preserva o comportamento antigo do "G) Restaurações" do menu principal
             'X' { return }
         }
@@ -5067,6 +5145,8 @@ function Show-BloatwareMenu {
         Write-Host " H) Remover Pastas de Bloatware Seguras"
         Write-Host " I) Parar Processos de Bloatware em Execução"
         Write-Host " J) Aplicar Prevenção de Bloatware e Privacidade"
+        Write-Host " K) Aplicar Endurecimento de Privacidade Agressivo"
+        Write-Host " L) Reforçar Segurança de Macros do Office"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5083,6 +5163,8 @@ function Show-BloatwareMenu {
             'H' { Restore-BloatwareSafe; Show-SuccessMessage } # Assumindo que esta remove pastas seguras
             'I' { Remove-SystemBloatware; Show-SuccessMessage }
             'J' { Grant-PrivacyAndBloatwarePrevention; Show-SuccessMessage }
+            'K' { Enable-PrivacyHardening; Show-SuccessMessage }   # NOVO: função órfã, agora acessível
+            'L' { Grant-HardenOfficeMacros; Show-SuccessMessage }  # NOVO: função órfã, agora acessível
             'Z' { Invoke-Bloatware; Show-SuccessMessage } # Chama o orquestrador de Bloatware
             'X' { return }
             default {
