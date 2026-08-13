@@ -1,0 +1,13 @@
+[
+  { "Name": "7-Zip",                    "Id": "7zip.7zip" },
+  { "Name": "AnyDesk",                  "Id": "AnyDesk.AnyDesk" },
+  { "Name": "AutoHotkey",               "Id": "AutoHotkey.AutoHotkey" },
+  { "Name": "Foxit Reader",             "Id": "Foxit.FoxitReader" },
+  { "Name": "Google Chrome",            "Id": "Google.Chrome" },
+  { "Name": "Google Drive",             "Id": "Google.GoogleDrive" },
+  { "Name": "K-Lite Codec Pack (Full)", "Id": "CodecGuide.K-LiteCodecPack.Full" },
+  { "Name": "Microsoft Office",         "Id": "Microsoft.Office" },
+  { "Name": "Microsoft PowerToys",      "Id": "Microsoft.PowerToys" },
+  { "Name": "Notepad++",                "Id": "Notepad++.Notepad++" },
+  { "Name": "VLC Media Player",         "Id": "VideoLAN.VLC" }
+]

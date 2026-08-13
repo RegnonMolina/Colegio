@@ -1,3 +1,8 @@
+#Requires -Version 5.1
+#Requires -RunAsAdministrator
+# (Obs.: #Requires vale quando o arquivo é executado como .ps1; na entrega via 'irm .../script | iex'
+#  ele é ignorado — por isso a checagem manual de Administrador logo abaixo permanece.)
+
 # Script Supremo de Manutenção 🛠️
 # Descrição: Script para otimização, limpeza e configuração de sistemas Windows no ambiente do Colégio Mundo do Saber.
 # Requisitos: PowerShell 5.1 ou superior, privilégios administrativos, cleanmgr configurado com /sageset:1.
@@ -344,6 +349,7 @@ function Invoke-Cleanup {
 
     Write-Log "Todas as rotinas de limpeza e manutenção foram concluídas pelo orquestrador." -Type Success
 
+    Show-CleanupReport   # #11: relatório de espaço liberado (usa a baseline do pré-flight)
 	Show-SuccessMessage
 }
 
@@ -1903,19 +1909,35 @@ function Install-Applications {
             }
             Write-Log "Winget encontrado. Prosseguindo com a instalação." -Type Success
 
-            $apps = @(
-                @{Name = "7-Zip"; Id = "7zip.7zip"},
-				@{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
-				@{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
-				@{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
-                @{Name = "Google Chrome"; Id = "Google.Chrome"},
-                @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
-				@{Name = "CodecGuide.K-LiteCodecPack.Full"; Id = "CodecGuide.K-LiteCodecPack.Full"},
-                @{Name = "Microsoft Office"; Id = "Microsoft.Office"},
-                @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
-                @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
-                @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"}
-            )
+            # #13: lista de apps externalizável — usa Apps.json ao lado do script se existir,
+            # senão cai no padrão embutido abaixo. ($app.Name/$app.Id funcionam tanto pra
+            # hashtable embutida quanto pro objeto vindo do JSON.)
+            $appsJson = Join-Path $PSScriptRoot "Apps.json"
+            $apps = $null
+            if (Test-Path $appsJson) {
+                try {
+                    $apps = @(Get-Content $appsJson -Raw -Encoding UTF8 | ConvertFrom-Json)
+                    Write-Log "Lista de apps carregada de Apps.json ($($apps.Count) apps)." -Type Info
+                } catch {
+                    Write-Log "Apps.json inválido — usando lista embutida. Detalhe: $($_.Exception.Message)" -Type Warning
+                    $apps = $null
+                }
+            }
+            if (-not $apps) {
+                $apps = @(
+                    @{Name = "7-Zip"; Id = "7zip.7zip"},
+                    @{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
+                    @{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
+                    @{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
+                    @{Name = "Google Chrome"; Id = "Google.Chrome"},
+                    @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
+                    @{Name = "CodecGuide.K-LiteCodecPack.Full"; Id = "CodecGuide.K-LiteCodecPack.Full"},
+                    @{Name = "Microsoft Office"; Id = "Microsoft.Office"},
+                    @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
+                    @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
+                    @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"}
+                )
+            }
             $totalApps = $apps.Count
             $installedCount = 0
 
@@ -3591,6 +3613,14 @@ function Optimize-ExplorerPerformance {
 function New-SystemRestorePoint {
     Write-Log "Criando ponto de restauração do sistema..." -Type Warning
     try {
+        # #9: garante Proteção do Sistema ligada no drive do sistema e remove o throttle de 24h
+        # entre pontos — senão o Checkpoint-Computer falha/ignora silenciosamente e a rede de
+        # segurança nunca existe de fato.
+        try { Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue } catch {}
+        try {
+            New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" `
+                -Name "SystemRestorePointCreationFrequency" -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+        } catch {}
         Checkpoint-Computer -Description "Antes da manutenção Windows" -RestorePointType "MODIFY_SETTINGS"
         Write-Log "Ponto de restauração criado com sucesso." -Type Success
     } catch {
@@ -3686,21 +3716,28 @@ function Disable-UnnecessaryServices {
 function Update-WindowsAndDrivers {
     Write-Log "Verificando e instalando atualizações do Windows..." -Type Warning
     try {
-        # Atualizações do Windows
-        Install-Module PSWindowsUpdate -Force -Scope CurrentUser -ErrorAction SilentlyContinue
-        Import-Module PSWindowsUpdate
+        # #8: só instala o módulo se ausente; falha de módulo/rede é tratada sem derrubar a rotina.
+        if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
+            Write-Log "Instalando módulo PSWindowsUpdate..." -Type Info
+            Install-Module PSWindowsUpdate -Force -Scope CurrentUser -ErrorAction Stop
+        }
+        Import-Module PSWindowsUpdate -ErrorAction Stop
         Get-WindowsUpdate -AcceptAll -Install -AutoReboot
         Write-Log "Atualizações do Windows concluídas." -Type Success
-    } 
+    }
     catch {
-        Write-Log "Erro ao atualizar o Windows: $_" -Type Error
+        Write-Log "Erro ao atualizar o Windows (PSWindowsUpdate indisponível?): $_" -Type Error
     }
     try {
-        # Atualização de drivers via winget (opcional, depende do suporte do fabricante)
-        Write-Log "Verificando atualizações de drivers via winget..." -Type Warning
-        winget upgrade --all --accept-package-agreements --accept-source-agreements
-        Write-Log "Atualização de drivers via winget concluída." -Type Success
-    } 
+        # #8: guard de winget — em LTSC/Windows recém-instalado o winget pode não existir.
+        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            Write-Log "winget não encontrado — pulando atualização de drivers via winget." -Type Warning
+        } else {
+            Write-Log "Verificando atualizações de drivers via winget..." -Type Warning
+            winget upgrade --all --accept-package-agreements --accept-source-agreements
+            Write-Log "Atualização de drivers via winget concluída." -Type Success
+        }
+    }
     catch {
         Write-Log "Erro ao atualizar drivers via winget: $_" -Type Error
     }
@@ -4667,7 +4704,7 @@ Write-Log " I. Habilitar sudo embutido (Windows 11 24H2+)"
 Write-Log "`n X. Voltar ao Menu Anterior"
 Write-Log "=============================================" -Type Info
 
-        $key = [Console]::ReadKey($true).Key
+        $key = Read-MenuKey
         Write-Log "Opção escolhida no menu de Personalização: $key" Blue
 
         switch ($key) {
@@ -4944,7 +4981,7 @@ Write-Log " E. Desativar Cortana e Pesquisa Online"
 Write-Log "`n X. Voltar ao Menu Principal"
 Write-Log "=============================================" -Type Info
 
-        $key = [Console]::ReadKey($true).Key
+        $key = Read-MenuKey
         Write-Log "Opção escolhida no menu de Utilitários: $key" Blue
 
         switch ($key) {
@@ -4977,7 +5014,7 @@ Write-Log " C. Remover OneDrive e Restaurar Pastas"
 Write-Log "`n X. Voltar ao Menu Anterior"
 Write-Log "=============================================" -Type Info
 
-                    $subChoice = [Console]::ReadKey($true).Key
+                    $subChoice = Read-MenuKey
                     Write-Log "Opção escolhida no submenu de Bloatware: $subChoice" Blue
 
                     switch ($subChoice) {
@@ -5015,7 +5052,7 @@ Write-Log " C. Desfragmentar/Otimizar Drives"
 Write-Log "`n X. Voltar ao Menu Anterior"
 Write-Log "=============================================" -Type Info
 
-                    $subChoice = [Console]::ReadKey($true).Key
+                    $subChoice = Read-MenuKey
                     Write-Log "Opção escolhida no submenu de Limpeza: $subChoice" Blue
 
                     switch ($subChoice) {
@@ -5053,7 +5090,7 @@ Write-Log " E. Outros Ajustes e Personalização" -Type Success
 Write-Log "`n X. Voltar ao Menu Anterior"
 Write-Log "=============================================" -Type Info
 
-                    $subChoice = [Console]::ReadKey($true).Key
+                    $subChoice = Read-MenuKey
                     Write-Log "Opção escolhida no submenu de Desempenho e Privacidade: $subChoice" Blue
 
                     switch ($subChoice) {
@@ -5296,9 +5333,19 @@ function Show-MainMenu {
 # -------------------------------------------------------------------------
 # 🔧 Função principal: ponto de entrada do script
 function Start-ScriptSupremo {
-    Write-Log "`n🛠️ Iniciando o script de manutenção..." -Type Info
+    Write-Log "`n🛠️ Iniciando o Script Supremo de Manutenção v$($ScriptConfig.Version)..." -Type Info
 
     try {
+        Show-EnvironmentCheck   # #8/#9/#11: pré-flight (ambiente + baseline de espaço)
+
+        if ($Unattended) {
+            # #12: modo desatendido — roda a Rotina Colégio sem menu/prompts e encerra.
+            Write-Log "🤖 Modo desatendido: executando a Rotina Colégio sem menu..." -Type Warning
+            Invoke-Colegio
+            Show-CleanupReport
+            return
+        }
+
         Write-Log "⚙️ Chamando o menu principal..." -Type Warning
         Show-MainMenu
     } catch {
@@ -5378,6 +5425,69 @@ function New-FolderForced {
 function Test-CommandExists {
     param([string]$Command)
     return $null -ne (Get-Command $Command -ErrorAction SilentlyContinue)
+}
+
+# -------------------------------------------------------------------------
+# HELPERS ADICIONADOS (pré-flight, relatório e leitura de menu padronizada)
+# -------------------------------------------------------------------------
+
+# #10: leitor único de tecla de menu — retorna o caractere em MAIÚSCULO. Substitui a
+# mistura de [Console]::ReadKey().Key (enum) x RawUI.ReadKey().Character (char).
+function Read-MenuKey {
+    return [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
+}
+
+# #11: espaço livre (GB) no drive informado (padrão: drive do sistema).
+function Get-FreeSpaceGB {
+    param([string]$Drive = $env:SystemDrive)
+    try {
+        $name = $Drive.TrimEnd(':', '\')
+        $d = Get-PSDrive -Name $name -ErrorAction Stop
+        return [math]::Round($d.Free / 1GB, 2)
+    } catch { return $null }
+}
+
+# #8/#9/#11: verificação de ambiente antes do menu — não altera nada, só informa.
+function Show-EnvironmentCheck {
+    Write-Log "=== Verificação de ambiente (pré-flight) ===" -Type Info
+    $os = [Environment]::OSVersion.Version
+    Write-Log ("SO: Windows build {0} | Windows 11: {1}" -f $os.Build, $(if ($IsWindows11) { 'sim' } else { 'não' })) -Type Info
+
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    Write-Log ("Administrador: {0}" -f $(if ($isAdmin) { 'sim' } else { 'NÃO' })) -Type $(if ($isAdmin) { 'Success' } else { 'Error' })
+
+    $winget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+    Write-Log ("winget disponível: {0}" -f $(if ($winget) { 'sim' } else { 'não (instalação de apps/drivers via winget indisponível)' })) -Type $(if ($winget) { 'Success' } else { 'Warning' })
+
+    $pswu = [bool](Get-Module -ListAvailable -Name PSWindowsUpdate -ErrorAction SilentlyContinue)
+    Write-Log ("Módulo PSWindowsUpdate: {0}" -f $(if ($pswu) { 'instalado' } else { 'ausente (será instalado sob demanda)' })) -Type Info
+
+    $srAtiva = $false
+    try { Get-ComputerRestorePoint -ErrorAction Stop | Out-Null; $srAtiva = $true } catch { $srAtiva = $false }
+    Write-Log ("Proteção do Sistema (restauração): {0}" -f $(if ($srAtiva) { 'ativa' } else { 'possivelmente desativada — pontos de restauração podem falhar' })) -Type $(if ($srAtiva) { 'Success' } else { 'Warning' })
+
+    $rebootPendente = (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") -or `
+                      (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired")
+    if ($rebootPendente) { Write-Log "Há uma reinicialização pendente do Windows — recomendável reiniciar antes de continuar." -Type Warning }
+
+    $global:FreeSpaceBaselineGB = Get-FreeSpaceGB
+    if ($null -ne $global:FreeSpaceBaselineGB) {
+        Write-Log ("Espaço livre em {0}: {1} GB" -f $env:SystemDrive, $global:FreeSpaceBaselineGB) -Type Info
+    }
+    Write-Log "===========================================" -Type Info
+}
+
+# #11: relatório final de espaço liberado (compara com a baseline capturada no pré-flight).
+function Show-CleanupReport {
+    $depois = Get-FreeSpaceGB
+    if ($null -ne $global:FreeSpaceBaselineGB -and $null -ne $depois) {
+        $delta = [math]::Round($depois - $global:FreeSpaceBaselineGB, 2)
+        $msg = if ($delta -ge 0) { "Espaço liberado: $delta GB (de $($global:FreeSpaceBaselineGB) GB para $depois GB livres)" }
+               else { "Espaço livre variou em $delta GB (de $($global:FreeSpaceBaselineGB) GB para $depois GB)" }
+        Write-Log "=== Relatório final ===" -Type Success
+        Write-Log $msg -Type Success
+        Write-Log "=======================" -Type Success
+    }
 }
 
 # -------------------------------------------------------------------------

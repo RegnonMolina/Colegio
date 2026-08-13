@@ -3,6 +3,7 @@
 *.local.ps1
 *.local
 WiFi.local.json
+Apps.json
 secrets*
 credentials*
 *.env

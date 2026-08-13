@@ -1,0 +1,67 @@
+name: Lint PowerShell
+
+# Escopo: arquivo de produção (o que colegiomundodosaber.com.br/script entrega).
+# ScriptSupremo.ps1 é uma cópia legada não auditada e fica fora do gate por ora.
+
+on:
+  push:
+    paths:
+      - 'MaintenanceColegio.ps1'
+      - '.github/workflows/lint.yml'
+  pull_request:
+    paths:
+      - 'MaintenanceColegio.ps1'
+  workflow_dispatch:
+
+env:
+  TARGET: MaintenanceColegio.ps1
+
+jobs:
+  analyze:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+
+      - name: PSScriptAnalyzer (falha só em erros de severidade Error)
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path $env:TARGET -Severity @('Error','Warning') -ExcludeRule 'PSReservedParams'
+          if ($results) {
+            $results | Format-Table -AutoSize RuleName, Severity, Line, Message | Out-String | Write-Host
+          }
+          $errors = @($results | Where-Object Severity -eq 'Error')
+          Write-Host ("Total: {0} | Erros: {1} | Avisos: {2}" -f $results.Count, $errors.Count, ($results.Count - $errors.Count))
+          if ($errors.Count -gt 0) {
+            Write-Error "PSScriptAnalyzer encontrou $($errors.Count) erro(s) de severidade Error."
+            exit 1
+          }
+
+      - name: Checagem AST - funcoes chamadas mas nao definidas (anti-fantasma)
+        shell: pwsh
+        run: |
+          $path = (Resolve-Path $env:TARGET).Path
+          $tokens = $null; $errors = $null
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) { Write-Error "Erro de sintaxe em $env:TARGET"; exit 1 }
+          $defined = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) | ForEach-Object { $_.Name } | Sort-Object -Unique
+          $calls = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() } | Where-Object { $_ } | Sort-Object -Unique
+          $phantoms = foreach ($c in $calls) {
+            if ($defined -contains $c) { continue }
+            if ($c -notmatch '^[A-Za-z]+-') { continue }
+            if (Get-Command $c -ErrorAction SilentlyContinue) { continue }
+            $c
+          }
+          if ($phantoms) {
+            Write-Host "Funcoes chamadas mas NAO definidas (nem cmdlet):"
+            $phantoms | Sort-Object -Unique | ForEach-Object { Write-Host "   $_" }
+            Write-Error "Ha funcoes chamadas mas nunca definidas. Corrija antes do merge."
+            exit 1
+          }
+          Write-Host "OK: nenhuma funcao fantasma em $env:TARGET."
