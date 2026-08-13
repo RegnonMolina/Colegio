@@ -32,7 +32,12 @@ jobs:
       - name: PSScriptAnalyzer (falha só em erros de severidade Error)
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path $env:TARGET -Severity @('Error','Warning') -ExcludeRule 'PSReservedParams'
+          # Regras excluídas (intencionais neste script, não são defeitos):
+          #  - PSReservedParams: o param [switch]$WhatIf é proposital (alimenta os blocos de simulação).
+          #  - PSAvoidUsingComputerNameHardcoded: Test-Connection ao host fixo de atualização
+          #    (script.colegiomundodosaber.com.br) é um check de conectividade intencional.
+          $excluir = @('PSReservedParams', 'PSAvoidUsingComputerNameHardcoded')
+          $results = Invoke-ScriptAnalyzer -Path $env:TARGET -Severity @('Error','Warning') -ExcludeRule $excluir
           if ($results) {
             $results | Format-Table -AutoSize RuleName, Severity, Line, Message | Out-String | Write-Host
           }
