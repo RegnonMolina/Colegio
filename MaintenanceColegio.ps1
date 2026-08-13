@@ -40,7 +40,13 @@ param (
     [bool]$RunWindowsUpdate = $false,
 
     [Parameter(HelpMessage="Aplica a configuração de plano de energia otimizado.")]
-    [bool]$ApplyOptimizedPowerPlan = $false
+    [bool]$ApplyOptimizedPowerPlan = $false,
+
+    [Parameter(HelpMessage="Modo simulacao: nao aplica alteracoes, apenas registra o que faria (alimenta os blocos de simulacao internos).")]
+    [switch]$WhatIf,
+
+    [Parameter(HelpMessage="Modo desatendido: executa a Rotina Colégio sem menu/prompts e encerra.")]
+    [switch]$Unattended
 )
 #endregion
 
@@ -76,7 +82,8 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-    LogFilePath = Join-Path $PSScriptRoot "ScriptSupremo.log"
+    Version = "2.0.0"
+    LogFilePath = "C:\ScriptsLogs\$env:COMPUTERNAME-ScriptLog.log"
     ConfirmBeforeDestructive = $true
     Cleanup = @{
         CleanTemporaryFiles = $true
@@ -99,6 +106,7 @@ $ScriptConfig = @{
         DisableAutoUpdatesStoreApps = $true
         DisableWidgets = $true
         DisableNewsAndInterests = $true
+        DisableWifiSense = $true
     }
     GPORegistrySettings = @{
         EnableUpdateManagement = $true
@@ -119,8 +127,13 @@ $ScriptConfig = @{
         HideDupliDrive = $true
         Hide3dObjects = $true
         HideOneDriveFolder = $true
+        HideWidgetsButton = $true
+        CenterTaskbar = $false
     }
 }
+
+# Detecta Windows 11 (build >= 22000) — usado por Grant-UITweaks e afins (antes $IsWindows11 nunca era definido).
+$global:IsWindows11 = ([Environment]::OSVersion.Version.Build -ge 22000)
 
 # Inicializa o arquivo de log
 Set-Content -Path $ScriptConfig.LogFilePath -Value "" -Encoding UTF8 -ErrorAction SilentlyContinue | Out-Null
@@ -141,7 +154,8 @@ $global:defaultColors = @{
 
 # Verifica privilégios administrativos
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Log "Este script precisa ser executado como Administrador. Feche e execute o PowerShell como Administrador." -Type Error
+    # Write-Host (não Write-Log): esta checagem roda no load, ANTES da definição de Write-Log.
+    Write-Host "Este script precisa ser executado como Administrador. Feche e execute o PowerShell como Administrador." -ForegroundColor Red
     Start-Sleep 5
     exit
 }
@@ -163,11 +177,10 @@ function Write-Log {
     # Obter o nome do computador
     $computerName = $env:COMPUTERNAME # ou [System.Environment]::MachineName
 
-    # Definir o diretório base para os logs conforme sua preferência
-    $logBaseDirectory = "C:\ScriptsLogs" # <--- DIRETÓRIO ESPECIFICADO PELO USUÁRIO
-
-    # Definir o caminho completo do arquivo de log, incluindo o nome do computador
-    $logFilePath = "$logBaseDirectory\$computerName-ScriptLog.log"
+    # Fonte única do caminho de log: $ScriptConfig.LogFilePath (antes ele ficava morto e este
+    # caminho era hardcoded em paralelo — duas verdades divergentes).
+    $logFilePath = if ($ScriptConfig -and $ScriptConfig.LogFilePath) { $ScriptConfig.LogFilePath } else { "C:\ScriptsLogs\$computerName-ScriptLog.log" }
+    $logBaseDirectory = Split-Path $logFilePath -Parent
 
     # Criar o diretório de log se ele não existir
     try {
@@ -341,7 +354,7 @@ function Invoke-Bloatware {
     try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware : $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    # Remove-SystemBloatware duplicado removido aqui (#6): já é chamado acima nesta mesma rotina.
     try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
 
@@ -470,10 +483,10 @@ function Invoke-Colegio {
 	try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
 	try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Add-WiFiNetwork -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Add-WiFiNetwork: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Backup-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Backup-Registry: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    # Backup-Registry duplicado removido aqui (#6): já é chamado no início da rotina (linha do checkpoint/backup).
     try { Clear-ARP -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-ARP: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Clear-DNS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DNS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    # Clear-DeepSystemCleanup duplicado removido aqui (#6): já é chamado logo acima nesta mesma rotina.
     try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Clear-TemporaryFiles -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-TemporaryFiles: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Clear-EmptyFilesAndFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-EmptyFilesAndFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -3212,9 +3225,7 @@ function Grant-PrivacyAndBloatwarePrevention {
     controlados pela hashtable global $ScriptConfig.PrivacyTweaks.
     #>
     [CmdletBinding(SupportsShouldProcess = $true)]
-    param(
-        [hashtable]$ScriptConfig # Assumindo que $ScriptConfig é um parâmetro, ou é globalmente acessível
-    )
+    param()  # usa a config global $ScriptConfig (antes um param [hashtable]$ScriptConfig sombreava o global e zerava a função quando chamada sem argumento)
 
     Write-Log "Aplicando ajustes de privacidade e prevenindo bloatware..." -Type Info
     $activity = "Ajustes de Privacidade e Bloatware"
@@ -3407,9 +3418,7 @@ function Show-PersonalizationMenu {
 
 function Grant-UITweaks {
     [CmdletBinding(SupportsShouldProcess = $true)]
-    param(
-        [hashtable]$ScriptConfig # Assumindo que $ScriptConfig é um parâmetro, ou é globalmente acessível
-    )
+    param()  # usa a config global $ScriptConfig (antes um param [hashtable]$ScriptConfig sombreava o global e zerava a função quando chamada sem argumento)
 
     Write-Log "Aplicando ajustes na interface do usuário (UI)..." -Type Info
     $activity = "Ajustes de UI"
