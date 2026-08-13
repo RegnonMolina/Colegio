@@ -4682,6 +4682,8 @@ function Show-AppsMenu {
         Write-Host " A) Instalar Aplicativos Definidos"
         Write-Host " B) Gerenciar Programas e Recursos (Abrir)"
         Write-Host " C) Desinstalar Aplicativos UWP (Microsoft Store)"
+        Write-Host " D) Atualizar Windows e Drivers (PSWindowsUpdate + winget)"
+        Write-Host " E) Instalar/Atualizar PowerShell"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -4691,6 +4693,8 @@ function Show-AppsMenu {
             'A' { Install-Applications; Show-SuccessMessage }
             'B' { Start-Process "appwiz.cpl"; Show-SuccessMessage } # Abre "Programas e Recursos"
             'C' { Start-Process "ms-settings:appsfeatures"; Show-SuccessMessage } # Abre "Aplicativos e Recursos" (UWP)
+            'D' { Update-WindowsAndDrivers; Show-SuccessMessage }   # NOVO: função órfã, agora acessível
+            'E' { Update-PowerShell; Show-SuccessMessage }          # NOVO: função órfã, agora acessível
             'Z' { Invoke-AppsAndTools; Show-SuccessMessage } # Chama o orquestrador
             'X' { return }
             default {
@@ -4811,6 +4815,9 @@ function Show-RestoreMenu {
         Write-Host " I) Restaurar macros Office"
         Write-Host " J) Restaurar IPv6"
         Write-Host " K) Reabilitar notificações Action Center"
+        Write-Host " L) Restaurar Registro a partir de Backup (pasta)"
+        Write-Host " M) Desfazer Reforço de Privacidade Agressivo"
+        Write-Host " Z) Desfazer Tudo (Rotina completa de Restauração)" -ForegroundColor Green
         Write-Host " X) Voltar" -ForegroundColor Red
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
@@ -4825,6 +4832,9 @@ function Show-RestoreMenu {
             'I' { Restore-OfficeMacros }
             'J' { Restore-DefaultIPv6 }
             'K' { Grant-ActionCenter-Notifications }
+            'L' { Restore-Registry-FromBackup }   # NOVO: função órfã, agora acessível
+            'M' { Undo-PrivacyHardening }          # NOVO: função órfã, agora acessível
+            'Z' { Invoke-Undo }                    # Preserva o comportamento antigo do "G) Restaurações" do menu principal
             'X' { return }
         }
         Show-SuccessMessage
@@ -5010,6 +5020,8 @@ function Show-CleanupMenu {
         Write-Host " I) Iniciar Verificação DISM"
         Write-Host " J) Iniciar Verificação SFC"
         Write-Host " K) Agendar ChkDsk no Reboot"
+        Write-Host " L) Remover Pasta Windows.old"
+        Write-Host " M) Limpar Arquivos e Pastas Vazias (Temp)"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5027,6 +5039,8 @@ function Show-CleanupMenu {
             'I' { Invoke-DISM-Scan; Show-SuccessMessage }
             'J' { Invoke-SFC-Scan; Show-SuccessMessage }
             'K' { New-ChkDsk; Show-SuccessMessage }
+            'L' { Remove-WindowsOld; Show-SuccessMessage }            # NOVO: função órfã, agora acessível
+            'M' { Clear-EmptyFilesAndFolders; Show-SuccessMessage }   # NOVO: deleta arquivos 0 byte e pastas vazias (só em %TEMP%/Windows\Temp)
             'Z' { Invoke-Cleanup; Show-SuccessMessage } # Chama o orquestrador de Limpeza
             'X' { return }
             default {
@@ -5146,6 +5160,8 @@ function Show-MainMenu {
 		Write-Host " F) Scripts Externos" -ForegroundColor Yellow
 		Write-Host " G) Restaurações" -ForegroundColor Yellow
         Write-Host " H) Rotina Colégio" -ForegroundColor Green
+        Write-Host " I) Limpeza e Otimização" -ForegroundColor Yellow
+        Write-Host " J) Diagnósticos" -ForegroundColor Yellow
 		Write-Host " R) Reiniciar" -ForegroundColor Blue
         Write-Host " S) Desligar" -ForegroundColor Blue
         Write-Host " X) Sair" -ForegroundColor Red
@@ -5159,8 +5175,10 @@ function Show-MainMenu {
             'D' { Show-NetworkMenu } # Mapeado para o antigo "Rede e Impressoras"
             'E' { Show-SystemPerformanceMenu } # Mapeado para a função de desempenho
 			'F' { Show-ExternalScriptsMenu }
-			'G' { Invoke-Undo }
+			'G' { Show-RestoreMenu } # Antes: Invoke-Undo. Agora abre o menu completo de Restauração; a rotina "Desfazer Tudo" (Invoke-Undo) virou a opção Z lá dentro.
 			'H' { Invoke-Colegio }
+			'I' { Show-CleanupMenu }      # NOVO: menu de Limpeza e Otimização (antes órfão, inalcançável)
+			'J' { Show-DiagnosticsMenu }  # NOVO: menu de Diagnósticos (antes órfão, inalcançável)
             'R' {
                 Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
                 Restart-Computer -Force
