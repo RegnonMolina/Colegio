@@ -44,9 +44,15 @@ jobs:
           }
 
       - name: Checagem AST - funcoes chamadas mas nao definidas (anti-fantasma)
-        shell: pwsh
+        # Windows PowerShell 5.1 (nao pwsh 7): e o alvo real do script e tem os cmdlets
+        # exclusivos do Windows (Checkpoint-Computer, Optimize-Volume, Set-MpPreference,
+        # Enable-ComputerRestore, Rename-Computer, ...) que o pwsh 7 nao expoe.
+        shell: powershell
         run: |
           $path = (Resolve-Path $env:TARGET).Path
+          # Cmdlets de modulos externos legitimos que podem nao estar instalados no runner
+          # (nao sao fantasmas do script — sao dependencias opcionais).
+          $allow = @('Get-WindowsUpdate')
           $tokens = $null; $errors = $null
           $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
           if ($errors.Count -gt 0) { Write-Error "Erro de sintaxe em $env:TARGET"; exit 1 }
@@ -54,6 +60,7 @@ jobs:
           $calls = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() } | Where-Object { $_ } | Sort-Object -Unique
           $phantoms = foreach ($c in $calls) {
             if ($defined -contains $c) { continue }
+            if ($allow -contains $c) { continue }
             if ($c -notmatch '^[A-Za-z]+-') { continue }
             if (Get-Command $c -ErrorAction SilentlyContinue) { continue }
             $c
