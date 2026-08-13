@@ -56,14 +56,21 @@ jobs:
         shell: pwsh
         run: |
           $path = (Resolve-Path $env:TARGET).Path
-          # Cmdlets de modulos externos/opcionais que podem nao estar no runner (nao sao fantasmas).
-          $allow = @('Get-WindowsUpdate','Set-MpPreference','Get-MpPreference')
+          # Rede de seguranca: cmdlets so-5.1 (removidos do PS7) e de modulos opcionais.
+          $allow = @('Get-WindowsUpdate','Set-MpPreference','Get-MpPreference',
+                     'Checkpoint-Computer','Enable-ComputerRestore','Get-ComputerRestorePoint','Get-WmiObject')
           $tokens = $null; $errors = $null
           $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
           if ($errors.Count -gt 0) { Write-Error "Erro de sintaxe em $env:TARGET"; exit 1 }
           $defined = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) | ForEach-Object { $_.Name }
           $avail = @{}
           Get-Command -CommandType Cmdlet,Function,Alias,Application -ErrorAction SilentlyContinue | ForEach-Object { $avail[$_.Name] = $true }
+          # Mescla os comandos do Windows PowerShell 5.1 (alvo real do script): resolve cmdlets
+          # que existem no 5.1 mas nao no pwsh 7 (Checkpoint-Computer, Get-WmiObject, ...).
+          try {
+            $wp = & powershell.exe -NoProfile -Command "Get-Command -CommandType Cmdlet,Function,Alias -ErrorAction SilentlyContinue | ForEach-Object Name" 2>$null
+            foreach ($n in $wp) { if ($n) { $avail[$n.Trim()] = $true } }
+          } catch { Write-Host "Aviso: nao foi possivel mesclar comandos do Windows PowerShell 5.1." }
           $calls = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() } | Where-Object { $_ -match '^[A-Za-z]+-' } | Sort-Object -Unique
           $phantoms = $calls | Where-Object { $defined -notcontains $_ -and $allow -notcontains $_ -and -not $avail.ContainsKey($_) }
           if ($phantoms) {
