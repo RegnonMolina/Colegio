@@ -2,6 +2,13 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [2.2.0] - 2026-08-14
+
+### Adicionado (GUI mais profissional)
+- **Parâmetros por ação** na GUI: ações com `Params` no catálogo renderizam campos dinâmicos (texto/pastas/switch/escolha) — ex.: `Clear-Arquivos e Pastas Vazias` expõe `Path` e `IncludeEmptyFiles`. Campo **"Argumentos extras (avançado)"** disponível para qualquer ação (ex.: `-Verbose`), passado direto para a função (splat + args).
+- **Botão ⚙ Personalizar**: janela de preferências com **tema (Escuro/Claro)**, **tamanho da fonte** (Pequeno/Médio/Grande), **confirmar ações destrutivas**, **auto-scroll do log** e **ocultar ações destrutivas**. Preferências persistidas em `%APPDATA%\ScriptSupremo\gui-prefs.json` e aplicadas ao vivo (tema/fonte via `DynamicResource`).
+- **Ordem alfabética** em toda a GUI: categorias e ações ordenadas (`Sort-Object Cat, Titulo`).
+
 ## [2.1.0] - 2026-08-14
 
 ### Adicionado
