@@ -9,23 +9,36 @@
 # estao no escopo quando este arquivo roda. Requer WPF (Windows + .NET).
 #
 # Recursos: busca em tempo real, filtro por categoria, painel de descricao,
-# PARAMETROS por acao (campos dinamicos) + "argumentos extras", checkbox
-# "Simular (WhatIf)", confirmacao/destaque p/ acoes destrutivas, execucao em
-# runspace de fundo (nao trava a janela), log ao vivo (tail do log) e botao
-# "Personalizar" (tema, fonte, confirmacoes) com preferencias salvas em JSON.
+# PARAMETROS por acao (campos dinamicos, com botao "Procurar pasta..." nos
+# campos de pasta) + "argumentos extras", checkbox "Simular (WhatIf)",
+# confirmacao/destaque p/ acoes destrutivas, execucao em runspace de fundo
+# (nao trava a janela), log ao vivo (tail do log, com botao "Copiar log") e
+# botao "Personalizar" (tema, fonte, confirmacoes, categorias ocultas) com
+# preferencias salvas em JSON. Tambem: icone/identidade da janela, indicador
+# de progresso + status com tempo decorrido, atalhos de teclado (Ctrl+F busca,
+# Ctrl+Enter executa, Esc fecha), botao "Ver comando equivalente", 4 temas
+# (Escuro/Claro/Alto Contraste/Petroleo), presets salvos de parametros por
+# acao e janela que lembra tamanho/posicao/ultima acao entre sessoes.
 # ============================================================================
 
 Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue
 Add-Type -AssemblyName PresentationCore      -ErrorAction SilentlyContinue
 Add-Type -AssemblyName WindowsBase           -ErrorAction SilentlyContinue
 Add-Type -AssemblyName System.Windows.Forms  -ErrorAction SilentlyContinue  # NOVO: FolderBrowserDialog para os campos de pasta
+Add-Type -AssemblyName System.Drawing        -ErrorAction SilentlyContinue  # NOVO: gera o icone da janela em tempo real (sem depender de arquivo externo)
+Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction SilentlyContinue  # NOVO: InputBox nativo p/ nomear presets salvos
 
 # ----------------------------------------------------------------------------
 # Paletas de tema
 # ----------------------------------------------------------------------------
 $script:GuiTemas = @{
-    Escuro = @{ Bg='#0f1419'; Panel='#161b22'; PanelDark='#0d1117'; Ink='#e6edf3'; Muted='#8b949e'; Border='#30363d'; Accent='#0f5c56'; Danger='#f85149'; Func='#58a6ff' }
-    Claro  = @{ Bg='#f6f8fa'; Panel='#ffffff'; PanelDark='#f0f2f5'; Ink='#1f2328'; Muted='#57606a'; Border='#d0d7de'; Accent='#0f5c56'; Danger='#cf222e'; Func='#0969da' }
+    Escuro        = @{ Bg='#0f1419'; Panel='#161b22'; PanelDark='#0d1117'; Ink='#e6edf3'; Muted='#8b949e'; Border='#30363d'; Accent='#0f5c56'; Danger='#f85149'; Func='#58a6ff' }
+    Claro         = @{ Bg='#f6f8fa'; Panel='#ffffff'; PanelDark='#f0f2f5'; Ink='#1f2328'; Muted='#57606a'; Border='#d0d7de'; Accent='#0f5c56'; Danger='#cf222e'; Func='#0969da' }
+    # NOVO: alto contraste para leitura em qualquer condicao de luz / acessibilidade.
+    AltoContraste = @{ Bg='#000000'; Panel='#000000'; PanelDark='#000000'; Ink='#ffffff'; Muted='#d0d0d0'; Border='#ffffff'; Accent='#ffcc00'; Danger='#ff5c5c'; Func='#7fd4ff' }
+    # NOVO: variante clara com identidade mais forte na cor institucional do CMS (mesmo
+    # verde-petroleo #0f5c56 usado nos web apps do ecossistema).
+    Petroleo      = @{ Bg='#eef5f4'; Panel='#ffffff'; PanelDark='#e0edeb'; Ink='#0b2b28'; Muted='#4f6b68'; Border='#c7ded9'; Accent='#0f5c56'; Danger='#c0392b'; Func='#146c94' }
 }
 
 # ----------------------------------------------------------------------------
@@ -38,22 +51,95 @@ function Get-GuiPrefsPath {
 }
 
 function Get-GuiPrefs {
-    $padrao = [pscustomobject]@{ Tema='Escuro'; Fonte=13; ConfirmarDestrutivas=$true; AutoScrollLog=$true; OcultarDestrutivas=$false }
+    $padrao = [pscustomobject]@{
+        Tema='Escuro'
+        Fonte=13
+        ConfirmarDestrutivas=$true
+        AutoScrollLog=$true
+        OcultarDestrutivas=$false
+        # NOVO: categorias inteiras ocultas da lista de acoes (nomes de Cat do catalogo)
+        CategoriasOcultas=@()
+        # NOVO: perfis/presets salvos por acao -- cada item: { Func; Nome; Splat; Extra; Simular }
+        Presets=@()
+        # NOVO: estado da janela lembrado entre sessoes (posicao/tamanho + ultima selecao)
+        JanelaLargura=$null
+        JanelaAltura=$null
+        JanelaX=$null
+        JanelaY=$null
+        JanelaMaximizada=$false
+        UltimaCategoria=$null
+        UltimaAcao=$null
+    }
     try {
         $p = Get-GuiPrefsPath
         if (Test-Path $p) {
             $j = Get-Content $p -Raw -Encoding UTF8 | ConvertFrom-Json
-            foreach ($k in 'Tema','Fonte','ConfirmarDestrutivas','AutoScrollLog','OcultarDestrutivas') {
+            foreach ($k in 'Tema','Fonte','ConfirmarDestrutivas','AutoScrollLog','OcultarDestrutivas',
+                           'CategoriasOcultas','Presets','JanelaLargura','JanelaAltura','JanelaX','JanelaY',
+                           'JanelaMaximizada','UltimaCategoria','UltimaAcao') {
                 if ($null -ne $j.$k) { $padrao.$k = $j.$k }
             }
         }
     } catch { }
+    # Normaliza arrays: ConvertFrom-Json devolve o item sozinho (fora de array) quando o
+    # JSON original tinha exatamente 1 elemento -- @() sozinho nao resolve pq @($null) vira
+    # um array de 1 elemento nulo, nao um array vazio.
+    $padrao.CategoriasOcultas = if ($null -eq $padrao.CategoriasOcultas) { @() } else { @($padrao.CategoriasOcultas) }
+    $padrao.Presets           = if ($null -eq $padrao.Presets)           { @() } else { @($padrao.Presets) }
     return $padrao
 }
 
 function Save-GuiPrefs {
     param($Prefs)
-    try { $Prefs | ConvertTo-Json | Set-Content -Path (Get-GuiPrefsPath) -Encoding UTF8 } catch { }
+    # -Depth maior: Prefs agora tem Presets (array de objetos com Splat aninhado) -- o
+    # padrao (2) truncaria esses niveis extras em texto tipo "System.Collections.Hashtable".
+    try { $Prefs | ConvertTo-Json -Depth 6 | Set-Content -Path (Get-GuiPrefsPath) -Encoding UTF8 } catch { }
+}
+
+# ----------------------------------------------------------------------------
+# NOVO: gera (uma vez, cacheado em disco) um icone simples para a janela/barra
+# de tarefas -- nao depende de nenhum arquivo externo nem de internet: desenha
+# um quadrado arredondado na cor de destaque com as iniciais "SS" (Script
+# Supremo) por cima.
+# ----------------------------------------------------------------------------
+function Get-GuiAppIconPath {
+    param($AccentHex = '#0f5c56')
+    try {
+        $dir = Join-Path $env:APPDATA 'ScriptSupremo'
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $caminho = Join-Path $dir 'app-icon.png'
+        if (Test-Path $caminho) { return $caminho }
+
+        $tam = 256
+        $bmp = New-Object System.Drawing.Bitmap($tam, $tam)
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        try {
+            $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $g.Clear([System.Drawing.Color]::Transparent)
+            $cor = [System.Drawing.ColorTranslator]::FromHtml($AccentHex)
+            $brush = New-Object System.Drawing.SolidBrush($cor)
+            $raio = 48
+            $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+            $d = $raio * 2
+            $path.AddArc(0, 0, $d, $d, 180, 90)
+            $path.AddArc($tam - $d, 0, $d, $d, 270, 90)
+            $path.AddArc($tam - $d, $tam - $d, $d, $d, 0, 90)
+            $path.AddArc(0, $tam - $d, $d, $d, 90, 90)
+            $path.CloseFigure()
+            $g.FillPath($brush, $path)
+
+            $fonte = New-Object System.Drawing.Font('Segoe UI', 92, [System.Drawing.FontStyle]::Bold)
+            $fmt = New-Object System.Drawing.StringFormat
+            $fmt.Alignment = [System.Drawing.StringAlignment]::Center
+            $fmt.LineAlignment = [System.Drawing.StringAlignment]::Center
+            $rect = New-Object System.Drawing.RectangleF(0, 0, $tam, $tam)
+            $g.DrawString('SS', $fonte, [System.Drawing.Brushes]::White, $rect, $fmt)
+        } finally { $g.Dispose() }
+
+        $bmp.Save($caminho, [System.Drawing.Imaging.ImageFormat]::Png)
+        $bmp.Dispose()
+        return $caminho
+    } catch { return $null }
 }
 
 # ----------------------------------------------------------------------------
@@ -292,13 +378,30 @@ $script:GuiXaml = @'
             <TextBlock x:Name="TxtParamsTitulo" Text="PARÂMETROS" Foreground="{DynamicResource Muted}" FontWeight="SemiBold" FontSize="11" Margin="0,4,0,4" Visibility="Collapsed"/>
             <StackPanel x:Name="PnlParams"/>
 
+            <TextBlock Text="PRESETS SALVOS DESTA AÇÃO" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,10,0,4"/>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <ComboBox x:Name="CboPresets" Grid.Column="0"/>
+              <Button x:Name="BtnCarregarPreset" Grid.Column="1" Content="Carregar" Style="{StaticResource GhostButton}" Margin="4,0,0,0"/>
+            </Grid>
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+              <Button x:Name="BtnSalvarPreset" Content="Salvar preset..." Style="{StaticResource GhostButton}"/>
+              <Button x:Name="BtnExcluirPreset" Content="Excluir preset" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+            </StackPanel>
+
             <TextBlock Text="ARGUMENTOS EXTRAS (AVANÇADO)" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,10,0,2"/>
             <TextBox x:Name="TxtExtra" Height="28" Background="{DynamicResource PanelDark}" Foreground="{DynamicResource Ink}"
                      BorderBrush="{DynamicResource Border}" Padding="6,3" VerticalContentAlignment="Center"/>
             <TextBlock x:Name="TxtArgDica" Foreground="{DynamicResource Muted}" FontSize="11" FontStyle="Italic" TextWrapping="Wrap" Margin="0,3,0,0"/>
 
             <Button x:Name="BtnExecutar" Content="Executar" Style="{StaticResource AccentButton}" Height="40" IsEnabled="False" Margin="0,14,0,0"/>
-            <TextBlock x:Name="TxtStatus" Margin="0,10,0,0" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
+            <Button x:Name="BtnVerComando" Content="Ver comando equivalente" Style="{StaticResource GhostButton}" Margin="0,6,0,0" HorizontalAlignment="Stretch"/>
+            <ProgressBar x:Name="PrgExec" Height="6" Margin="0,10,0,0" Visibility="Collapsed" IsIndeterminate="False"
+                         Foreground="{DynamicResource Accent}" Background="{DynamicResource PanelDark}" BorderThickness="0"/>
+            <TextBlock x:Name="TxtStatus" Margin="0,8,0,0" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
           </StackPanel>
         </ScrollViewer>
       </Border>
@@ -314,7 +417,14 @@ $script:GuiXaml = @'
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <TextBlock Grid.Row="0" Text="Log ao vivo" Foreground="{DynamicResource Muted}" Margin="2,0,0,4"/>
+        <Grid Grid.Row="0" Margin="0,0,0,4">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0" Text="Log ao vivo" Foreground="{DynamicResource Muted}" Margin="2,0,0,0" VerticalAlignment="Center"/>
+          <Button x:Name="BtnCopiarLog" Grid.Column="1" Content="Copiar log" Style="{StaticResource GhostButton}" Padding="10,3"/>
+        </Grid>
         <TextBox x:Name="TxtLog" Grid.Row="1" IsReadOnly="True" TextWrapping="NoWrap"
                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                  Background="{DynamicResource PanelDark}" Foreground="{DynamicResource Muted}"
@@ -332,7 +442,7 @@ $script:PrefsXaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
-        Title="Personalizar" Height="360" Width="380" WindowStartupLocation="CenterOwner"
+        Title="Personalizar" Height="520" Width="400" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" Background="{DynamicResource Bg}">
   <Window.Resources>
     <!-- Autocontido: valores-padrao proprios (sobrescritos pelo tema do Owner logo apos o
@@ -369,11 +479,14 @@ $script:PrefsXaml = @'
       <Setter Property="Cursor" Value="Hand"/>
     </Style>
   </Window.Resources>
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
   <StackPanel Margin="18">
     <TextBlock Text="Tema" Foreground="{DynamicResource Ink}" FontWeight="SemiBold"/>
     <ComboBox x:Name="CboTema" Margin="0,4,0,12">
       <ComboBoxItem Content="Escuro"/>
       <ComboBoxItem Content="Claro"/>
+      <ComboBoxItem Content="Alto Contraste"/>
+      <ComboBoxItem Content="Petroleo (CMS)"/>
     </ComboBox>
 
     <TextBlock Text="Tamanho da fonte" Foreground="{DynamicResource Ink}" FontWeight="SemiBold"/>
@@ -387,11 +500,15 @@ $script:PrefsXaml = @'
     <CheckBox x:Name="ChkAutoScroll" Content="Rolar o log automaticamente" Foreground="{DynamicResource Ink}" Margin="0,4"/>
     <CheckBox x:Name="ChkOcultarDestr" Content="Ocultar acoes destrutivas da lista" Foreground="{DynamicResource Ink}" Margin="0,4"/>
 
+    <TextBlock Text="Ocultar categorias inteiras" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" Margin="0,14,0,4"/>
+    <StackPanel x:Name="PnlCategoriasOcultas"/>
+
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
       <Button x:Name="BtnCancelar" Content="Cancelar" Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
       <Button x:Name="BtnOk" Content="Salvar" Style="{StaticResource AccentButton}"/>
     </StackPanel>
   </StackPanel>
+  </ScrollViewer>
 </Window>
 '@
 
@@ -444,10 +561,37 @@ function Show-GuiHandlerError {
 }
 
 # ----------------------------------------------------------------------------
+# NOVO: monta uma previa em texto do comando PowerShell equivalente ao que o
+# botao "Executar" vai rodar de fato (mesma logica de montagem de Splat/Extra
+# usada em Invoke-MaintenanceGuiWindow) -- so para o usuario conferir/copiar,
+# nao executa nada.
+# ----------------------------------------------------------------------------
+function ConvertTo-GuiCommandPreview {
+    param([string]$FuncName, [hashtable]$Splat, [string[]]$Extra, [bool]$Simular)
+    $escapar = { param($s) "'" + ([string]$s -replace "'", "''") + "'" }
+    $partes = New-Object System.Collections.Generic.List[string]
+    $partes.Add($FuncName)
+    foreach ($k in $Splat.Keys) {
+        $v = $Splat[$k]
+        if ($v -is [bool]) {
+            if ($v) { $partes.Add("-$k") }
+        } elseif ($v -is [array]) {
+            $itens = @($v | ForEach-Object { & $escapar $_ }) -join ', '
+            $partes.Add("-$k @($itens)")
+        } else {
+            $partes.Add("-$k " + (& $escapar $v))
+        }
+    }
+    if ($Extra -and $Extra.Count) { $partes.AddRange([string[]]$Extra) }
+    if ($Simular) { $partes.Add('-WhatIf') }
+    return ($partes -join ' ')
+}
+
+# ----------------------------------------------------------------------------
 # Janela de preferencias (modal). Retorna $true se salvou.
 # ----------------------------------------------------------------------------
 function Show-GuiPreferences {
-    param($Owner, $Prefs)
+    param($Owner, $Prefs, $Catalogo)
     $win = [Windows.Markup.XamlReader]::Parse($script:PrefsXaml)
     $win.Owner = $Owner
     # herda os recursos de tema do owner p/ o modal ficar no mesmo estilo
@@ -459,23 +603,43 @@ function Show-GuiPreferences {
     $chkConfirmar   = $win.FindName('ChkConfirmar')
     $chkAutoScroll  = $win.FindName('ChkAutoScroll')
     $chkOcultarDestr= $win.FindName('ChkOcultarDestr')
+    $pnlCatOcultas  = $win.FindName('PnlCategoriasOcultas')
     $btnOk          = $win.FindName('BtnOk')
     $btnCancelar    = $win.FindName('BtnCancelar')
 
-    $cboTema.SelectedIndex  = if ($Prefs.Tema -eq 'Claro') { 1 } else { 0 }
+    # NOVO: 4 temas -- indice do combo mapeado pelo nome interno (mesma ordem dos itens no XAML).
+    $temaNomes = @('Escuro','Claro','AltoContraste','Petroleo')
+    $idxTema = [array]::IndexOf($temaNomes, $Prefs.Tema)
+    $cboTema.SelectedIndex  = if ($idxTema -ge 0) { $idxTema } else { 0 }
     $cboFonte.SelectedIndex = switch ([int]$Prefs.Fonte) { 12 {0} 16 {2} default {1} }
     $chkConfirmar.IsChecked    = [bool]$Prefs.ConfirmarDestrutivas
     $chkAutoScroll.IsChecked   = [bool]$Prefs.AutoScrollLog
     $chkOcultarDestr.IsChecked = [bool]$Prefs.OcultarDestrutivas
 
+    # NOVO: 1 checkbox por categoria do catalogo, marcado se ja estiver oculta.
+    $categoriasOcultasAtuais = @($Prefs.CategoriasOcultas)
+    $chksCategorias = @{}
+    if ($Catalogo) {
+        foreach ($cat in ($Catalogo | Select-Object -ExpandProperty Cat -Unique | Sort-Object)) {
+            $chk = New-Object System.Windows.Controls.CheckBox
+            $chk.Content = $cat
+            $chk.Margin = '0,2'
+            $chk.IsChecked = ($categoriasOcultasAtuais -contains $cat)
+            $chk.SetResourceReference([System.Windows.Controls.CheckBox]::ForegroundProperty, 'Ink')
+            [void]$pnlCatOcultas.Children.Add($chk)
+            $chksCategorias[$cat] = $chk
+        }
+    }
+
     $result = @{ Salvou = $false }
     $btnOk.Add_Click({
         try {
-            $Prefs.Tema = if ($cboTema.SelectedIndex -eq 1) { 'Claro' } else { 'Escuro' }
+            $Prefs.Tema = $temaNomes[$cboTema.SelectedIndex]
             $Prefs.Fonte = switch ($cboFonte.SelectedIndex) { 0 {12} 2 {16} default {14} }
             $Prefs.ConfirmarDestrutivas = [bool]$chkConfirmar.IsChecked
             $Prefs.AutoScrollLog        = [bool]$chkAutoScroll.IsChecked
             $Prefs.OcultarDestrutivas   = [bool]$chkOcultarDestr.IsChecked
+            $Prefs.CategoriasOcultas    = @($chksCategorias.Keys | Where-Object { [bool]$chksCategorias[$_].IsChecked })
             $result.Salvou = $true
             $win.Close()
         } catch { Show-GuiHandlerError -Contexto 'Salvar preferencias' -ErroObj $_ }
@@ -510,15 +674,64 @@ function Invoke-MaintenanceGuiWindow {
     $detAviso   = & $F 'TxtDetAviso'
     $paramsTit  = & $F 'TxtParamsTitulo'
     $pnlParams  = & $F 'PnlParams'
+    $cboPresets        = & $F 'CboPresets'
+    $btnCarregarPreset = & $F 'BtnCarregarPreset'
+    $btnSalvarPreset   = & $F 'BtnSalvarPreset'
+    $btnExcluirPreset  = & $F 'BtnExcluirPreset'
     $txtExtra   = & $F 'TxtExtra'
     $txtArgDica = & $F 'TxtArgDica'
     $btnExec    = & $F 'BtnExecutar'
+    $btnVerComando = & $F 'BtnVerComando'
+    $prgExec    = & $F 'PrgExec'
     $txtStatus  = & $F 'TxtStatus'
     $txtLog     = & $F 'TxtLog'
+    $btnCopiarLog = & $F 'BtnCopiarLog'
 
     $tema = Set-GuiAppearance -Window $window -Prefs $prefs
 
-    $st = @{ Worker=$null; PS=$null; Handle=$null; LogPath=$null; LogPos=0; Selecao=$null; ParamControls=@{}; InkHex=$tema.Ink; Prefs=$prefs }
+    # NOVO: identidade da janela -- titulo com o nome do colegio (+ versao, se o script
+    # principal expuser algum campo reconhecido em ScriptConfig) e icone gerado na hora
+    # (sem depender de arquivo .ico externo nem de internet).
+    $versaoTxt = if ($global:ScriptConfig -and $global:ScriptConfig.Versao) { " v$($global:ScriptConfig.Versao)" }
+                 elseif ($global:ScriptConfig -and $global:ScriptConfig.Version) { " v$($global:ScriptConfig.Version)" }
+                 else { '' }
+    $window.Title = "Script Supremo de Manutencao$versaoTxt — Colegio Mundo do Saber"
+    try {
+        $iconPath = Get-GuiAppIconPath -AccentHex $tema.Accent
+        if ($iconPath -and (Test-Path $iconPath)) {
+            $bmpIcone = New-Object System.Windows.Media.Imaging.BitmapImage
+            $bmpIcone.BeginInit()
+            $bmpIcone.CacheOption = 'OnLoad'
+            $bmpIcone.UriSource = New-Object System.Uri($iconPath, [System.UriKind]::Absolute)
+            $bmpIcone.EndInit()
+            $bmpIcone.Freeze()
+            $window.Icon = $bmpIcone
+        }
+    } catch { }
+
+    # NOVO: restaura tamanho/posicao da janela salvos da ultima vez, com limites minimos
+    # e sem deixar a janela "perdida" fora da tela (ex.: depois de desconectar um monitor).
+    if ($prefs.JanelaLargura -and $prefs.JanelaAltura) {
+        try {
+            $areaUtil = [System.Windows.SystemParameters]::WorkArea
+            $w = [Math]::Min([double]$prefs.JanelaLargura, $areaUtil.Width)
+            $h = [Math]::Min([double]$prefs.JanelaAltura, $areaUtil.Height)
+            $window.Width = [Math]::Max(700, $w)
+            $window.Height = [Math]::Max(400, $h)
+            if ($null -ne $prefs.JanelaX -and $null -ne $prefs.JanelaY) {
+                $x = [double]$prefs.JanelaX
+                $y = [double]$prefs.JanelaY
+                if ($x -ge $areaUtil.Left -and $x -le ($areaUtil.Right - 100) -and $y -ge $areaUtil.Top -and $y -le ($areaUtil.Bottom - 100)) {
+                    $window.WindowStartupLocation = 'Manual'
+                    $window.Left = $x
+                    $window.Top = $y
+                }
+            }
+            if ([bool]$prefs.JanelaMaximizada) { $window.WindowState = 'Maximized' }
+        } catch { }
+    }
+
+    $st = @{ Worker=$null; PS=$null; Handle=$null; LogPath=$null; LogPos=0; Selecao=$null; ParamControls=@{}; InkHex=$tema.Ink; TemaAtual=$tema; Prefs=$prefs; Cronometro=$null; StatusBase='' }
     $st.LogPath = "C:\ScriptsLogs\$env:COMPUTERNAME-ScriptLog.log"
     if ((Get-Variable -Name ScriptConfig -Scope Global -ErrorAction SilentlyContinue) -and $global:ScriptConfig.LogFilePath) {
         $st.LogPath = $global:ScriptConfig.LogFilePath
@@ -529,8 +742,18 @@ function Invoke-MaintenanceGuiWindow {
         $sel = '' + $lstCat.SelectedItem
         $lstCat.Items.Clear()
         [void]$lstCat.Items.Add('Todas')
-        foreach ($c in ($catalogo | Select-Object -ExpandProperty Cat -Unique | Sort-Object)) { [void]$lstCat.Items.Add($c) }
-        $lstCat.SelectedItem = if ($sel) { $sel } else { 'Todas' }
+        $ocultas = @($st.Prefs.CategoriasOcultas)
+        foreach ($c in ($catalogo | Select-Object -ExpandProperty Cat -Unique | Sort-Object)) {
+            if ($ocultas -contains $c) { continue }  # NOVO: categoria inteira ocultada em Personalizar
+            [void]$lstCat.Items.Add($c)
+        }
+        $lstCat.SelectedItem = if ($sel -and $lstCat.Items.Contains($sel)) {
+            $sel
+        } elseif (-not $sel -and $st.Prefs.UltimaCategoria -and $lstCat.Items.Contains($st.Prefs.UltimaCategoria)) {
+            $st.Prefs.UltimaCategoria  # NOVO: primeira abertura -- volta pra ultima categoria usada
+        } else {
+            'Todas'
+        }
         if (-not $lstCat.SelectedItem) { $lstCat.SelectedIndex = 0 }
     }
     & $preencherCategorias
@@ -543,6 +766,7 @@ function Invoke-MaintenanceGuiWindow {
             $lstAcoes.Items.Clear()
             foreach ($a in $catalogo) {
                 if ($cat -ne 'Todas' -and $a.Cat -ne $cat) { continue }
+                if (@($st.Prefs.CategoriasOcultas) -contains $a.Cat) { continue }  # NOVO: categoria inteira ocultada
                 if ($st.Prefs.OcultarDestrutivas -and $a.Destr) { continue }
                 if ($termo -and -not (
                         ($a.Titulo.ToLower().Contains($termo)) -or
@@ -679,6 +903,37 @@ function Invoke-MaintenanceGuiWindow {
         }
     }
 
+    # NOVO: atualiza o combo de presets salvos para a acao atualmente selecionada.
+    $AtualizarPresetsCombo = {
+        param($a)
+        $cboPresets.Items.Clear()
+        if (-not $a) { return }
+        $presetsDaAcao = @($st.Prefs.Presets | Where-Object { $_.Func -eq $a.Func })
+        foreach ($ps in ($presetsDaAcao | Sort-Object Nome)) { [void]$cboPresets.Items.Add($ps.Nome) }
+        if ($cboPresets.Items.Count) { $cboPresets.SelectedIndex = 0 }
+    }
+
+    # NOVO: monta { Splat; Extra } a partir dos controles dinamicos de parametros + campo
+    # de argumentos extras -- compartilhado por Executar, "Ver comando equivalente" e
+    # "Salvar preset..." (evita 3 copias da mesma logica de montagem).
+    $MontarSplatExtra = {
+        $splat = @{}
+        foreach ($nome in $st.ParamControls.Keys) {
+            $pc = $st.ParamControls[$nome]
+            switch ($pc.Tipo) {
+                'switch'   { $splat[$nome] = [bool]$pc.Ctrl.IsChecked }
+                'choice'   { $v = '' + $pc.Ctrl.SelectedItem; if ($v) { $splat[$nome] = $v } }
+                'paths'    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
+                'password' { $v = $pc.Ctrl.Password; if ($v) { $splat[$nome] = $v } }
+                default    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = $v } }
+            }
+        }
+        $extra = @()
+        $rawExtra = ('' + $txtExtra.Text).Trim()
+        if ($rawExtra) { $extra = @($rawExtra -split '\s+') }
+        return @{ Splat = $splat; Extra = $extra }
+    }
+
     $lstAcoes.Add_SelectionChanged({
       try {
         $sel = $lstAcoes.SelectedItem
@@ -692,12 +947,15 @@ function Invoke-MaintenanceGuiWindow {
         $detAviso.Text = if ($a.Destr) { 'Ação destrutiva/irreversível. Confira antes de executar.' } else { '' }
         $txtExtra.Text = ''
         & $renderParams $a
+        & $AtualizarPresetsCombo $a
         $temParams = ($a.PSObject.Properties.Name -contains 'Params') -and $a.Params
         $txtArgDica.Text = if ($temParams) {
             'Use os campos acima (mais simples) ou digite parâmetros extras aqui, se souber a sintaxe.'
         } else {
             'Deixe em branco, a menos que saiba os parâmetros aceitos por esta função.'
         }
+        $txtStatus.Text = ''
+        $txtStatus.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, 'Muted')
         $btnExec.IsEnabled = $true
       } catch { Show-GuiHandlerError -Contexto 'Selecionar acao' -ErroObj $_ }
     })
@@ -725,13 +983,32 @@ function Invoke-MaintenanceGuiWindow {
             }
         } catch { }
 
+        # NOVO: enquanto a acao roda, mostra tempo decorrido no status (nao e' % real de
+        # progresso -- as funcoes de manutencao nao reportam isso -- mas da' uma nocao viva
+        # de "ainda esta trabalhando", junto com a barra indeterminada.
+        if ($st.Handle -and -not $st.Handle.IsCompleted -and $st.Cronometro) {
+            $txtStatus.Text = $st.StatusBase + ' (' + $st.Cronometro.Elapsed.ToString('mm\:ss') + ')'
+        }
+
         if ($st.Handle -and $st.Handle.IsCompleted) {
-            try { $st.PS.EndInvoke($st.Handle) } catch { $txtLog.AppendText("`n[ERRO] " + $_.Exception.Message + "`n") }
+            $teveErro = $false
+            try { $st.PS.EndInvoke($st.Handle) } catch { $txtLog.AppendText("`n[ERRO] " + $_.Exception.Message + "`n"); $teveErro = $true }
+            if ($st.PS.HadErrors) { $teveErro = $true }
             try { $st.PS.Dispose() } catch { }
             $st.PS = $null; $st.Handle = $null
+            if ($st.Cronometro) { $st.Cronometro.Stop() }
+            $prgExec.IsIndeterminate = $false
+            $prgExec.Visibility = 'Collapsed'
             $btnExec.IsEnabled = ($null -ne $lstAcoes.SelectedItem)
             $btnExec.Content = 'Executar'
-            $txtStatus.Text = 'Concluido.'
+            $tempoTxt = if ($st.Cronometro) { ' (' + $st.Cronometro.Elapsed.ToString('mm\:ss') + ')' } else { '' }
+            if ($teveErro) {
+                $txtStatus.Text = "Concluido com erro.$tempoTxt Veja o log."
+                $txtStatus.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, 'Danger')
+            } else {
+                $txtStatus.Text = "Concluido.$tempoTxt"
+                $txtStatus.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, 'Ink')
+            }
         }
     })
     $timer.Start()
@@ -739,14 +1016,103 @@ function Invoke-MaintenanceGuiWindow {
     # Personalizar
     $btnPers.Add_Click({
         try {
-            if (Show-GuiPreferences -Owner $window -Prefs $st.Prefs) {
+            if (Show-GuiPreferences -Owner $window -Prefs $st.Prefs -Catalogo $catalogo) {
                 Save-GuiPrefs -Prefs $st.Prefs
                 $novoTema = Set-GuiAppearance -Window $window -Prefs $st.Prefs
                 $st.InkHex = $novoTema.Ink
-                & $Refiltrar   # recolore os itens da lista conforme o tema
+                $st.TemaAtual = $novoTema
+                & $preencherCategorias  # NOVO: categorias recem-ocultadas/reexibidas somem/voltam na lista da esquerda
+                & $Refiltrar            # recolore os itens da lista conforme o tema + aplica categorias/destrutivas ocultas
                 $txtStatus.Text = 'Preferencias aplicadas.'
             }
         } catch { Show-GuiHandlerError -Contexto 'Abrir Personalizar' -ErroObj $_ }
+    })
+
+    # NOVO: Presets -- carregar/salvar/excluir um conjunto de parametros pre-preenchidos
+    # para a acao selecionada.
+    $btnCarregarPreset.Add_Click({
+        try {
+            $a = $st.Selecao
+            if (-not $a) { return }
+            $nomePreset = '' + $cboPresets.SelectedItem
+            if (-not $nomePreset) { return }
+            $preset = $st.Prefs.Presets | Where-Object { $_.Func -eq $a.Func -and $_.Nome -eq $nomePreset } | Select-Object -First 1
+            if (-not $preset) { return }
+            foreach ($nomeParam in $st.ParamControls.Keys) {
+                $pc = $st.ParamControls[$nomeParam]
+                $valor = $preset.Splat.$nomeParam
+                switch ($pc.Tipo) {
+                    'switch'   { $pc.Ctrl.IsChecked = [bool]$valor }
+                    'choice'   { if ($valor) { $pc.Ctrl.SelectedItem = [string]$valor } }
+                    'paths'    { $pc.Ctrl.Text = if ($valor) { (@($valor) -join ';') } else { '' } }
+                    'password' { $pc.Ctrl.Password = [string]$valor }
+                    default    { $pc.Ctrl.Text = [string]$valor }
+                }
+            }
+            $txtExtra.Text = [string]$preset.Extra
+            $chkWhatIf.IsChecked = [bool]$preset.Simular
+            $txtStatus.Text = "Preset '$nomePreset' carregado."
+        } catch { Show-GuiHandlerError -Contexto 'Carregar preset' -ErroObj $_ }
+    })
+
+    $btnSalvarPreset.Add_Click({
+        try {
+            $a = $st.Selecao
+            if (-not $a) { return }
+            $nome = [Microsoft.VisualBasic.Interaction]::InputBox('Nome do preset (ex.: "Fotos - so JPG"):', 'Salvar preset', '')
+            $nome = ('' + $nome).Trim()
+            if (-not $nome) { return }
+
+            $montado = & $MontarSplatExtra
+            $jaExiste = $st.Prefs.Presets | Where-Object { $_.Func -eq $a.Func -and $_.Nome -eq $nome }
+            if ($jaExiste) {
+                $r = [System.Windows.MessageBox]::Show("Ja existe um preset '$nome' para esta acao. Sobrescrever?", 'Preset existente', 'YesNo', 'Question')
+                if ($r -ne 'Yes') { return }
+                $st.Prefs.Presets = @($st.Prefs.Presets | Where-Object { -not ($_.Func -eq $a.Func -and $_.Nome -eq $nome) })
+            }
+            $novoPreset = [pscustomobject]@{ Func=$a.Func; Nome=$nome; Splat=$montado.Splat; Extra=($montado.Extra -join ' '); Simular=[bool]$chkWhatIf.IsChecked }
+            $st.Prefs.Presets = @($st.Prefs.Presets) + $novoPreset
+            Save-GuiPrefs -Prefs $st.Prefs
+            & $AtualizarPresetsCombo $a
+            $cboPresets.SelectedItem = $nome
+            $txtStatus.Text = "Preset '$nome' salvo."
+        } catch { Show-GuiHandlerError -Contexto 'Salvar preset' -ErroObj $_ }
+    })
+
+    $btnExcluirPreset.Add_Click({
+        try {
+            $a = $st.Selecao
+            if (-not $a) { return }
+            $nomePreset = '' + $cboPresets.SelectedItem
+            if (-not $nomePreset) { return }
+            $r = [System.Windows.MessageBox]::Show("Excluir o preset '$nomePreset'?", 'Confirmar exclusao', 'YesNo', 'Warning')
+            if ($r -ne 'Yes') { return }
+            $st.Prefs.Presets = @($st.Prefs.Presets | Where-Object { -not ($_.Func -eq $a.Func -and $_.Nome -eq $nomePreset) })
+            Save-GuiPrefs -Prefs $st.Prefs
+            & $AtualizarPresetsCombo $a
+            $txtStatus.Text = "Preset '$nomePreset' excluido."
+        } catch { Show-GuiHandlerError -Contexto 'Excluir preset' -ErroObj $_ }
+    })
+
+    # NOVO: mostra o comando PowerShell equivalente ao que "Executar" vai rodar, sem executar nada.
+    $btnVerComando.Add_Click({
+        try {
+            $a = $st.Selecao
+            if (-not $a) { return }
+            $montado = & $MontarSplatExtra
+            $cmd = ConvertTo-GuiCommandPreview -FuncName $a.Func -Splat $montado.Splat -Extra $montado.Extra -Simular ([bool]$chkWhatIf.IsChecked)
+            [System.Windows.MessageBox]::Show($cmd, 'Comando equivalente (Ctrl+C para copiar)', 'OK', 'Information') | Out-Null
+        } catch { Show-GuiHandlerError -Contexto 'Ver comando equivalente' -ErroObj $_ }
+    })
+
+    # NOVO: copia o log ao vivo inteiro pra area de transferencia.
+    $btnCopiarLog.Add_Click({
+        try {
+            if ($txtLog.Text) {
+                [System.Windows.Clipboard]::SetText($txtLog.Text)
+                $txtStatus.Text = 'Log copiado para a area de transferencia.'
+            }
+        } catch { Show-GuiHandlerError -Contexto 'Copiar log' -ErroObj $_ }
     })
 
     # Executar
@@ -761,21 +1127,11 @@ function Invoke-MaintenanceGuiWindow {
             if ($r -ne 'Yes') { return }
         }
 
-        # Monta o splat de parametros a partir dos controles dinamicos
-        $splat = @{}
-        foreach ($nome in $st.ParamControls.Keys) {
-            $pc = $st.ParamControls[$nome]
-            switch ($pc.Tipo) {
-                'switch'   { $splat[$nome] = [bool]$pc.Ctrl.IsChecked }
-                'choice'   { $v = '' + $pc.Ctrl.SelectedItem; if ($v) { $splat[$nome] = $v } }
-                'paths'    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
-                'password' { $v = $pc.Ctrl.Password; if ($v) { $splat[$nome] = $v } }  # so envia se preenchido (senao usa o fallback interno da funcao)
-                default    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = $v } }
-            }
-        }
-        $extra = @()
-        $rawExtra = ('' + $txtExtra.Text).Trim()
-        if ($rawExtra) { $extra = @($rawExtra -split '\s+') }
+        # Monta o splat de parametros a partir dos controles dinamicos (mesma logica usada
+        # por "Ver comando equivalente" e "Salvar preset...")
+        $montado = & $MontarSplatExtra
+        $splat = $montado.Splat
+        $extra = $montado.Extra
 
         $simular = [bool]$chkWhatIf.IsChecked
         if (-not $st.Worker) { $st.Worker = New-GuiWorkerRunspace }
@@ -796,23 +1152,80 @@ function Invoke-MaintenanceGuiWindow {
         [void]$st.PS.AddScript($script).AddArgument($a.Func).AddArgument($simular).AddArgument($splat).AddArgument($extra)
         $st.Handle = $st.PS.BeginInvoke()
 
+        # NOVO: indicador de progresso (indeterminado -- as funcoes de manutencao nao
+        # reportam % real internamente) + cronometro pro status mostrar tempo decorrido.
+        $st.Cronometro = [System.Diagnostics.Stopwatch]::StartNew()
+        $prgExec.Visibility = 'Visible'
+        $prgExec.IsIndeterminate = $true
+
         $btnExec.IsEnabled = $false
         $btnExec.Content = 'Executando...'
         $modo = if ($simular) { ' (SIMULACAO)' } else { '' }
         $extraTxt = if ($splat.Count -or $extra.Count) { ' [parametros]' } else { '' }
-        $txtStatus.Text = "Executando $($a.Titulo)$modo..."
+        $st.StatusBase = "Executando $($a.Titulo)$modo..."
+        $txtStatus.Text = $st.StatusBase
+        $txtStatus.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, 'Muted')
         $txtLog.AppendText("`n>>> $($a.Titulo) -> $($a.Func)$modo$extraTxt`n")
         if ($st.Prefs.AutoScrollLog) { $txtLog.ScrollToEnd() }
       } catch { Show-GuiHandlerError -Contexto 'Executar acao' -ErroObj $_ }
+    })
+
+    # NOVO: atalhos de teclado -- Ctrl+F foca a busca, Ctrl+Enter executa a acao
+    # selecionada (Enter puro fica de fora de proposito, pra nao disparar sozinho
+    # enquanto o usuario digita em algum campo de parametro), Esc fecha a janela.
+    $window.Add_KeyDown({
+        try {
+            $ctrl = (([int][System.Windows.Input.Keyboard]::Modifiers) -band ([int][System.Windows.Input.ModifierKeys]::Control)) -ne 0
+            if ($ctrl -and $_.Key -eq 'F') {
+                $txtBusca.Focus() | Out-Null
+                $txtBusca.SelectAll()
+                $_.Handled = $true
+            } elseif ($ctrl -and $_.Key -eq 'Return') {
+                if ($btnExec.IsEnabled) { $btnExec.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent))) }
+                $_.Handled = $true
+            } elseif ($_.Key -eq 'Escape') {
+                $window.Close()
+                $_.Handled = $true
+            }
+        } catch { Show-GuiHandlerError -Contexto 'Atalho de teclado' -ErroObj $_ }
     })
 
     $window.Add_Closed({
         try { $timer.Stop() } catch { }
         try { if ($st.PS) { $st.PS.Dispose() } } catch { }
         try { if ($st.Worker) { $st.Worker.Close(); $st.Worker.Dispose() } } catch { }
+        # NOVO: lembra tamanho/posicao da janela e a ultima categoria/acao selecionadas
+        # para a proxima abertura.
+        try {
+            $maximizada = ($window.WindowState -eq 'Maximized')
+            if ($maximizada) {
+                $st.Prefs.JanelaLargura = $window.RestoreBounds.Width
+                $st.Prefs.JanelaAltura  = $window.RestoreBounds.Height
+                $st.Prefs.JanelaX = $window.RestoreBounds.Left
+                $st.Prefs.JanelaY = $window.RestoreBounds.Top
+            } else {
+                $st.Prefs.JanelaLargura = $window.Width
+                $st.Prefs.JanelaAltura  = $window.Height
+                $st.Prefs.JanelaX = $window.Left
+                $st.Prefs.JanelaY = $window.Top
+            }
+            $st.Prefs.JanelaMaximizada = $maximizada
+            $st.Prefs.UltimaCategoria = '' + $lstCat.SelectedItem
+            $st.Prefs.UltimaAcao = if ($st.Selecao) { $st.Selecao.Func } else { $null }
+            Save-GuiPrefs -Prefs $st.Prefs
+        } catch { }
     })
 
     & $Refiltrar
+
+    # NOVO: reabre na mesma acao usada da ultima vez, se ela ainda existir no catalogo
+    # e nao estiver oculta pelos filtros atuais.
+    if ($prefs.UltimaAcao) {
+        foreach ($item in $lstAcoes.Items) {
+            if ($item.Acao.Func -eq $prefs.UltimaAcao) { $lstAcoes.SelectedItem = $item; break }
+        }
+    }
+
     $txtLog.AppendText("Interface grafica iniciada. Selecione uma acao a esquerda.`n")
     [void]$window.ShowDialog()
 }
