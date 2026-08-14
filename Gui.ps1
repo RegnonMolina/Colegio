@@ -18,6 +18,7 @@
 Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue
 Add-Type -AssemblyName PresentationCore      -ErrorAction SilentlyContinue
 Add-Type -AssemblyName WindowsBase           -ErrorAction SilentlyContinue
+Add-Type -AssemblyName System.Windows.Forms  -ErrorAction SilentlyContinue  # NOVO: FolderBrowserDialog para os campos de pasta
 
 # ----------------------------------------------------------------------------
 # Paletas de tema
@@ -65,7 +66,7 @@ function Get-GuiActionCatalog {
         # --- Limpeza e Otimizacao ---
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Agendar ChkDsk no Reboot';           Func='New-ChkDsk';                  Desc='Agenda verificacao de disco (chkdsk) na proxima reinicializacao.'; Destr=$false }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpar Arquivos e Pastas Vazias';    Func='Clear-EmptyFilesAndFolders';  Desc='Remove arquivos de 0 byte e pastas vazias (protege .gitkeep/desktop.ini). Suporta -WhatIf.'; Destr=$true; Params=@(
-                                            @{ Nome='Path';             Rotulo='Pastas-raiz (vazio = %TEMP% padrao)'; Tipo='paths';  Default=''; Exemplo='Ex.: D:\Outra Pasta;E:\Downloads (separe varias pastas por ;)' }
+                                            @{ Nome='Path';             Rotulo='Pastas-raiz (vazio = %TEMP% padrao)'; Tipo='paths';  Default=''; Exemplo='Ex.: D:\Outra Pasta;E:\Downloads (separe varias pastas por ;)'; Pasta=$true }
                                             @{ Nome='IncludeEmptyFiles'; Rotulo='Tambem remover arquivos de 0 byte';    Tipo='switch'; Default=$true }
                                           ) }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpar Arquivos Temporarios';        Func='Clear-TemporaryFiles';        Desc='Remove arquivos temporarios do usuario e do sistema (%TEMP%, Windows\Temp).'; Destr=$true }
@@ -75,7 +76,7 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpeza Profunda do Sistema';        Func='Clear-DeepSystemCleanup';     Desc='Rotina de limpeza profunda (cleanmgr /sagerun + caches diversos).'; Destr=$true }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Otimizar Volumes (Desfrag/ReTrim)';  Func='Optimize-Volumes';            Desc='Desfragmenta (HDD) ou faz ReTrim (SSD) dos volumes.'; Destr=$false }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Remover Arquivos Duplicados';        Func='Remove-DuplicateFiles';       Desc='Procura duplicatas por conteúdo idêntico (hash SHA256) em Downloads/Documentos/Área de Trabalho/Imagens/Vídeos/Música (com subpastas). Mantém 1 cópia por grupo. Por padrão MOVE as demais para revisão em C:\ScriptsLogs\Duplicatas_<data> (com backup automático) — marque "Deletar" pra apagar de verdade.'; Destr=$true; Params=@(
-                                            @{ Nome='Path';    Rotulo='Pastas-raiz (vazio = Downloads/Documentos/Área de Trabalho/Imagens/Vídeos/Música)'; Tipo='paths'; Default=''; Exemplo='Ex.: D:\Fotos;E:\Backup (separe varias pastas por ;)' }
+                                            @{ Nome='Path';    Rotulo='Pastas-raiz (vazio = Downloads/Documentos/Área de Trabalho/Imagens/Vídeos/Música)'; Tipo='paths'; Default=''; Exemplo='Ex.: D:\Fotos;E:\Backup (separe varias pastas por ;)'; Pasta=$true }
                                             @{ Nome='Manter';  Rotulo='Qual cópia manter em cada grupo'; Tipo='choice'; Default='MaisAntigo'; Opcoes=@('MaisAntigo','MaisNovo','Maior') }
                                             @{ Nome='TiposArquivo'; Rotulo='Filtrar por extensão (vazio = todos)'; Tipo='paths'; Default=''; Exemplo='Ex.: *.jpg;*.pdf (separe por ;)' }
                                             @{ Nome='IncluirComuns'; Rotulo='Filtrar só tipos comuns (fotos/vídeos/documentos/zip)'; Tipo='switch'; Default=$false }
@@ -149,7 +150,7 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Restauracao'; Titulo='Desfazer Tudo (Rotina)';          Func='Invoke-Undo';            Desc='Executa toda a rotina de restauracao/reversao.'; Destr=$true }
         [pscustomobject]@{ Cat='Restauracao'; Titulo='Reinstalar OneDrive';             Func='Restore-OneDrive';       Desc='Reinstala o OneDrive.'; Destr=$false }
         [pscustomobject]@{ Cat='Restauracao'; Titulo='Restaurar Registro';              Func='Restore-Registry';       Desc='Restaura o registro (HKLM\SOFTWARE, HKLM\SYSTEM, HKCU) a partir de uma pasta de backup gerada por "Backup do Registro".'; Destr=$true; Params=@(
-                                            @{ Nome='BkpPath'; Rotulo='Pasta do backup do registro'; Tipo='text'; Default=''; Exemplo='Ex.: C:\Users\SeuUsuario\Documents\reg_backup_20260814_140000' }
+                                            @{ Nome='BkpPath'; Rotulo='Pasta do backup do registro'; Tipo='text'; Default=''; Exemplo='Ex.: C:\Users\SeuUsuario\Documents\reg_backup_20260814_140000'; Pasta=$true }
                                           ) }
         [pscustomobject]@{ Cat='Restauracao'; Titulo='Restaurar TODOS os Padroes';      Func='Restore-SystemDefaults'; Desc='Reverte os tweaks aplicados, voltando o sistema ao padrao.'; Destr=$true }
 
@@ -607,7 +608,54 @@ function Invoke-MaintenanceGuiWindow {
                     }
                 }
                 $c.Margin = '0,0,0,0'
-                [void]$pnlParams.Children.Add($c)
+
+                # NOVO: campos marcados com Pasta=$true no catalogo ganham um botao "Procurar
+                # pasta..." ao lado, que abre o dialogo nativo do Windows. So se aplica a
+                # TextBox (nao mexe em ComboBox/PasswordBox nem em campos sem a flag).
+                $temBotaoPasta = ($p.PSObject.Properties.Name -contains 'Pasta') -and $p.Pasta -and ($c -is [System.Windows.Controls.TextBox])
+                if ($temBotaoPasta) {
+                    $gridPasta = New-Object System.Windows.Controls.Grid
+                    $colTxt = New-Object System.Windows.Controls.ColumnDefinition
+                    $colTxt.Width = New-Object System.Windows.GridLength(1, [System.Windows.GridUnitType]::Star)
+                    $colBtn = New-Object System.Windows.Controls.ColumnDefinition
+                    $colBtn.Width = 'Auto'
+                    [void]$gridPasta.ColumnDefinitions.Add($colTxt)
+                    [void]$gridPasta.ColumnDefinitions.Add($colBtn)
+
+                    [System.Windows.Controls.Grid]::SetColumn($c, 0)
+                    [void]$gridPasta.Children.Add($c)
+
+                    $btnPasta = New-Object System.Windows.Controls.Button
+                    $btnPasta.Content = '📂'
+                    $btnPasta.Width = 34
+                    $btnPasta.Margin = '4,0,0,0'
+                    $btnPasta.ToolTip = 'Procurar pasta...'
+                    [System.Windows.Controls.Grid]::SetColumn($btnPasta, 1)
+
+                    # Referencias fechadas no clique via GetNewClosure (mesmo padrao ja usado
+                    # no resto do arquivo para botoes criados em loop/dinamicamente).
+                    $txtRef = $c
+                    $ehListaDePastas = ($p.Tipo -eq 'paths')  # 'paths' aceita varias pastas separadas por ; (soma); os demais tipos substituem o valor
+                    $btnPasta.Add_Click({
+                        try {
+                            $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
+                            $dlg.Description = 'Selecione a pasta'
+                            $dlg.ShowNewFolderButton = $true
+                            if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                                if ($ehListaDePastas -and $txtRef.Text.Trim()) {
+                                    $txtRef.Text = $txtRef.Text.TrimEnd(';') + ';' + $dlg.SelectedPath
+                                } else {
+                                    $txtRef.Text = $dlg.SelectedPath
+                                }
+                            }
+                        } catch { Show-GuiHandlerError -Contexto 'Procurar pasta' -ErroObj $_ }
+                    }.GetNewClosure())
+
+                    [void]$gridPasta.Children.Add($btnPasta)
+                    [void]$pnlParams.Children.Add($gridPasta)
+                } else {
+                    [void]$pnlParams.Children.Add($c)
+                }
             }
             $st.ParamControls[$p.Nome] = @{ Ctrl=$c; Tipo=$p.Tipo }
 
