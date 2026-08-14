@@ -2,6 +2,20 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [2.4.0] - 2026-08-14
+
+### Alterado
+- **`Remove-DuplicateFiles` reescrita**, com base no script pessoal do Regnon (`Softwares\PowerShell\Dedup-Hash-Mover.ps1`), adaptado para rodar integrado ao menu/GUI:
+  - Detecção continua por **hash SHA256** (multi-pass: agrupa por tamanho antes de calcular hash). O método por padrão de nome ("arquivo (1).ext") foi **removido** nesta reescrita — a versão anterior o mantinha só como relatório; o script de referência não o tinha.
+  - **Por padrão MOVE** as duplicatas pra revisão (reversível) em vez de apagar direto — `-Deletar` apaga de verdade.
+  - **Backup automático** de cada duplicata antes de mover/deletar (`-SemBackup` desativa) — rede de segurança extra além do `-WhatIf`/`-Confirm`.
+  - Gera **relatório CSV** (plano completo) e **resumo TXT** a cada execução real.
+  - Nova estratégia de retenção **`Maior`** (mantém o arquivo de maior tamanho — útil pra fotos/vídeos reexportados com qualidades diferentes), além de `MaisAntigo`/`MaisNovo`.
+  - Novos parâmetros: `-TiposArquivo` (filtro de extensão) e `-IncluirComuns` (atalho pros tipos mais duplicados: fotos/vídeos/documentos/zip).
+  - **Ajuste de local dos artefatos**: diferente do script original (que gravava `_RELATORIOS`/`_DUPLICADOS`/`_BACKUP` dentro da própria pasta escaneada), aqui tudo fica centralizado em `C:\ScriptsLogs\Duplicatas_<data>\` — evita espalhar pastas novas dentro de Documentos/Imagens de quem está sendo atendido.
+  - Catálogo da GUI atualizado com os novos parâmetros (`Manter` com 3 opções, `TiposArquivo`, `IncluirComuns`, `Deletar`, `SemBackup`).
+  - **Testado ao vivo** (5 cenários, 14 verificações): `-WhatIf` não cria nada; execução padrão move + faz backup + gera CSV/TXT + preserva protegidos/únicos; `-Deletar` remove de verdade sem criar `_DUPLICADOS`; `-SemBackup` pula o backup; `-TiposArquivo` filtra corretamente.
+
 ## [2.3.1] - 2026-08-14
 
 ### Adicionado

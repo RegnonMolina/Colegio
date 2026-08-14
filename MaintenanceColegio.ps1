@@ -90,7 +90,7 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-    Version = "2.3.1"
+    Version = "2.4.0"
     LogFilePath = "C:\ScriptsLogs\$env:COMPUTERNAME-ScriptLog.log"
     ConfirmBeforeDestructive = $true
     Cleanup = @{
@@ -704,50 +704,58 @@ function Clear-EmptyFilesAndFolders {
 function Remove-DuplicateFiles {
     <#
     .SYNOPSIS
-        Encontra e remove arquivos duplicados em pastas e subpastas.
+        Encontra e remove (ou move para revisão) arquivos duplicados em pastas e subpastas.
     .DESCRIPTION
-        Detecta duplicatas por duas formas complementares (pedido: "tentar todas
-        as formas possíveis"):
-          1) HASH (SHA256) — conteúdo IDÊNTICO. Sempre confiável. Só compara
-             arquivos do MESMO TAMANHO primeiro (otimização — tamanhos
-             diferentes nunca podem ter o mesmo conteúdo), só calculando hash
-             dentro de cada grupo de mesmo tamanho.
-          2) NOME SEMELHANTE — padrões clássicos de duplicata do Windows/
-             navegador ("arquivo (1).ext", "arquivo - Cópia.ext", "arquivo -
-             Copy.ext", "arquivo_copy.ext"...), exigindo também o MESMO
-             TAMANHO. Como o conteúdo pode ser ligeiramente diferente (não
-             bate o hash), esse grupo entra só no RELATÓRIO por padrão — use
-             -IncluirCandidatosPorNome pra também remover esses, por sua conta
-             e risco, depois de revisar o relatório.
-        Em cada grupo, mantém SEMPRE 1 cópia (a mais antiga por padrão;
-        -Manter MaisNovo inverte) e remove as demais — nunca remove todas as
-        cópias de um grupo. Protege nomes de sistema (desktop.ini, Thumbs.db,
-        .gitkeep...) e ignora arquivos abaixo de -TamanhoMinimoKB (0 byte já é
-        coberto por Clear-EmptyFilesAndFolders, que tem semântica própria).
-        Suporta -WhatIf/-Confirm; ConfirmImpact=High pede confirmação por
-        padrão antes de remover (mesmo padrão de Restore-SystemDefaults).
+        Conteúdo baseado no script pessoal do Regnon (Dedup-Hash-Mover.ps1, em
+        Softwares\PowerShell) — adaptado pra rodar como função integrada ao
+        menu/GUI deste script. Estratégia multi-pass:
+          1) Agrupa por TAMANHO (rápido, só metadado).
+          2) Calcula HASH (SHA256) só dentro dos grupos com 2+ arquivos do
+             mesmo tamanho — evita hashear a coleção inteira.
+          3) Agrupa por hash -> cada grupo com 2+ é uma duplicata REAL
+             (conteúdo idêntico, não é heurística de nome).
+        Em cada grupo, mantém 1 cópia (estratégia -Manter: mais antiga, mais
+        nova, ou maior tamanho) e MOVE as demais para revisão por padrão
+        (reversível) — ou DELETA de verdade com -Deletar. Antes de mover/
+        deletar, faz um BACKUP automático das duplicatas (a menos que
+        -SemBackup) — rede de segurança extra além do próprio -WhatIf/-Confirm.
+        Gera relatório em CSV (plano de duplicatas) e um resumo em TXT.
+
+        Diferente do script original (que gravava _RELATORIOS/_DUPLICADOS/
+        _BACKUP DENTRO da pasta escaneada): aqui tudo fica centralizado em
+        C:\ScriptsLogs\Duplicatas_<data>\, pra não espalhar pastas novas
+        dentro de Documentos/Imagens/etc. de quem está sendo atendido — mais
+        adequado a rodar numa máquina de terceiros.
+
+        Protege nomes de sistema (desktop.ini, Thumbs.db, .gitkeep...) e
+        ignora arquivos abaixo de -TamanhoMinimoKB (0 byte já é coberto por
+        Clear-EmptyFilesAndFolders). Suporta -WhatIf/-Confirm; ConfirmImpact=
+        High pede confirmação por padrão (mesmo padrão de Restore-SystemDefaults).
     .PARAMETER Path
-        Pastas-raiz onde procurar (recursivo, inclui subpastas). Padrão:
-        Downloads, Documentos, Área de Trabalho, Imagens, Vídeos e Música do
-        usuário atual (as que existirem no sistema).
-    .PARAMETER Metodo
-        'Hash' (só conteúdo idêntico), 'NomeSimilar' (só padrão de nome,
-        sempre só-relatório) ou 'Ambos' (padrão — roda os dois).
+        Pastas-raiz onde procurar (recursivo, inclui subpastas; aceita várias).
+        Padrão: Downloads, Documentos, Área de Trabalho, Imagens, Vídeos e
+        Música do usuário atual (as que existirem).
     .PARAMETER Manter
-        Qual cópia manter em cada grupo de duplicatas: 'MaisAntigo' (padrão,
-        por CreationTime) ou 'MaisNovo'.
+        Qual cópia manter em cada grupo: 'MaisAntigo' (padrão, por
+        CreationTime), 'MaisNovo', ou 'Maior' (mantém o arquivo de maior
+        tamanho — útil quando "duplicatas" na verdade têm qualidade/resolução
+        diferente, ex.: fotos reexportadas).
+    .PARAMETER TiposArquivo
+        Filtro de extensões (ex.: '*.jpg','*.pdf'). Padrão: todos ('*').
+    .PARAMETER IncluirComuns
+        Atalho: filtra só pelos tipos mais comuns de duplicar (imagens,
+        vídeos, documentos, compactados) — substitui -TiposArquivo se usado junto.
     .PARAMETER TamanhoMinimoKB
-        Ignora arquivos menores que isso (padrão 1 KB) — reduz ruído de
-        arquivos triviais.
-    .PARAMETER TamanhoMaximoMB
-        Ignora arquivos maiores que isso para o CÁLCULO DE HASH (padrão
-        500 MB) — arquivos gigantes deixam o hash lento. Ainda podem aparecer
-        no método por nome.
-    .PARAMETER IncluirCandidatosPorNome
-        Sem isso (padrão), o grupo "Nome Semelhante" é SÓ relatório — nunca
-        remove nada desse grupo. Com isso, esses arquivos também entram na
-        remoção. Use com cautela: o conteúdo desses arquivos PODE ser
-        diferente (só o nome/tamanho bateram, não o hash).
+        Ignora arquivos menores que isso (padrão 1 KB).
+    .PARAMETER Deletar
+        Sem isso (padrão), as duplicatas são MOVIDAS para revisão em
+        C:\ScriptsLogs\Duplicatas_<data>\_DUPLICADOS (reversível — dá pra
+        conferir e apagar depois). Com isso, são DELETADAS de verdade (ainda
+        com backup automático, a menos que -SemBackup).
+    .PARAMETER SemBackup
+        Desativa o backup automático das duplicatas antes de mover/deletar.
+        Por padrão o backup fica ligado — é a rede de segurança extra deste
+        comando, além do -WhatIf/-Confirm.
     #>
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
     param(
@@ -759,159 +767,241 @@ function Remove-DuplicateFiles {
             [Environment]::GetFolderPath('MyVideos'),
             [Environment]::GetFolderPath('MyMusic')
         ),
-        [ValidateSet('Hash', 'NomeSimilar', 'Ambos')]
-        [string]$Metodo = 'Ambos',
-        [ValidateSet('MaisAntigo', 'MaisNovo')]
+        [ValidateSet('MaisAntigo', 'MaisNovo', 'Maior')]
         [string]$Manter = 'MaisAntigo',
+        [string[]]$TiposArquivo = @('*'),
+        [switch]$IncluirComuns,
         [int]$TamanhoMinimoKB = 1,
-        [int]$TamanhoMaximoMB = 500,
-        [switch]$IncluirCandidatosPorNome
+        [switch]$Deletar,
+        [switch]$SemBackup
     )
 
-    Write-Log "Iniciando busca por arquivos duplicados..." -Type Info
-    $activity = "Busca de Arquivos Duplicados"
+    # --- Helpers locais (escopo só desta função, evita colidir com o resto do script) ---
+    function Get-HumanReadableSize {
+        param([long]$Size)
+        if ($Size -lt 1KB) { return "$Size B" }
+        if ($Size -lt 1MB) { return "{0:N2} KB" -f ($Size / 1KB) }
+        if ($Size -lt 1GB) { return "{0:N2} MB" -f ($Size / 1MB) }
+        return "{0:N2} GB" -f ($Size / 1GB)
+    }
+    function Get-SafeDestination {
+        param([string]$TargetDir, [string]$FileName)
+        $dest = Join-Path $TargetDir $FileName
+        $i = 1
+        $base = [System.IO.Path]::GetFileNameWithoutExtension($FileName)
+        $ext = [System.IO.Path]::GetExtension($FileName)
+        while (Test-Path -LiteralPath $dest) {
+            $dest = Join-Path $TargetDir ("{0}__dup{1}{2}" -f $base, $i, $ext)
+            $i++
+        }
+        return $dest
+    }
+    function Test-FileAccess {
+        param([string]$Path)
+        try { [void][System.IO.File]::OpenRead($Path).Close(); return $true }
+        catch { return $false }
+    }
+
+    if ($IncluirComuns) {
+        $TiposArquivo = @(
+            '*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.webp', '*.heic',
+            '*.mp4', '*.mkv', '*.avi', '*.mov', '*.flv', '*.wmv', '*.3gp',
+            '*.pdf', '*.docx', '*.xlsx', '*.pptx', '*.txt', '*.zip', '*.rar'
+        )
+    }
+
     $protectedNames = @('desktop.ini', 'thumbs.db', '.gitkeep', '.keep', '.placeholder', 'ntuser.dat', 'iconcache.db')
+    $activity = "Busca de Arquivos Duplicados"
+    $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $relatoriosDir = "C:\ScriptsLogs\Duplicatas_$ts"
 
     $pastasValidas = @($Path | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique)
     if ($pastasValidas.Count -eq 0) {
         Write-Log "Nenhuma das pastas informadas existe. Nada a fazer." -Type Warning
         return
     }
-    Write-Log "Pastas incluídas na busca (com subpastas): $($pastasValidas -join '; ')" -Type Info
+    Write-Log "Iniciando busca por arquivos duplicados em: $($pastasValidas -join '; ')" -Type Info
 
     try {
-        # --- ETAPA 1: coletar arquivos elegíveis ---
+        # --- FASE 1: coletar arquivos elegíveis (1 passada por pasta, filtra tudo junto) ---
         Grant-WriteProgress -Activity $activity -Status "Enumerando arquivos..." -PercentComplete 5
         $minBytes = $TamanhoMinimoKB * 1KB
-        $maxBytesHash = $TamanhoMaximoMB * 1MB
-        $todos = New-Object System.Collections.Generic.List[System.IO.FileInfo]
+        $filtraPorTipo = ($TiposArquivo -notcontains '*')
+        $itens = New-Object System.Collections.Generic.List[System.IO.FileInfo]
         foreach ($raiz in $pastasValidas) {
-            Get-ChildItem -LiteralPath $raiz -Recurse -File -Force -ErrorAction SilentlyContinue |
-                Where-Object {
-                    $_.Length -ge $minBytes -and
-                    -not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and
-                    ($protectedNames -notcontains $_.Name.ToLower())
-                } | ForEach-Object { $todos.Add($_) }
+            Get-ChildItem -LiteralPath $raiz -Recurse -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                $f = $_
+                if ($f.Length -lt $minBytes) { return }
+                if ($f.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { return }
+                if ($protectedNames -contains $f.Name.ToLower()) { return }
+                if ($f.FullName -match '\\ScriptsLogs\\') { return }  # nunca reprocessa os proprios relatorios/backups
+                if ($filtraPorTipo) {
+                    $bate = $false
+                    foreach ($padrao in $TiposArquivo) { if ($f.Name -like $padrao) { $bate = $true; break } }
+                    if (-not $bate) { return }
+                }
+                $itens.Add($f)
+            }
         }
-        Write-Log "Arquivos elegíveis analisados: $($todos.Count)" -Type Info
-        if ($todos.Count -lt 2) {
+        $totalItens = $itens.Count
+        Write-Log "Arquivos elegíveis analisados: $totalItens" -Type Info
+        if ($totalItens -lt 2) {
             Write-Log "Menos de 2 arquivos elegíveis — nada a comparar." -Type Info
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
             return
         }
 
-        $gruposRemover = @()
-        $gruposRevisar = @()
-        $jaTratados = New-Object 'System.Collections.Generic.HashSet[string]'
+        # --- FASE 2: agrupar por tamanho (rapido, so metadado) ---
+        Grant-WriteProgress -Activity $activity -Status "Agrupando por tamanho..." -PercentComplete 15
+        $porTamanho = @($itens | Group-Object Length | Where-Object { $_.Count -gt 1 })
+        Write-Log "Grupos com múltiplos arquivos do mesmo tamanho: $($porTamanho.Count) (candidatos a hash)" -Type Info
 
-        # --- ETAPA 2: duplicatas por HASH (conteúdo idêntico) ---
-        if ($Metodo -eq 'Hash' -or $Metodo -eq 'Ambos') {
-            Grant-WriteProgress -Activity $activity -Status "Agrupando por tamanho..." -PercentComplete 15
-            $porTamanho = @($todos | Group-Object Length | Where-Object { $_.Count -gt 1 })
-            $totalGruposTam = [math]::Max(1, $porTamanho.Count)
-            $i = 0
-            foreach ($grupoTamanho in $porTamanho) {
-                $i++
-                if (($i % 15) -eq 0 -or $i -eq $porTamanho.Count) {
-                    $pct = 15 + [math]::Min(55, [math]::Round(($i / $totalGruposTam) * 55))
-                    Grant-WriteProgress -Activity $activity -Status "Calculando hash ($i/$($porTamanho.Count) grupos por tamanho)..." -PercentComplete $pct
+        # --- FASE 3: hash SO nos grupos candidatos ---
+        $comHash = @()
+        $errosAcesso = 0
+        $totalGrupos = [math]::Max(1, $porTamanho.Count)
+        $i = 0
+        foreach ($grupoTamanho in $porTamanho) {
+            $i++
+            if (($i % 15) -eq 0 -or $i -eq $porTamanho.Count) {
+                $pct = 15 + [math]::Min(50, [math]::Round(($i / $totalGrupos) * 50))
+                Grant-WriteProgress -Activity $activity -Status "Calculando hash ($i/$($porTamanho.Count) grupos)..." -PercentComplete $pct
+            }
+            foreach ($f in $grupoTamanho.Group) {
+                if (-not (Test-FileAccess $f.FullName)) {
+                    Write-Log "AVISO: sem acesso a '$($f.FullName)' — ignorado." -Type Warning
+                    $errosAcesso++
+                    continue
                 }
-                $candidatos = @($grupoTamanho.Group | Where-Object { $_.Length -le $maxBytesHash })
-                if ($candidatos.Count -lt 2) { continue }
-
-                $comHash = @()
-                foreach ($f in $candidatos) {
-                    try {
-                        $h = Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256 -ErrorAction Stop
-                        $comHash += [pscustomobject]@{ Arquivo = $f; Hash = $h.Hash }
-                    } catch {
-                        Write-Log "AVISO: não foi possível calcular hash de '$($f.FullName)': $($_.Exception.Message)" -Type Warning
-                    }
-                }
-                $porHash = @($comHash | Group-Object Hash | Where-Object { $_.Count -gt 1 })
-                foreach ($gh in $porHash) {
-                    $arquivosGrupo = @($gh.Group.Arquivo | Sort-Object CreationTime)
-                    if ($Manter -eq 'MaisNovo') { [array]::Reverse($arquivosGrupo) }
-                    $manterArq = $arquivosGrupo[0]
-                    $removerArq = @($arquivosGrupo[1..($arquivosGrupo.Count - 1)])
-                    foreach ($r in $removerArq) { [void]$jaTratados.Add($r.FullName) }
-                    $gruposRemover += , @{ Motivo = 'Conteúdo idêntico (hash SHA256)'; Manter = $manterArq; Remover = $removerArq }
+                try {
+                    $hash = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256 -ErrorAction Stop).Hash
+                    $comHash += [pscustomobject]@{ Arquivo = $f; Hash = $hash }
+                } catch {
+                    Write-Log "AVISO: falha ao calcular hash de '$($f.FullName)': $($_.Exception.Message)" -Type Warning
+                    $errosAcesso++
                 }
             }
         }
+        if ($errosAcesso -gt 0) { Write-Log "$errosAcesso arquivo(s) ignorado(s) por erro de acesso/hash." -Type Warning }
 
-        # --- ETAPA 3: candidatos por NOME semelhante (mesmo tamanho, conteúdo pode diferir) ---
-        if ($Metodo -eq 'NomeSimilar' -or $Metodo -eq 'Ambos') {
-            Grant-WriteProgress -Activity $activity -Status "Procurando padrões de nome duplicado..." -PercentComplete 75
-            $padraoDuplicata = '(?i)^(?<base>.+?)\s*(\((?:c[oó]pia|copy)?\s*\d+\)|-\s*(?:c[oó]pia|copy)(?:\s*\(\d+\))?|_(?:copia|copy)\d*)$'
-            $restantes = @($todos | Where-Object { -not $jaTratados.Contains($_.FullName) })
-            $normalizados = foreach ($f in $restantes) {
-                $nomeSemExt = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
-                $m = [regex]::Match($nomeSemExt, $padraoDuplicata)
-                $baseNome = if ($m.Success) { $m.Groups['base'].Value.Trim() } else { $nomeSemExt }
-                [pscustomobject]@{ Arquivo = $f; Chave = ($baseNome.ToLower() + $f.Extension.ToLower()) }
-            }
-            $porChave = @($normalizados | Group-Object Chave | Where-Object { $_.Count -gt 1 })
-            foreach ($gc in $porChave) {
-                $porTam2 = @($gc.Group.Arquivo | Group-Object Length | Where-Object { $_.Count -gt 1 })
-                foreach ($gt in $porTam2) {
-                    $arquivosGrupo = @($gt.Group | Sort-Object CreationTime)
-                    if ($Manter -eq 'MaisNovo') { [array]::Reverse($arquivosGrupo) }
-                    $manterArq = $arquivosGrupo[0]
-                    $removerArq = @($arquivosGrupo[1..($arquivosGrupo.Count - 1)])
-                    $item = @{ Motivo = 'Nome/tamanho parecido (conteúdo pode diferir — revisar)'; Manter = $manterArq; Remover = $removerArq }
-                    if ($IncluirCandidatosPorNome) { $gruposRemover += , $item } else { $gruposRevisar += , $item }
-                }
-            }
-        }
+        # --- FASE 4: agrupar por hash -> duplicatas REAIS ---
+        Grant-WriteProgress -Activity $activity -Status "Identificando duplicatas..." -PercentComplete 70
+        $gruposDup = @($comHash | Group-Object Hash | Where-Object { $_.Count -gt 1 })
+        $totalDupArquivos = 0
+        foreach ($g in $gruposDup) { $totalDupArquivos += ($g.Count - 1) }
 
-        Grant-WriteProgress -Activity $activity -Status "Gerando relatório..." -PercentComplete 92
-
-        # --- Relatório (sempre gerado, mesmo em -WhatIf/Simular) ---
-        $totalRemover = 0
-        $espacoBytes = 0
-        foreach ($g in $gruposRemover) { $totalRemover += $g.Remover.Count; foreach ($r in $g.Remover) { $espacoBytes += $r.Length } }
-        $espacoMB = [math]::Round($espacoBytes / 1MB, 1)
-
-        Write-Log "=== Relatório de duplicatas ===" -Type Info
-        Write-Log "Grupos com remoção habilitada: $($gruposRemover.Count) | arquivos a remover: $totalRemover | espaço a liberar: $espacoMB MB" -Type Info
-        if ($gruposRevisar.Count -gt 0) {
-            Write-Log "Grupos SÓ-RELATÓRIO (nome/tamanho parecido, NÃO removidos): $($gruposRevisar.Count) — revise e use -IncluirCandidatosPorNome se quiser removê-los também." -Type Warning
-        }
-        foreach ($g in $gruposRemover) {
-            Write-Log "[REMOVER] $($g.Motivo) — mantém: $($g.Manter.FullName)" -Type Debug
-            foreach ($r in $g.Remover) { Write-Log ("          remove: {0} ({1} KB)" -f $r.FullName, [math]::Round($r.Length / 1KB, 1)) -Type Debug }
-        }
-        foreach ($g in $gruposRevisar) {
-            Write-Log "[REVISAR] $($g.Motivo) — mantém: $($g.Manter.FullName)" -Type Debug
-            foreach ($r in $g.Remover) { Write-Log ("          candidato: {0} ({1} KB)" -f $r.FullName, [math]::Round($r.Length / 1KB, 1)) -Type Debug }
-        }
-
-        if ($gruposRemover.Count -eq 0) {
-            Write-Log "Nenhuma duplicata elegível para remoção encontrada." -Type Success
+        Write-Log "Grupos de duplicatas: $($gruposDup.Count) | arquivos duplicados a processar: $totalDupArquivos" -Type Info
+        if ($gruposDup.Count -eq 0) {
+            Write-Log "Nenhuma duplicata encontrada." -Type Success
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
             return
         }
 
-        if ($PSCmdlet.ShouldProcess("$totalRemover arquivo(s) duplicado(s) ($espacoMB MB)", "remover")) {
-            $removidos = 0
-            $liberadosBytes = 0
-            foreach ($g in $gruposRemover) {
-                foreach ($r in $g.Remover) {
+        # --- FASE 5: estrategia de retencao -> monta o plano de mover/deletar ---
+        Grant-WriteProgress -Activity $activity -Status "Aplicando estratégia de retenção ($Manter)..." -PercentComplete 78
+        $plano = @()
+        $espacoBytes = 0
+        foreach ($g in $gruposDup) {
+            $ordenado = @(switch ($Manter) {
+                'MaisAntigo' { $g.Group.Arquivo | Sort-Object CreationTime }
+                'MaisNovo'   { $g.Group.Arquivo | Sort-Object CreationTime -Descending }
+                'Maior'      { $g.Group.Arquivo | Sort-Object @{Expression = 'Length'; Descending = $true}, CreationTime }
+            })
+            $manterArq = $ordenado[0]
+            $moverArq = @($ordenado[1..($ordenado.Count - 1)])
+            foreach ($x in $moverArq) {
+                $plano += [pscustomobject]@{
+                    Hash      = $g.Name
+                    Manter    = $manterArq
+                    Duplicata = $x
+                    DestPasta = Join-Path (Join-Path $relatoriosDir '_DUPLICADOS') $g.Name
+                }
+                $espacoBytes += $x.Length
+            }
+        }
+        $espacoMB = [math]::Round($espacoBytes / 1MB, 1)
+
+        # --- FASE 6: relatorio (sempre gerado no log, mesmo em -WhatIf/Simular) ---
+        $acaoTxt = if ($Deletar) { 'deletar' } else { 'mover para revisão' }
+        Write-Log "=== Relatório de duplicatas ===" -Type Info
+        Write-Log "Estratégia de retenção: $Manter | ação: $acaoTxt | arquivos: $totalDupArquivos | espaço a liberar: $espacoMB MB" -Type Info
+        foreach ($p in $plano) {
+            Write-Log "[$(if($Deletar){'DELETAR'}else{'MOVER'})] mantém: $($p.Manter.FullName)" -Type Debug
+            Write-Log ("           {0}: {1} ({2})" -f $(if($Deletar){'deleta'}else{'move'}), $p.Duplicata.FullName, (Get-HumanReadableSize $p.Duplicata.Length)) -Type Debug
+        }
+
+        # --- FASE 7: confirmar (ShouldProcess) e executar ---
+        $descAlvo = if ($Deletar) { "deletar" } else { "mover para revisão em $relatoriosDir\_DUPLICADOS" }
+        if ($PSCmdlet.ShouldProcess("$totalDupArquivos arquivo(s) duplicado(s) ($espacoMB MB)", $descAlvo)) {
+            New-Item -ItemType Directory -Path $relatoriosDir -Force -ErrorAction SilentlyContinue | Out-Null
+
+            # backup automatico ANTES de mover/deletar -- rede de seguranca extra
+            if (-not $SemBackup -and -not $WhatIf) {
+                $backupDir = Join-Path $relatoriosDir '_BACKUP'
+                New-Item -ItemType Directory -Path $backupDir -Force -ErrorAction SilentlyContinue | Out-Null
+                Write-Log "Criando backup de segurança em '$backupDir'..." -Type Info
+                $i = 0
+                foreach ($p in $plano) {
+                    $i++
+                    Grant-WriteProgress -Activity $activity -Status "Backup ($i/$($plano.Count))..." -PercentComplete (80 + [math]::Min(10, [math]::Round(($i / $plano.Count) * 10)))
                     try {
-                        if (-not $WhatIf) {
-                            Remove-Item -LiteralPath $r.FullName -Force -ErrorAction Stop
-                            $removidos++
-                            $liberadosBytes += $r.Length
-                        } else {
-                            Write-Log "Modo WhatIf: '$($r.FullName)' seria removido." -Type Debug
-                        }
+                        $destBkp = Get-SafeDestination -TargetDir $backupDir -FileName $p.Duplicata.Name
+                        Copy-Item -LiteralPath $p.Duplicata.FullName -Destination $destBkp -Force -ErrorAction Stop
                     } catch {
-                        Write-Log "AVISO: falha ao remover '$($r.FullName)': $($_.Exception.Message)" -Type Warning
+                        Write-Log "AVISO: falha ao fazer backup de '$($p.Duplicata.FullName)': $($_.Exception.Message)" -Type Warning
                     }
                 }
+                Write-Log "Backup concluído." -Type Success
             }
-            Write-Log "Duplicatas removidas: $removidos | espaço liberado: $([math]::Round($liberadosBytes / 1MB, 1)) MB" -Type Success
+
+            # executa: move (padrao) ou deleta (-Deletar)
+            $processados = 0
+            $falhas = 0
+            foreach ($p in $plano) {
+                try {
+                    if (-not $WhatIf) {
+                        if ($Deletar) {
+                            Remove-Item -LiteralPath $p.Duplicata.FullName -Force -ErrorAction Stop
+                        } else {
+                            New-Item -ItemType Directory -Path $p.DestPasta -Force -ErrorAction SilentlyContinue | Out-Null
+                            $dest = Get-SafeDestination -TargetDir $p.DestPasta -FileName $p.Duplicata.Name
+                            Move-Item -LiteralPath $p.Duplicata.FullName -Destination $dest -Force -ErrorAction Stop
+                        }
+                        $processados++
+                    } else {
+                        Write-Log "Modo WhatIf: '$($p.Duplicata.FullName)' seria $(if($Deletar){'deletado'}else{'movido'})." -Type Debug
+                    }
+                } catch {
+                    $falhas++
+                    Write-Log "AVISO: falha ao processar '$($p.Duplicata.FullName)': $($_.Exception.Message)" -Type Warning
+                }
+            }
+
+            # relatorio CSV + resumo TXT (so quando executou de verdade)
+            if (-not $WhatIf) {
+                try {
+                    $plano | Select-Object Hash, @{N = 'Manter'; E = { $_.Manter.FullName } }, @{N = 'Duplicata'; E = { $_.Duplicata.FullName } }, @{N = 'TamanhoBytes'; E = { $_.Duplicata.Length } } |
+                        Export-Csv -NoTypeInformation -Encoding UTF8 -LiteralPath (Join-Path $relatoriosDir "duplicados_$ts.csv")
+                    $resumo = @(
+                        "Data/Hora: $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss')"
+                        "Pastas analisadas: $($pastasValidas -join '; ')"
+                        "Arquivos analisados: $totalItens"
+                        "Grupos de duplicatas: $($gruposDup.Count)"
+                        "Arquivos duplicados: $totalDupArquivos"
+                        "Estratégia de retenção: $Manter"
+                        "Ação: $(if ($Deletar) { 'DELETADOS' } else { 'MOVIDOS para revisão' })"
+                        "Processados com sucesso: $processados"
+                        "Falhas: $falhas"
+                        "Espaço liberado: $(Get-HumanReadableSize $espacoBytes)"
+                        "Backup: $(if ($SemBackup) { 'desativado (-SemBackup)' } else { "$relatoriosDir\_BACKUP" })"
+                    )
+                    $resumo -join "`r`n" | Out-File -Encoding UTF8 -LiteralPath (Join-Path $relatoriosDir "resumo_$ts.txt")
+                    Write-Log "Relatórios salvos em: $relatoriosDir" -Type Info
+                } catch {
+                    Write-Log "AVISO: falha ao salvar relatórios: $($_.Exception.Message)" -Type Warning
+                }
+                Write-Log "Concluído: $processados processado(s), $falhas falha(s), $(Get-HumanReadableSize $espacoBytes) $(if ($Deletar) { 'liberados' } else { 'movidos para revisão' })." -Type Success
+            }
         }
     } catch {
         Write-Log "ERRO GERAL na busca de duplicatas: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
@@ -5387,7 +5477,7 @@ function Show-CleanupMenu {
         Write-Host " K) Agendar ChkDsk no Reboot"
         Write-Host " L) Remover Pasta Windows.old"
         Write-Host " M) Limpar Arquivos e Pastas Vazias (Temp)"
-        Write-Host " N) Remover Arquivos Duplicados (Downloads/Documentos/etc.)"
+        Write-Host " N) Remover Arquivos Duplicados (move p/ revisão por padrão, com backup)"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
