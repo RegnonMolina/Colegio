@@ -612,7 +612,11 @@ function Invoke-MaintenanceGuiWindow {
                 # NOVO: campos marcados com Pasta=$true no catalogo ganham um botao "Procurar
                 # pasta..." ao lado, que abre o dialogo nativo do Windows. So se aplica a
                 # TextBox (nao mexe em ComboBox/PasswordBox nem em campos sem a flag).
-                $temBotaoPasta = ($p.PSObject.Properties.Name -contains 'Pasta') -and $p.Pasta -and ($c -is [System.Windows.Controls.TextBox])
+                # NOTA: $p e' Hashtable (nao PSCustomObject) -- .PSObject.Properties so' expoe
+                # os membros da classe Hashtable (Count/Keys/...), nunca as proprias chaves.
+                # Acesso direto ($p.Pasta) funciona normalmente e retorna $null se a chave
+                # nao existir, entao dispensa checagem de existencia.
+                $temBotaoPasta = [bool]$p.Pasta -and ($c -is [System.Windows.Controls.TextBox])
                 if ($temBotaoPasta) {
                     $gridPasta = New-Object System.Windows.Controls.Grid
                     $colTxt = New-Object System.Windows.Controls.ColumnDefinition
@@ -660,7 +664,9 @@ function Invoke-MaintenanceGuiWindow {
             $st.ParamControls[$p.Nome] = @{ Ctrl=$c; Tipo=$p.Tipo }
 
             # Exemplo (dica curta) logo abaixo do campo, quando definido no catalogo.
-            if ($p.PSObject.Properties.Name -contains 'Exemplo' -and $p.Exemplo) {
+            # FIX: $p e' Hashtable -- PSObject.Properties.Name nunca contem 'Exemplo' (mesma
+            # causa do bug do botao de pasta); a dica nunca aparecia. Acesso direto resolve.
+            if ($p.Exemplo) {
                 $hint = New-Object System.Windows.Controls.TextBlock
                 $hint.Text = $p.Exemplo
                 $hint.FontSize = 11
