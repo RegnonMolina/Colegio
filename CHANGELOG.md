@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [2.3.1] - 2026-08-14
+
+### Adicionado
+- **Painéis redimensionáveis na GUI** (`GridSplitter`, como o Explorer do Windows): agora dá pra arrastar a barra entre Categorias/Ações, entre Ações/Detalhe, e entre a área do meio e o Log ao vivo. Barras destacam em verde ao passar o mouse; cada painel tem um tamanho mínimo (não dá pra arrastar até sumir).
+
 ## [2.3.0] - 2026-08-14
 
 ### Adicionado

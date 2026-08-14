@@ -207,13 +207,23 @@ $script:GuiXaml = @'
       <Setter Property="Padding" Value="12,6"/>
       <Setter Property="Cursor" Value="Hand"/>
     </Style>
+    <!-- Splitter: barra arrastável pra redimensionar os painéis (igual o Explorer do Windows). -->
+    <Style x:Key="Splitter" TargetType="GridSplitter">
+      <Setter Property="Background" Value="{DynamicResource Border}"/>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
   </Window.Resources>
 
   <Grid Margin="12">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="170"/>
+      <RowDefinition Height="*" MinHeight="160"/>
+      <RowDefinition Height="6"/>
+      <RowDefinition Height="170" MinHeight="70"/>
     </Grid.RowDefinitions>
 
     <!-- Topo: busca + WhatIf + Personalizar -->
@@ -232,18 +242,23 @@ $script:GuiXaml = @'
               Style="{StaticResource GhostButton}"/>
     </Grid>
 
-    <!-- Meio: categorias | acoes | detalhe -->
+    <!-- Meio: categorias | splitter | acoes | splitter | detalhe -->
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="200"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="340"/>
+        <ColumnDefinition Width="200" MinWidth="120"/>
+        <ColumnDefinition Width="6"/>
+        <ColumnDefinition Width="*" MinWidth="220"/>
+        <ColumnDefinition Width="6"/>
+        <ColumnDefinition Width="340" MinWidth="240"/>
       </Grid.ColumnDefinitions>
 
       <ListBox x:Name="LstCategorias" Grid.Column="0" Background="{DynamicResource Panel}"
                Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Border}" FontSize="{DynamicResource FSBody}"/>
 
-      <ListBox x:Name="LstAcoes" Grid.Column="1" Margin="10,0" Background="{DynamicResource Panel}"
+      <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    Cursor="SizeWE" Style="{StaticResource Splitter}"/>
+
+      <ListBox x:Name="LstAcoes" Grid.Column="2" Background="{DynamicResource Panel}"
                Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Border}" FontSize="{DynamicResource FSBody}">
         <ListBox.ItemTemplate>
           <DataTemplate>
@@ -255,7 +270,10 @@ $script:GuiXaml = @'
         </ListBox.ItemTemplate>
       </ListBox>
 
-      <Border Grid.Column="2" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="6">
+      <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    Cursor="SizeWE" Style="{StaticResource Splitter}"/>
+
+      <Border Grid.Column="4" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="6">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel Margin="14">
             <TextBlock x:Name="TxtDetTitulo" FontSize="16" FontWeight="Bold" TextWrapping="Wrap"/>
@@ -283,8 +301,11 @@ $script:GuiXaml = @'
       </Border>
     </Grid>
 
+    <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  Cursor="SizeNS" Style="{StaticResource Splitter}"/>
+
     <!-- Rodape: log ao vivo -->
-    <Border Grid.Row="2" Margin="0,10,0,0" Background="{DynamicResource PanelDark}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="6">
+    <Border Grid.Row="3" Margin="0,4,0,0" Background="{DynamicResource PanelDark}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="6">
       <Grid Margin="8">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>
