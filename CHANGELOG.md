@@ -2,6 +2,18 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [2.2.1] - 2026-08-14
+
+### Corrigido (achado testando a GUI ao vivo)
+- **Descrição pouco visível no painel de detalhe** — ganhou cabeçalho "DESCRIÇÃO" + divisor, igual ao de "PARÂMETROS", além de um texto de fallback ("Sem descrição disponível.") caso algum item fique sem uma no futuro.
+- **`Restore-Registry`, `Restore-Registry-FromBackup` e `Rename-Notebook` usavam `Read-Host`** — travariam se chamadas pela GUI (o runspace de fundo não tem console pra digitar). Cada uma ganhou um parâmetro opcional (`-BkpPath` / `-NovoNome`) que pula o prompt quando fornecido; sem ele, o comportamento interativo do menu de texto continua idêntico.
+- **`Add-WiFiNetwork`** ganhou `-WifiKey` opcional (prioridade sobre env/arquivo) pelo mesmo motivo, evitando o `Read-Host -AsSecureString` em background.
+
+### Adicionado
+- **Sugestões de argumentos**: parâmetros do catálogo podem ter um `Exemplo` (dica curta exibida abaixo do campo). Ex.: "Limpar Arquivos e Pastas Vazias" mostra `Ex.: D:\Outra Pasta;E:\Downloads`.
+- **Novos parâmetros estruturados na GUI**: "Restaurar Registro" (pasta do backup), "Renomear Notebook" (novo nome), "Adicionar Rede Wi-Fi" (senha — campo **mascarado**, tipo `password`/`PasswordBox`).
+- Dica dinâmica abaixo de "Argumentos extras" (muda conforme a ação tem ou não parâmetros estruturados).
+
 ## [2.2.0] - 2026-08-14
 
 ### Adicionado (GUI mais profissional)

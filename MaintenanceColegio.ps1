@@ -90,7 +90,7 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-    Version = "2.2.0"
+    Version = "2.2.1"
     LogFilePath = "C:\ScriptsLogs\$env:COMPUTERNAME-ScriptLog.log"
     ConfirmBeforeDestructive = $true
     Cleanup = @{
@@ -2035,15 +2035,17 @@ function Update-PowerShell {
 
 function Add-WiFiNetwork {
     [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
+    # CORREÇÃO (GUI): $WifiKey opcional -- passado explicitamente (ex.: campo da GUI),
+    # tem prioridade sobre env/arquivo e evita cair no Read-Host (que travaria em background).
+    param([string]$WifiKey)
     Write-Log -Message "Iniciando configuração da rede Wi-Fi 'VemProMundo - Adm'..." -Type Info
     $profilePath = "$env:TEMP\VemProMundo_-_Adm.xml"
     $wifiName = "VemProMundo - Adm"
 
     # SEGURANÇA (scrub p/ GitHub): a senha do Wi-Fi NÃO fica mais no código-fonte.
-    # É lida nesta ordem: 1) variável de ambiente CMS_WIFI_KEY; 2) arquivo git-ignored
-    # 'WiFi.local.json' na pasta do script (formato { "WiFiKey": "..." }); 3) digitação.
-    $wifiKey = $env:CMS_WIFI_KEY
+    # É lida nesta ordem: 1) parâmetro $WifiKey; 2) variável de ambiente CMS_WIFI_KEY;
+    # 3) arquivo git-ignored 'WiFi.local.json' na pasta do script ({ "WiFiKey": "..." }); 4) digitação.
+    $wifiKey = if ($WifiKey) { $WifiKey } else { $env:CMS_WIFI_KEY }
     if (-not $wifiKey) {
         $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
         $localSecret = Join-Path $scriptDir 'WiFi.local.json'
@@ -3880,27 +3882,33 @@ function Enable-TaskbarSeconds {
 }
 
 function Rename-Notebook {
-    Write-Log "Deseja renomear este notebook? (S/N)" -Type Warning
-    $timeout = 15
-    $sw = [Diagnostics.Stopwatch]::StartNew()
-    $input = $null
+    # CORREÇÃO (GUI): $NovoNome opcional -- com ele, pula direto pro Rename-Computer
+    # (sem esperar teclado); sem ele, mantém o fluxo interativo de sempre (timeout 15s).
+    param([string]$NovoNome)
+    if (-not $NovoNome) {
+        Write-Log "Deseja renomear este notebook? (S/N)" -Type Warning
+        $timeout = 15
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $input = $null
 Write-Log "Digite o novo nome do notebook e pressione ENTER (ou aguarde $timeout segundos para cancelar):" -Type Info
-    while ($sw.Elapsed.TotalSeconds -lt $timeout -and !$input) {
-        if ([System.Console]::KeyAvailable) {
-            $input = Read-Host
-        } else {
-            Start-Sleep -Milliseconds 200
+        while ($sw.Elapsed.TotalSeconds -lt $timeout -and !$input) {
+            if ([System.Console]::KeyAvailable) {
+                $input = Read-Host
+            } else {
+                Start-Sleep -Milliseconds 200
+            }
         }
-    }
-    $sw.Stop()
-    if ([string]::IsNullOrWhiteSpace($input)) {
-        Write-Log "Tempo esgotado. Renomeação cancelada." -Type Error
-        Start-Sleep -Seconds 2
-        return
+        $sw.Stop()
+        if ([string]::IsNullOrWhiteSpace($input)) {
+            Write-Log "Tempo esgotado. Renomeação cancelada." -Type Error
+            Start-Sleep -Seconds 2
+            return
+        }
+        $NovoNome = $input
     }
     try {
-        Rename-Computer -NewName $input -Force
-        Write-Log "Nome do notebook alterado para: $input. Reinicie para aplicar." -Type Success
+        Rename-Computer -NewName $NovoNome -Force
+        Write-Log "Nome do notebook alterado para: $NovoNome. Reinicie para aplicar." -Type Success
     } catch {
         Write-Log "Erro ao renomear o notebook: $_" -Type Error
     }
@@ -4052,13 +4060,19 @@ function Backup-Registry {
 }
 
 function Restore-Registry {
+    # CORREÇÃO (GUI): $BkpPath opcional -- sem ele, mantém o Read-Host interativo de
+    # sempre (menu de texto). Com ele, pula o prompt (necessário p/ rodar em background,
+    # onde Read-Host trava por não ter console pra digitar).
+    param([string]$BkpPath)
+    if (-not $BkpPath) {
 Write-Log "Digite o caminho da pasta onde está o backup do registro:" -Type Info
-    $bkpPath = Read-Host "Exemplo: C:\Users\SeuUsuario\Desktop\reg_backup_20250704_140000"
+        $BkpPath = Read-Host "Exemplo: C:\Users\SeuUsuario\Desktop\reg_backup_20250704_140000"
+    }
     try {
-        reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
-        reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
-        reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
-        Write-Log "Registro restaurado a partir de $bkpPath." -Type Success
+        reg.exe restore HKLM\SOFTWARE "$BkpPath\HKLM_SOFTWARE.reg" | Out-Null
+        reg.exe restore HKLM\SYSTEM "$BkpPath\HKLM_SYSTEM.reg" | Out-Null
+        reg.exe restore HKCU "$BkpPath\HKCU.reg" | Out-Null
+        Write-Log "Registro restaurado a partir de $BkpPath." -Type Success
     } catch { Write-Log "Erro ao restaurar o registro: $_" -Type Error }
 }
 
@@ -4157,13 +4171,17 @@ function Restore-DefaultIPv6 {
 }
 
 function Restore-Registry-FromBackup {
+    # CORREÇÃO (GUI): mesmo padrão de Restore-Registry -- $BkpPath opcional.
+    param([string]$BkpPath)
+    if (-not $BkpPath) {
 Write-Log "Digite o caminho do backup do registro para restaurar (pasta):" -Type Info
-    $bkpPath = Read-Host
+        $BkpPath = Read-Host
+    }
     try {
-        reg.exe restore HKLM\SOFTWARE "$bkpPath\HKLM_SOFTWARE.reg" | Out-Null
-        reg.exe restore HKLM\SYSTEM "$bkpPath\HKLM_SYSTEM.reg" | Out-Null
-        reg.exe restore HKCU "$bkpPath\HKCU.reg" | Out-Null
-        Write-Log "Registro restaurado a partir de $bkpPath." -Type Success
+        reg.exe restore HKLM\SOFTWARE "$BkpPath\HKLM_SOFTWARE.reg" | Out-Null
+        reg.exe restore HKLM\SYSTEM "$BkpPath\HKLM_SYSTEM.reg" | Out-Null
+        reg.exe restore HKCU "$BkpPath\HKCU.reg" | Out-Null
+        Write-Log "Registro restaurado a partir de $BkpPath." -Type Success
     } catch { Write-Log "Erro ao restaurar o registro: $_" -Type Error }
 }
 

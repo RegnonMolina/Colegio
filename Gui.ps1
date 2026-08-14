@@ -65,8 +65,8 @@ function Get-GuiActionCatalog {
         # --- Limpeza e Otimizacao ---
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Agendar ChkDsk no Reboot';           Func='New-ChkDsk';                  Desc='Agenda verificacao de disco (chkdsk) na proxima reinicializacao.'; Destr=$false }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpar Arquivos e Pastas Vazias';    Func='Clear-EmptyFilesAndFolders';  Desc='Remove arquivos de 0 byte e pastas vazias (protege .gitkeep/desktop.ini). Suporta -WhatIf.'; Destr=$true; Params=@(
-                                            @{ Nome='Path';             Rotulo='Pastas-raiz (separadas por ";"; vazio = %TEMP% padrao)'; Tipo='paths';  Default='' }
-                                            @{ Nome='IncludeEmptyFiles'; Rotulo='Tambem remover arquivos de 0 byte';                       Tipo='switch'; Default=$true }
+                                            @{ Nome='Path';             Rotulo='Pastas-raiz (vazio = %TEMP% padrao)'; Tipo='paths';  Default=''; Exemplo='Ex.: D:\Outra Pasta;E:\Downloads (separe varias pastas por ;)' }
+                                            @{ Nome='IncludeEmptyFiles'; Rotulo='Tambem remover arquivos de 0 byte';    Tipo='switch'; Default=$true }
                                           ) }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpar Arquivos Temporarios';        Func='Clear-TemporaryFiles';        Desc='Remove arquivos temporarios do usuario e do sistema (%TEMP%, Windows\Temp).'; Destr=$true }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpar Cache do Windows Update';     Func='Clear-WUCache';               Desc='Limpa o cache de downloads do Windows Update (SoftwareDistribution).'; Destr=$true }
@@ -92,7 +92,9 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Seguranca de Macros do Office';       Func='Grant-HardenOfficeMacros';  Desc='Desabilita macros perigosos do Office (Word/Excel/PowerPoint).'; Destr=$false }
 
         # --- Rede ---
-        [pscustomobject]@{ Cat='Rede'; Titulo='Adicionar Rede Wi-Fi';          Func='Add-WiFiNetwork';             Desc='Adiciona um perfil de rede Wi-Fi.'; Destr=$false }
+        [pscustomobject]@{ Cat='Rede'; Titulo='Adicionar Rede Wi-Fi';          Func='Add-WiFiNetwork';             Desc='Adiciona o perfil de rede Wi-Fi "VemProMundo - Adm". A senha vem de CMS_WIFI_KEY / WiFi.local.json; use o campo abaixo so se quiser informar outra.'; Destr=$false; Params=@(
+                                            @{ Nome='WifiKey'; Rotulo='Senha do Wi-Fi (opcional — deixe em branco p/ usar a configurada)'; Tipo='password'; Default=''; Exemplo='So preencha se quiser sobrescrever a senha ja configurada.' }
+                                          ) }
         [pscustomobject]@{ Cat='Rede'; Titulo='Configurar DNS Google/Cloudflare'; Func='Set-DnsGoogleCloudflare';  Desc='Configura DNS para 8.8.8.8 / 1.1.1.1.'; Destr=$false }
         [pscustomobject]@{ Cat='Rede'; Titulo='Desativar IPv6';               Func='Disable-IPv6';                Desc='Desativa o IPv6 nas interfaces.'; Destr=$false }
         [pscustomobject]@{ Cat='Rede'; Titulo='Instalar Impressoras de Rede';  Func='Install-NetworkPrinters';     Desc='Instala as impressoras de rede configuradas.'; Destr=$false }
@@ -110,7 +112,9 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Sistema'; Titulo='Otimizacoes Gerais do Sistema';   Func='Grant-SystemOptimizations';   Desc='Aplica um conjunto de otimizacoes gerais.'; Destr=$false }
         [pscustomobject]@{ Cat='Sistema'; Titulo='Otimizar Desempenho do Explorer'; Func='Optimize-ExplorerPerformance';Desc='Ajustes de desempenho do Windows Explorer.'; Destr=$false }
         [pscustomobject]@{ Cat='Sistema'; Titulo='Plano de Energia Otimizado';      Func='Set-OptimizedPowerPlan';      Desc='Aplica um plano de energia otimizado.'; Destr=$false }
-        [pscustomobject]@{ Cat='Sistema'; Titulo='Renomear Notebook';               Func='Rename-Notebook';             Desc='Renomeia o computador (pede o novo nome no console).'; Destr=$false }
+        [pscustomobject]@{ Cat='Sistema'; Titulo='Renomear Notebook';               Func='Rename-Notebook';             Desc='Renomeia o computador. Requer reinicio para aplicar.'; Destr=$false; Params=@(
+                                            @{ Nome='NovoNome'; Rotulo='Novo nome do notebook'; Tipo='text'; Default=''; Exemplo='Ex.: CMS-NOTE-14 (sem espacos/acentos, max ~15 caracteres)' }
+                                          ) }
 
         # --- Personalizacao ---
         [pscustomobject]@{ Cat='Personalizacao'; Titulo='Ajustes de UI (Widgets/Barra)';   Func='Grant-UITweaks';              Desc='Aplica ajustes de UI conforme a config global (widgets, alinhamento, pesquisa).'; Destr=$false }
@@ -135,7 +139,9 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Restauracao'; Titulo='Desfazer Reforco de Privacidade'; Func='Undo-PrivacyHardening';  Desc='Desfaz os ajustes agressivos de privacidade.'; Destr=$false }
         [pscustomobject]@{ Cat='Restauracao'; Titulo='Desfazer Tudo (Rotina)';          Func='Invoke-Undo';            Desc='Executa toda a rotina de restauracao/reversao.'; Destr=$true }
         [pscustomobject]@{ Cat='Restauracao'; Titulo='Reinstalar OneDrive';             Func='Restore-OneDrive';       Desc='Reinstala o OneDrive.'; Destr=$false }
-        [pscustomobject]@{ Cat='Restauracao'; Titulo='Restaurar Registro';              Func='Restore-Registry';       Desc='Restaura o registro a partir do backup mais recente.'; Destr=$true }
+        [pscustomobject]@{ Cat='Restauracao'; Titulo='Restaurar Registro';              Func='Restore-Registry';       Desc='Restaura o registro (HKLM\SOFTWARE, HKLM\SYSTEM, HKCU) a partir de uma pasta de backup gerada por "Backup do Registro".'; Destr=$true; Params=@(
+                                            @{ Nome='BkpPath'; Rotulo='Pasta do backup do registro'; Tipo='text'; Default=''; Exemplo='Ex.: C:\Users\SeuUsuario\Documents\reg_backup_20260814_140000' }
+                                          ) }
         [pscustomobject]@{ Cat='Restauracao'; Titulo='Restaurar TODOS os Padroes';      Func='Restore-SystemDefaults'; Desc='Reverte os tweaks aplicados, voltando o sistema ao padrao.'; Destr=$true }
 
         # --- Instalacao e Ferramentas ---
@@ -248,16 +254,20 @@ $script:GuiXaml = @'
             <TextBlock x:Name="TxtDetTitulo" FontSize="16" FontWeight="Bold" TextWrapping="Wrap"/>
             <TextBlock x:Name="TxtDetCat" Foreground="{DynamicResource Muted}" Margin="0,4,0,0"/>
             <TextBlock x:Name="TxtDetFunc" Foreground="{DynamicResource Func}" FontFamily="Consolas" Margin="0,2,0,10"/>
+
+            <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border}" Margin="0,0,0,8"/>
+            <TextBlock Text="DESCRIÇÃO" Foreground="{DynamicResource Muted}" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,4"/>
             <TextBlock x:Name="TxtDetDesc" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
             <TextBlock x:Name="TxtDetAviso" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,10"/>
 
-            <TextBlock x:Name="TxtParamsTitulo" Text="Parametros" Foreground="{DynamicResource Muted}" FontWeight="SemiBold" Margin="0,4,0,4" Visibility="Collapsed"/>
+            <TextBlock x:Name="TxtParamsTitulo" Text="PARÂMETROS" Foreground="{DynamicResource Muted}" FontWeight="SemiBold" FontSize="11" Margin="0,4,0,4" Visibility="Collapsed"/>
             <StackPanel x:Name="PnlParams"/>
 
-            <TextBlock Text="Argumentos extras (avancado)" Foreground="{DynamicResource Muted}" Margin="0,10,0,2"/>
+            <TextBlock Text="ARGUMENTOS EXTRAS (AVANÇADO)" Foreground="{DynamicResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,10,0,2"/>
             <TextBox x:Name="TxtExtra" Height="28" Background="{DynamicResource PanelDark}" Foreground="{DynamicResource Ink}"
-                     BorderBrush="{DynamicResource Border}" Padding="6,3" VerticalContentAlignment="Center"
-                     ToolTip="Ex.: -Verbose  (passado direto para a funcao)"/>
+                     BorderBrush="{DynamicResource Border}" Padding="6,3" VerticalContentAlignment="Center"/>
+            <TextBlock x:Name="TxtArgDica" Foreground="{DynamicResource Muted}" FontSize="11" FontStyle="Italic" TextWrapping="Wrap" Margin="0,3,0,0"/>
 
             <Button x:Name="BtnExecutar" Content="Executar" Style="{StaticResource AccentButton}" Height="40" IsEnabled="False" Margin="0,14,0,0"/>
             <TextBlock x:Name="TxtStatus" Margin="0,10,0,0" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
@@ -419,6 +429,7 @@ function Invoke-MaintenanceGuiWindow {
     $paramsTit  = & $F 'TxtParamsTitulo'
     $pnlParams  = & $F 'PnlParams'
     $txtExtra   = & $F 'TxtExtra'
+    $txtArgDica = & $F 'TxtArgDica'
     $btnExec    = & $F 'BtnExecutar'
     $txtStatus  = & $F 'TxtStatus'
     $txtLog     = & $F 'TxtLog'
@@ -474,14 +485,14 @@ function Invoke-MaintenanceGuiWindow {
         $paramsTit.Visibility = if ($temParams) { 'Visible' } else { 'Collapsed' }
         if (-not $temParams) { return }
         foreach ($p in $a.Params) {
+            $c = $null
             if ($p.Tipo -eq 'switch') {
                 $c = New-Object System.Windows.Controls.CheckBox
                 $c.Content = $p.Rotulo
                 $c.IsChecked = [bool]$p.Default
-                $c.Margin = '0,4,0,4'
+                $c.Margin = '0,4,0,0'
                 $c.SetResourceReference([System.Windows.Controls.CheckBox]::ForegroundProperty, 'Ink')
                 [void]$pnlParams.Children.Add($c)
-                $st.ParamControls[$p.Nome] = @{ Ctrl=$c; Tipo=$p.Tipo }
             } else {
                 $lbl = New-Object System.Windows.Controls.TextBlock
                 $lbl.Text = $p.Rotulo
@@ -489,21 +500,44 @@ function Invoke-MaintenanceGuiWindow {
                 $lbl.TextWrapping = 'Wrap'
                 $lbl.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, 'Muted')
                 [void]$pnlParams.Children.Add($lbl)
-                if ($p.Tipo -eq 'choice') {
-                    $c = New-Object System.Windows.Controls.ComboBox
-                    foreach ($o in $p.Opcoes) { [void]$c.Items.Add($o) }
-                    if ($p.Default) { $c.SelectedItem = $p.Default } elseif ($c.Items.Count) { $c.SelectedIndex = 0 }
-                } else {
-                    $c = New-Object System.Windows.Controls.TextBox
-                    $c.Text = [string]$p.Default
-                    $c.Padding = '6,3'
-                    $c.SetResourceReference([System.Windows.Controls.TextBox]::BackgroundProperty, 'PanelDark')
-                    $c.SetResourceReference([System.Windows.Controls.TextBox]::ForegroundProperty, 'Ink')
-                    $c.SetResourceReference([System.Windows.Controls.TextBox]::BorderBrushProperty, 'Border')
+                switch ($p.Tipo) {
+                    'choice' {
+                        $c = New-Object System.Windows.Controls.ComboBox
+                        foreach ($o in $p.Opcoes) { [void]$c.Items.Add($o) }
+                        if ($p.Default) { $c.SelectedItem = $p.Default } elseif ($c.Items.Count) { $c.SelectedIndex = 0 }
+                    }
+                    'password' {
+                        # Campo mascarado (ex.: senha de Wi-Fi) — nao ecoa o valor na tela.
+                        $c = New-Object System.Windows.Controls.PasswordBox
+                        $c.Padding = '6,3'
+                        $c.SetResourceReference([System.Windows.Controls.PasswordBox]::BackgroundProperty, 'PanelDark')
+                        $c.SetResourceReference([System.Windows.Controls.PasswordBox]::ForegroundProperty, 'Ink')
+                        $c.SetResourceReference([System.Windows.Controls.PasswordBox]::BorderBrushProperty, 'Border')
+                    }
+                    default {
+                        $c = New-Object System.Windows.Controls.TextBox
+                        $c.Text = [string]$p.Default
+                        $c.Padding = '6,3'
+                        $c.SetResourceReference([System.Windows.Controls.TextBox]::BackgroundProperty, 'PanelDark')
+                        $c.SetResourceReference([System.Windows.Controls.TextBox]::ForegroundProperty, 'Ink')
+                        $c.SetResourceReference([System.Windows.Controls.TextBox]::BorderBrushProperty, 'Border')
+                    }
                 }
-                $c.Margin = '0,0,0,4'
+                $c.Margin = '0,0,0,0'
                 [void]$pnlParams.Children.Add($c)
-                $st.ParamControls[$p.Nome] = @{ Ctrl=$c; Tipo=$p.Tipo }
+            }
+            $st.ParamControls[$p.Nome] = @{ Ctrl=$c; Tipo=$p.Tipo }
+
+            # Exemplo (dica curta) logo abaixo do campo, quando definido no catalogo.
+            if ($p.PSObject.Properties.Name -contains 'Exemplo' -and $p.Exemplo) {
+                $hint = New-Object System.Windows.Controls.TextBlock
+                $hint.Text = $p.Exemplo
+                $hint.FontSize = 11
+                $hint.FontStyle = 'Italic'
+                $hint.TextWrapping = 'Wrap'
+                $hint.Margin = '0,2,0,4'
+                $hint.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, 'Muted')
+                [void]$pnlParams.Children.Add($hint)
             }
         }
     }
@@ -516,10 +550,16 @@ function Invoke-MaintenanceGuiWindow {
         $detTitulo.Text = $a.Titulo
         $detCat.Text = "Categoria: $($a.Cat)"
         $detFunc.Text = $a.Func + '()'
-        $detDesc.Text = $a.Desc
-        $detAviso.Text = if ($a.Destr) { 'Acao destrutiva/irreversivel. Confira antes de executar.' } else { '' }
+        $detDesc.Text = if ($a.Desc) { $a.Desc } else { 'Sem descrição disponível.' }
+        $detAviso.Text = if ($a.Destr) { 'Ação destrutiva/irreversível. Confira antes de executar.' } else { '' }
         $txtExtra.Text = ''
         & $renderParams $a
+        $temParams = ($a.PSObject.Properties.Name -contains 'Params') -and $a.Params
+        $txtArgDica.Text = if ($temParams) {
+            'Use os campos acima (mais simples) ou digite parâmetros extras aqui, se souber a sintaxe.'
+        } else {
+            'Deixe em branco, a menos que saiba os parâmetros aceitos por esta função.'
+        }
         $btnExec.IsEnabled = $true
     })
 
@@ -584,10 +624,11 @@ function Invoke-MaintenanceGuiWindow {
         foreach ($nome in $st.ParamControls.Keys) {
             $pc = $st.ParamControls[$nome]
             switch ($pc.Tipo) {
-                'switch' { $splat[$nome] = [bool]$pc.Ctrl.IsChecked }
-                'choice' { $v = '' + $pc.Ctrl.SelectedItem; if ($v) { $splat[$nome] = $v } }
-                'paths'  { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
-                default  { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = $v } }
+                'switch'   { $splat[$nome] = [bool]$pc.Ctrl.IsChecked }
+                'choice'   { $v = '' + $pc.Ctrl.SelectedItem; if ($v) { $splat[$nome] = $v } }
+                'paths'    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
+                'password' { $v = $pc.Ctrl.Password; if ($v) { $splat[$nome] = $v } }  # so envia se preenchido (senao usa o fallback interno da funcao)
+                default    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = $v } }
             }
         }
         $extra = @()
