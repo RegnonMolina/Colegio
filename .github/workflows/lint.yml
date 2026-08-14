@@ -7,10 +7,12 @@ on:
   push:
     paths:
       - 'MaintenanceColegio.ps1'
+      - 'Gui.ps1'
       - '.github/workflows/lint.yml'
   pull_request:
     paths:
       - 'MaintenanceColegio.ps1'
+      - 'Gui.ps1'
   workflow_dispatch:
 
 env:
@@ -37,9 +39,10 @@ jobs:
           #  - PSAvoidUsingComputerNameHardcoded: Test-Connection ao host fixo de atualização
           #    (script.colegiomundodosaber.com.br) é um check de conectividade intencional.
           $excluir = @('PSReservedParams', 'PSAvoidUsingComputerNameHardcoded')
-          $results = Invoke-ScriptAnalyzer -Path $env:TARGET -Severity @('Error','Warning') -ExcludeRule $excluir
+          $alvos = @($env:TARGET, 'Gui.ps1') | Where-Object { Test-Path $_ }
+          $results = foreach ($f in $alvos) { Invoke-ScriptAnalyzer -Path $f -Severity @('Error','Warning') -ExcludeRule $excluir }
           if ($results) {
-            $results | Format-Table -AutoSize RuleName, Severity, Line, Message | Out-String | Write-Host
+            $results | Format-Table -AutoSize RuleName, Severity, ScriptName, Line, Message | Out-String | Write-Host
           }
           $errors = @($results | Where-Object Severity -eq 'Error')
           Write-Host ("Total: {0} | Erros: {1} | Avisos: {2}" -f $results.Count, $errors.Count, ($results.Count - $errors.Count))

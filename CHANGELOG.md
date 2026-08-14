@@ -2,6 +2,16 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [2.1.0] - 2026-08-14
+
+### Adicionado
+- **Interface gráfica (WPF)** — `Gui.ps1`, aberta por `-Gui`, pelo item `K) Interface Gráfica` do menu, ou pela função `Show-Gui`. O menu de texto continua intacto (aditivo).
+  - Orientada a dados: `Get-GuiActionCatalog` é a fonte única de ~69 ações (Categoria/Título/Função/Descrição/Destrutivo).
+  - Busca em tempo real, filtro por categoria, painel de descrição, checkbox **Simular (WhatIf)**, destaque vermelho + confirmação para ações destrutivas, **log ao vivo** (tail do arquivo do `Write-Log`).
+  - Execução em **runspace de fundo** (não trava a janela); trata thread **STA** (funciona em Windows PowerShell 5.1 e pwsh 7).
+  - `Show-Gui` carrega o `Gui.ps1` do lado do script ou baixa do repositório (caminho `irm | iex`).
+- CI passa a lintar `Gui.ps1` também (PSScriptAnalyzer); a checagem anti-fantasma segue no arquivo self-contained.
+
 ## [2.0.0] - 2026-08-13
 
 ### Corrigido

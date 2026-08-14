@@ -51,7 +51,10 @@ param (
     [switch]$WhatIf,
 
     [Parameter(HelpMessage="Modo desatendido: executa a Rotina Colégio sem menu/prompts e encerra.")]
-    [switch]$Unattended
+    [switch]$Unattended,
+
+    [Parameter(HelpMessage="Abre a interface grafica (WPF) em vez do menu de texto.")]
+    [switch]$Gui
 )
 #endregion
 
@@ -87,7 +90,7 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-    Version = "2.0.0"
+    Version = "2.1.0"
     LogFilePath = "C:\ScriptsLogs\$env:COMPUTERNAME-ScriptLog.log"
     ConfirmBeforeDestructive = $true
     Cleanup = @{
@@ -5290,6 +5293,7 @@ function Show-MainMenu {
         Write-Host " H) Rotina Colégio" -ForegroundColor Green
         Write-Host " I) Limpeza e Otimização" -ForegroundColor Yellow
         Write-Host " J) Diagnósticos" -ForegroundColor Yellow
+        Write-Host " K) Interface Gráfica (GUI)" -ForegroundColor Magenta
 		Write-Host " R) Reiniciar" -ForegroundColor Blue
         Write-Host " S) Desligar" -ForegroundColor Blue
         Write-Host " X) Sair" -ForegroundColor Red
@@ -5307,6 +5311,7 @@ function Show-MainMenu {
 			'H' { Invoke-Colegio }
 			'I' { Show-CleanupMenu }      # NOVO: menu de Limpeza e Otimização (antes órfão, inalcançável)
 			'J' { Show-DiagnosticsMenu }  # NOVO: menu de Diagnósticos (antes órfão, inalcançável)
+			'K' { Show-Gui }              # NOVO: abre a interface grafica (WPF)
             'R' {
                 Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
                 Restart-Computer -Force
@@ -5337,6 +5342,12 @@ function Start-ScriptSupremo {
 
     try {
         Show-EnvironmentCheck   # #8/#9/#11: pré-flight (ambiente + baseline de espaço)
+
+        if ($Gui) {
+            # Interface grafica (WPF) em vez do menu de texto.
+            Show-Gui
+            return
+        }
 
         if ($Unattended) {
             # #12: modo desatendido — roda a Rotina Colégio sem menu/prompts e encerra.
@@ -5487,6 +5498,27 @@ function Show-CleanupReport {
         Write-Log "=== Relatório final ===" -Type Success
         Write-Log $msg -Type Success
         Write-Log "=======================" -Type Success
+    }
+}
+
+# Abre a interface grafica (WPF). Carrega Gui.ps1 do lado do script; se nao existir
+# (execucao via 'irm | iex', sem arquivo local), baixa do repositorio para o TEMP.
+function Show-Gui {
+    try {
+        $guiPath = $null
+        if ($PSScriptRoot) {
+            $cand = Join-Path $PSScriptRoot 'Gui.ps1'
+            if (Test-Path $cand) { $guiPath = $cand }
+        }
+        if (-not $guiPath) {
+            Write-Log "Gui.ps1 nao encontrado localmente — baixando do repositorio..." -Type Info
+            $guiPath = Join-Path $env:TEMP 'CMS_Gui.ps1'
+            Invoke-RestMethod 'https://raw.githubusercontent.com/RegnonMolina/Colegio/main/Gui.ps1' -OutFile $guiPath
+        }
+        . $guiPath
+        Show-MaintenanceGui -GuiPath $guiPath
+    } catch {
+        Write-Log "Erro ao abrir a interface grafica: $($_.Exception.Message)" -Type Error
     }
 }
 
