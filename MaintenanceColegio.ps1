@@ -90,7 +90,7 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-    Version = "2.2.1"
+    Version = "2.2.2"
     LogFilePath = "C:\ScriptsLogs\$env:COMPUTERNAME-ScriptLog.log"
     ConfirmBeforeDestructive = $true
     Cleanup = @{

@@ -2,6 +2,14 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [2.2.2] - 2026-08-14
+
+### Corrigido (bug real: "cliquei em Personalizar, travou o app")
+- **Causa raiz:** a janela de preferências (`PrefsXaml`) referenciava `Style="{StaticResource GhostButton}"` e `{StaticResource AccentButton}`, definidos **apenas** nos recursos da janela principal. `StaticResource` é resolvido **na hora do parse**, dentro do próprio documento XAML — `PrefsXaml` não tinha esses estilos no seu próprio `<Window.Resources>`, então `XamlReader.Parse()` lançava exceção assim que o botão "Personalizar" era clicado. Uma exceção não tratada dentro de um `Add_Click` do WPF trava o `Dispatcher` da UI em vez de falhar visivelmente — daí o "travou o app".
+- **Fix:** `PrefsXaml` ganhou seu próprio `<Window.Resources>` completo e autocontido (cores/fontes padrão + os dois estilos de botão), não depende mais de recursos externos pra fazer o parse.
+- **Blindagem geral:** todo `Add_Click`/`Add_SelectionChanged`/`Add_TextChanged` da GUI agora está envolto em try/catch com `Show-GuiHandlerError` (log + MessageBox de erro visível), pra qualquer exceção futura nunca mais travar a janela silenciosamente.
+- **Validado desta vez com o parser WPF real** (`[Windows.Markup.XamlReader]::Parse`, disponível neste ambiente Windows): as duas janelas parseiam sem erro, todos os controles nomeados resolvem via `FindName`, `Set-GuiAppearance` funciona nos dois temas, round-trip de preferências grava certo.
+
 ## [2.2.1] - 2026-08-14
 
 ### Corrigido (achado testando a GUI ao vivo)

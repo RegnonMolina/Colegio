@@ -300,8 +300,44 @@ $script:GuiXaml = @'
 $script:PrefsXaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Personalizar" Height="330" Width="380" WindowStartupLocation="CenterOwner"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        Title="Personalizar" Height="360" Width="380" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" Background="{DynamicResource Bg}">
+  <Window.Resources>
+    <!-- Autocontido: valores-padrao proprios (sobrescritos pelo tema do Owner logo apos o
+         parse). Necessario porque StaticResource (usado nos Styles abaixo) e resolvido NA
+         HORA DO PARSE, dentro do PROPRIO documento XAML: ele nao enxerga os recursos da
+         janela principal. Sem isso, XamlReader.Parse lancava excecao ao achar os Styles dos
+         botoes, e uma excecao nao tratada dentro de um Add_Click do WPF trava o Dispatcher
+         (era a causa do "travou o app" ao clicar em Personalizar). -->
+    <SolidColorBrush x:Key="Bg"        Color="#0f1419"/>
+    <SolidColorBrush x:Key="Panel"     Color="#161b22"/>
+    <SolidColorBrush x:Key="PanelDark" Color="#0d1117"/>
+    <SolidColorBrush x:Key="Ink"       Color="#e6edf3"/>
+    <SolidColorBrush x:Key="Muted"     Color="#8b949e"/>
+    <SolidColorBrush x:Key="Border"    Color="#30363d"/>
+    <SolidColorBrush x:Key="Accent"    Color="#0f5c56"/>
+    <SolidColorBrush x:Key="Danger"    Color="#f85149"/>
+    <SolidColorBrush x:Key="Func"      Color="#58a6ff"/>
+    <sys:Double x:Key="FSBody">13</sys:Double>
+    <sys:Double x:Key="FSLog">12</sys:Double>
+    <Style x:Key="AccentButton" TargetType="Button">
+      <Setter Property="Background" Value="{DynamicResource Accent}"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="14,8"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style x:Key="GhostButton" TargetType="Button">
+      <Setter Property="Background" Value="{DynamicResource Panel}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+  </Window.Resources>
   <StackPanel Margin="18">
     <TextBlock Text="Tema" Foreground="{DynamicResource Ink}" FontWeight="SemiBold"/>
     <ComboBox x:Name="CboTema" Margin="0,4,0,12">
@@ -366,6 +402,17 @@ function New-GuiWorkerRunspace {
 }
 
 # ----------------------------------------------------------------------------
+# Mostra um erro de forma segura (log + MessageBox) em vez de deixar uma excecao
+# nao tratada escapar de dentro de um evento WPF (Add_Click/Add_Tick), o que trava
+# o Dispatcher da UI em vez de so falhar visivelmente.
+# ----------------------------------------------------------------------------
+function Show-GuiHandlerError {
+    param($Contexto, $ErroObj)
+    try { Write-Log "ERRO na GUI ($Contexto): $($ErroObj.Exception.Message)" -Type Error } catch { }
+    try { [System.Windows.MessageBox]::Show("Ocorreu um erro em '$Contexto':`n`n$($ErroObj.Exception.Message)", 'Erro', 'OK', 'Error') | Out-Null } catch { }
+}
+
+# ----------------------------------------------------------------------------
 # Janela de preferencias (modal). Retorna $true se salvou.
 # ----------------------------------------------------------------------------
 function Show-GuiPreferences {
@@ -392,15 +439,19 @@ function Show-GuiPreferences {
 
     $result = @{ Salvou = $false }
     $btnOk.Add_Click({
-        $Prefs.Tema = if ($cboTema.SelectedIndex -eq 1) { 'Claro' } else { 'Escuro' }
-        $Prefs.Fonte = switch ($cboFonte.SelectedIndex) { 0 {12} 2 {16} default {14} }
-        $Prefs.ConfirmarDestrutivas = [bool]$chkConfirmar.IsChecked
-        $Prefs.AutoScrollLog        = [bool]$chkAutoScroll.IsChecked
-        $Prefs.OcultarDestrutivas   = [bool]$chkOcultarDestr.IsChecked
-        $result.Salvou = $true
-        $win.Close()
+        try {
+            $Prefs.Tema = if ($cboTema.SelectedIndex -eq 1) { 'Claro' } else { 'Escuro' }
+            $Prefs.Fonte = switch ($cboFonte.SelectedIndex) { 0 {12} 2 {16} default {14} }
+            $Prefs.ConfirmarDestrutivas = [bool]$chkConfirmar.IsChecked
+            $Prefs.AutoScrollLog        = [bool]$chkAutoScroll.IsChecked
+            $Prefs.OcultarDestrutivas   = [bool]$chkOcultarDestr.IsChecked
+            $result.Salvou = $true
+            $win.Close()
+        } catch { Show-GuiHandlerError -Contexto 'Salvar preferencias' -ErroObj $_ }
     }.GetNewClosure())
-    $btnCancelar.Add_Click({ $win.Close() }.GetNewClosure())
+    $btnCancelar.Add_Click({
+        try { $win.Close() } catch { Show-GuiHandlerError -Contexto 'Cancelar preferencias' -ErroObj $_ }
+    }.GetNewClosure())
 
     [void]$win.ShowDialog()
     return $result.Salvou
@@ -455,22 +506,24 @@ function Invoke-MaintenanceGuiWindow {
 
     # Filtro/renderizacao da lista de acoes (ja alfabetica)
     $Refiltrar = {
-        $termo = ('' + $txtBusca.Text).Trim().ToLower()
-        $cat = '' + $lstCat.SelectedItem
-        $lstAcoes.Items.Clear()
-        foreach ($a in $catalogo) {
-            if ($cat -ne 'Todas' -and $a.Cat -ne $cat) { continue }
-            if ($st.Prefs.OcultarDestrutivas -and $a.Destr) { continue }
-            if ($termo -and -not (
-                    ($a.Titulo.ToLower().Contains($termo)) -or
-                    ($a.Desc.ToLower().Contains($termo)) -or
-                    ($a.Func.ToLower().Contains($termo)) -or
-                    ($a.Cat.ToLower().Contains($termo)))) { continue }
-            $cor = if ($a.Destr) { '#f85149' } else { $st.InkHex }
-            $marca = if ($a.Destr) { [char]0x26A0 } else { [char]0x2022 }
-            [void]$lstAcoes.Items.Add([pscustomobject]@{ Titulo=$a.Titulo; Marca=$marca; Cor=$cor; Acao=$a })
-        }
-        $txtStatus.Text = "$($lstAcoes.Items.Count) acao(oes) listada(s)."
+        try {
+            $termo = ('' + $txtBusca.Text).Trim().ToLower()
+            $cat = '' + $lstCat.SelectedItem
+            $lstAcoes.Items.Clear()
+            foreach ($a in $catalogo) {
+                if ($cat -ne 'Todas' -and $a.Cat -ne $cat) { continue }
+                if ($st.Prefs.OcultarDestrutivas -and $a.Destr) { continue }
+                if ($termo -and -not (
+                        ($a.Titulo.ToLower().Contains($termo)) -or
+                        ($a.Desc.ToLower().Contains($termo)) -or
+                        ($a.Func.ToLower().Contains($termo)) -or
+                        ($a.Cat.ToLower().Contains($termo)))) { continue }
+                $cor = if ($a.Destr) { '#f85149' } else { $st.InkHex }
+                $marca = if ($a.Destr) { [char]0x26A0 } else { [char]0x2022 }
+                [void]$lstAcoes.Items.Add([pscustomobject]@{ Titulo=$a.Titulo; Marca=$marca; Cor=$cor; Acao=$a })
+            }
+            $txtStatus.Text = "$($lstAcoes.Items.Count) acao(oes) listada(s)."
+        } catch { Show-GuiHandlerError -Contexto 'Filtrar acoes' -ErroObj $_ }
     }
 
     $txtBusca.Add_TextChanged($Refiltrar)
@@ -543,6 +596,7 @@ function Invoke-MaintenanceGuiWindow {
     }
 
     $lstAcoes.Add_SelectionChanged({
+      try {
         $sel = $lstAcoes.SelectedItem
         if (-not $sel) { $btnExec.IsEnabled = $false; return }
         $a = $sel.Acao
@@ -561,6 +615,7 @@ function Invoke-MaintenanceGuiWindow {
             'Deixe em branco, a menos que saiba os parâmetros aceitos por esta função.'
         }
         $btnExec.IsEnabled = $true
+      } catch { Show-GuiHandlerError -Contexto 'Selecionar acao' -ErroObj $_ }
     })
 
     # Timer: tail do log + fim da execucao
@@ -599,17 +654,20 @@ function Invoke-MaintenanceGuiWindow {
 
     # Personalizar
     $btnPers.Add_Click({
-        if (Show-GuiPreferences -Owner $window -Prefs $st.Prefs) {
-            Save-GuiPrefs -Prefs $st.Prefs
-            $novoTema = Set-GuiAppearance -Window $window -Prefs $st.Prefs
-            $st.InkHex = $novoTema.Ink
-            & $Refiltrar   # recolore os itens da lista conforme o tema
-            $txtStatus.Text = 'Preferencias aplicadas.'
-        }
+        try {
+            if (Show-GuiPreferences -Owner $window -Prefs $st.Prefs) {
+                Save-GuiPrefs -Prefs $st.Prefs
+                $novoTema = Set-GuiAppearance -Window $window -Prefs $st.Prefs
+                $st.InkHex = $novoTema.Ink
+                & $Refiltrar   # recolore os itens da lista conforme o tema
+                $txtStatus.Text = 'Preferencias aplicadas.'
+            }
+        } catch { Show-GuiHandlerError -Contexto 'Abrir Personalizar' -ErroObj $_ }
     })
 
     # Executar
     $btnExec.Add_Click({
+      try {
         $a = $st.Selecao
         if (-not $a) { return }
         if ($st.Handle) { return }
@@ -656,6 +714,7 @@ function Invoke-MaintenanceGuiWindow {
         $txtStatus.Text = "Executando $($a.Titulo)$modo..."
         $txtLog.AppendText("`n>>> $($a.Titulo) -> $($a.Func)$modo$extraTxt`n")
         if ($st.Prefs.AutoScrollLog) { $txtLog.ScrollToEnd() }
+      } catch { Show-GuiHandlerError -Contexto 'Executar acao' -ErroObj $_ }
     })
 
     $window.Add_Closed({
