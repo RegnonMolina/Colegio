@@ -61,7 +61,8 @@ jobs:
           $path = (Resolve-Path $env:TARGET).Path
           # Rede de seguranca: cmdlets so-5.1 (removidos do PS7) e de modulos opcionais.
           $allow = @('Get-WindowsUpdate','Set-MpPreference','Get-MpPreference',
-                     'Checkpoint-Computer','Enable-ComputerRestore','Get-ComputerRestorePoint','Get-WmiObject')
+                     'Checkpoint-Computer','Enable-ComputerRestore','Get-ComputerRestorePoint','Get-WmiObject',
+                     'Show-MaintenanceGui')  # definida no companheiro Gui.ps1 (dot-sourced em runtime por Show-Gui)
           $tokens = $null; $errors = $null
           $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
           if ($errors.Count -gt 0) { Write-Error "Erro de sintaxe em $env:TARGET"; exit 1 }
