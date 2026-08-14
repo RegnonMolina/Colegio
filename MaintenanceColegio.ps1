@@ -90,7 +90,7 @@ $global:DebugPreference = 'SilentlyContinue'
 
 # Configurações do script
 $ScriptConfig = @{
-    Version = "2.2.2"
+    Version = "2.3.0"
     LogFilePath = "C:\ScriptsLogs\$env:COMPUTERNAME-ScriptLog.log"
     ConfirmBeforeDestructive = $true
     Cleanup = @{
@@ -697,6 +697,226 @@ function Clear-EmptyFilesAndFolders {
         }
 
         Write-Log "Limpeza de vazios concluída. Arquivos de 0 byte removidos: $filesRemoved | Pastas vazias removidas: $foldersRemoved" -Type Success
+        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    }
+}
+
+function Remove-DuplicateFiles {
+    <#
+    .SYNOPSIS
+        Encontra e remove arquivos duplicados em pastas e subpastas.
+    .DESCRIPTION
+        Detecta duplicatas por duas formas complementares (pedido: "tentar todas
+        as formas possíveis"):
+          1) HASH (SHA256) — conteúdo IDÊNTICO. Sempre confiável. Só compara
+             arquivos do MESMO TAMANHO primeiro (otimização — tamanhos
+             diferentes nunca podem ter o mesmo conteúdo), só calculando hash
+             dentro de cada grupo de mesmo tamanho.
+          2) NOME SEMELHANTE — padrões clássicos de duplicata do Windows/
+             navegador ("arquivo (1).ext", "arquivo - Cópia.ext", "arquivo -
+             Copy.ext", "arquivo_copy.ext"...), exigindo também o MESMO
+             TAMANHO. Como o conteúdo pode ser ligeiramente diferente (não
+             bate o hash), esse grupo entra só no RELATÓRIO por padrão — use
+             -IncluirCandidatosPorNome pra também remover esses, por sua conta
+             e risco, depois de revisar o relatório.
+        Em cada grupo, mantém SEMPRE 1 cópia (a mais antiga por padrão;
+        -Manter MaisNovo inverte) e remove as demais — nunca remove todas as
+        cópias de um grupo. Protege nomes de sistema (desktop.ini, Thumbs.db,
+        .gitkeep...) e ignora arquivos abaixo de -TamanhoMinimoKB (0 byte já é
+        coberto por Clear-EmptyFilesAndFolders, que tem semântica própria).
+        Suporta -WhatIf/-Confirm; ConfirmImpact=High pede confirmação por
+        padrão antes de remover (mesmo padrão de Restore-SystemDefaults).
+    .PARAMETER Path
+        Pastas-raiz onde procurar (recursivo, inclui subpastas). Padrão:
+        Downloads, Documentos, Área de Trabalho, Imagens, Vídeos e Música do
+        usuário atual (as que existirem no sistema).
+    .PARAMETER Metodo
+        'Hash' (só conteúdo idêntico), 'NomeSimilar' (só padrão de nome,
+        sempre só-relatório) ou 'Ambos' (padrão — roda os dois).
+    .PARAMETER Manter
+        Qual cópia manter em cada grupo de duplicatas: 'MaisAntigo' (padrão,
+        por CreationTime) ou 'MaisNovo'.
+    .PARAMETER TamanhoMinimoKB
+        Ignora arquivos menores que isso (padrão 1 KB) — reduz ruído de
+        arquivos triviais.
+    .PARAMETER TamanhoMaximoMB
+        Ignora arquivos maiores que isso para o CÁLCULO DE HASH (padrão
+        500 MB) — arquivos gigantes deixam o hash lento. Ainda podem aparecer
+        no método por nome.
+    .PARAMETER IncluirCandidatosPorNome
+        Sem isso (padrão), o grupo "Nome Semelhante" é SÓ relatório — nunca
+        remove nada desse grupo. Com isso, esses arquivos também entram na
+        remoção. Use com cautela: o conteúdo desses arquivos PODE ser
+        diferente (só o nome/tamanho bateram, não o hash).
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param(
+        [string[]]$Path = @(
+            (Join-Path $env:USERPROFILE 'Downloads'),
+            [Environment]::GetFolderPath('MyDocuments'),
+            (Join-Path $env:USERPROFILE 'Desktop'),
+            [Environment]::GetFolderPath('MyPictures'),
+            [Environment]::GetFolderPath('MyVideos'),
+            [Environment]::GetFolderPath('MyMusic')
+        ),
+        [ValidateSet('Hash', 'NomeSimilar', 'Ambos')]
+        [string]$Metodo = 'Ambos',
+        [ValidateSet('MaisAntigo', 'MaisNovo')]
+        [string]$Manter = 'MaisAntigo',
+        [int]$TamanhoMinimoKB = 1,
+        [int]$TamanhoMaximoMB = 500,
+        [switch]$IncluirCandidatosPorNome
+    )
+
+    Write-Log "Iniciando busca por arquivos duplicados..." -Type Info
+    $activity = "Busca de Arquivos Duplicados"
+    $protectedNames = @('desktop.ini', 'thumbs.db', '.gitkeep', '.keep', '.placeholder', 'ntuser.dat', 'iconcache.db')
+
+    $pastasValidas = @($Path | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique)
+    if ($pastasValidas.Count -eq 0) {
+        Write-Log "Nenhuma das pastas informadas existe. Nada a fazer." -Type Warning
+        return
+    }
+    Write-Log "Pastas incluídas na busca (com subpastas): $($pastasValidas -join '; ')" -Type Info
+
+    try {
+        # --- ETAPA 1: coletar arquivos elegíveis ---
+        Grant-WriteProgress -Activity $activity -Status "Enumerando arquivos..." -PercentComplete 5
+        $minBytes = $TamanhoMinimoKB * 1KB
+        $maxBytesHash = $TamanhoMaximoMB * 1MB
+        $todos = New-Object System.Collections.Generic.List[System.IO.FileInfo]
+        foreach ($raiz in $pastasValidas) {
+            Get-ChildItem -LiteralPath $raiz -Recurse -File -Force -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Length -ge $minBytes -and
+                    -not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and
+                    ($protectedNames -notcontains $_.Name.ToLower())
+                } | ForEach-Object { $todos.Add($_) }
+        }
+        Write-Log "Arquivos elegíveis analisados: $($todos.Count)" -Type Info
+        if ($todos.Count -lt 2) {
+            Write-Log "Menos de 2 arquivos elegíveis — nada a comparar." -Type Info
+            Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+            return
+        }
+
+        $gruposRemover = @()
+        $gruposRevisar = @()
+        $jaTratados = New-Object 'System.Collections.Generic.HashSet[string]'
+
+        # --- ETAPA 2: duplicatas por HASH (conteúdo idêntico) ---
+        if ($Metodo -eq 'Hash' -or $Metodo -eq 'Ambos') {
+            Grant-WriteProgress -Activity $activity -Status "Agrupando por tamanho..." -PercentComplete 15
+            $porTamanho = @($todos | Group-Object Length | Where-Object { $_.Count -gt 1 })
+            $totalGruposTam = [math]::Max(1, $porTamanho.Count)
+            $i = 0
+            foreach ($grupoTamanho in $porTamanho) {
+                $i++
+                if (($i % 15) -eq 0 -or $i -eq $porTamanho.Count) {
+                    $pct = 15 + [math]::Min(55, [math]::Round(($i / $totalGruposTam) * 55))
+                    Grant-WriteProgress -Activity $activity -Status "Calculando hash ($i/$($porTamanho.Count) grupos por tamanho)..." -PercentComplete $pct
+                }
+                $candidatos = @($grupoTamanho.Group | Where-Object { $_.Length -le $maxBytesHash })
+                if ($candidatos.Count -lt 2) { continue }
+
+                $comHash = @()
+                foreach ($f in $candidatos) {
+                    try {
+                        $h = Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256 -ErrorAction Stop
+                        $comHash += [pscustomobject]@{ Arquivo = $f; Hash = $h.Hash }
+                    } catch {
+                        Write-Log "AVISO: não foi possível calcular hash de '$($f.FullName)': $($_.Exception.Message)" -Type Warning
+                    }
+                }
+                $porHash = @($comHash | Group-Object Hash | Where-Object { $_.Count -gt 1 })
+                foreach ($gh in $porHash) {
+                    $arquivosGrupo = @($gh.Group.Arquivo | Sort-Object CreationTime)
+                    if ($Manter -eq 'MaisNovo') { [array]::Reverse($arquivosGrupo) }
+                    $manterArq = $arquivosGrupo[0]
+                    $removerArq = @($arquivosGrupo[1..($arquivosGrupo.Count - 1)])
+                    foreach ($r in $removerArq) { [void]$jaTratados.Add($r.FullName) }
+                    $gruposRemover += , @{ Motivo = 'Conteúdo idêntico (hash SHA256)'; Manter = $manterArq; Remover = $removerArq }
+                }
+            }
+        }
+
+        # --- ETAPA 3: candidatos por NOME semelhante (mesmo tamanho, conteúdo pode diferir) ---
+        if ($Metodo -eq 'NomeSimilar' -or $Metodo -eq 'Ambos') {
+            Grant-WriteProgress -Activity $activity -Status "Procurando padrões de nome duplicado..." -PercentComplete 75
+            $padraoDuplicata = '(?i)^(?<base>.+?)\s*(\((?:c[oó]pia|copy)?\s*\d+\)|-\s*(?:c[oó]pia|copy)(?:\s*\(\d+\))?|_(?:copia|copy)\d*)$'
+            $restantes = @($todos | Where-Object { -not $jaTratados.Contains($_.FullName) })
+            $normalizados = foreach ($f in $restantes) {
+                $nomeSemExt = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
+                $m = [regex]::Match($nomeSemExt, $padraoDuplicata)
+                $baseNome = if ($m.Success) { $m.Groups['base'].Value.Trim() } else { $nomeSemExt }
+                [pscustomobject]@{ Arquivo = $f; Chave = ($baseNome.ToLower() + $f.Extension.ToLower()) }
+            }
+            $porChave = @($normalizados | Group-Object Chave | Where-Object { $_.Count -gt 1 })
+            foreach ($gc in $porChave) {
+                $porTam2 = @($gc.Group.Arquivo | Group-Object Length | Where-Object { $_.Count -gt 1 })
+                foreach ($gt in $porTam2) {
+                    $arquivosGrupo = @($gt.Group | Sort-Object CreationTime)
+                    if ($Manter -eq 'MaisNovo') { [array]::Reverse($arquivosGrupo) }
+                    $manterArq = $arquivosGrupo[0]
+                    $removerArq = @($arquivosGrupo[1..($arquivosGrupo.Count - 1)])
+                    $item = @{ Motivo = 'Nome/tamanho parecido (conteúdo pode diferir — revisar)'; Manter = $manterArq; Remover = $removerArq }
+                    if ($IncluirCandidatosPorNome) { $gruposRemover += , $item } else { $gruposRevisar += , $item }
+                }
+            }
+        }
+
+        Grant-WriteProgress -Activity $activity -Status "Gerando relatório..." -PercentComplete 92
+
+        # --- Relatório (sempre gerado, mesmo em -WhatIf/Simular) ---
+        $totalRemover = 0
+        $espacoBytes = 0
+        foreach ($g in $gruposRemover) { $totalRemover += $g.Remover.Count; foreach ($r in $g.Remover) { $espacoBytes += $r.Length } }
+        $espacoMB = [math]::Round($espacoBytes / 1MB, 1)
+
+        Write-Log "=== Relatório de duplicatas ===" -Type Info
+        Write-Log "Grupos com remoção habilitada: $($gruposRemover.Count) | arquivos a remover: $totalRemover | espaço a liberar: $espacoMB MB" -Type Info
+        if ($gruposRevisar.Count -gt 0) {
+            Write-Log "Grupos SÓ-RELATÓRIO (nome/tamanho parecido, NÃO removidos): $($gruposRevisar.Count) — revise e use -IncluirCandidatosPorNome se quiser removê-los também." -Type Warning
+        }
+        foreach ($g in $gruposRemover) {
+            Write-Log "[REMOVER] $($g.Motivo) — mantém: $($g.Manter.FullName)" -Type Debug
+            foreach ($r in $g.Remover) { Write-Log ("          remove: {0} ({1} KB)" -f $r.FullName, [math]::Round($r.Length / 1KB, 1)) -Type Debug }
+        }
+        foreach ($g in $gruposRevisar) {
+            Write-Log "[REVISAR] $($g.Motivo) — mantém: $($g.Manter.FullName)" -Type Debug
+            foreach ($r in $g.Remover) { Write-Log ("          candidato: {0} ({1} KB)" -f $r.FullName, [math]::Round($r.Length / 1KB, 1)) -Type Debug }
+        }
+
+        if ($gruposRemover.Count -eq 0) {
+            Write-Log "Nenhuma duplicata elegível para remoção encontrada." -Type Success
+            Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+            return
+        }
+
+        if ($PSCmdlet.ShouldProcess("$totalRemover arquivo(s) duplicado(s) ($espacoMB MB)", "remover")) {
+            $removidos = 0
+            $liberadosBytes = 0
+            foreach ($g in $gruposRemover) {
+                foreach ($r in $g.Remover) {
+                    try {
+                        if (-not $WhatIf) {
+                            Remove-Item -LiteralPath $r.FullName -Force -ErrorAction Stop
+                            $removidos++
+                            $liberadosBytes += $r.Length
+                        } else {
+                            Write-Log "Modo WhatIf: '$($r.FullName)' seria removido." -Type Debug
+                        }
+                    } catch {
+                        Write-Log "AVISO: falha ao remover '$($r.FullName)': $($_.Exception.Message)" -Type Warning
+                    }
+                }
+            }
+            Write-Log "Duplicatas removidas: $removidos | espaço liberado: $([math]::Round($liberadosBytes / 1MB, 1)) MB" -Type Success
+        }
+    } catch {
+        Write-Log "ERRO GERAL na busca de duplicatas: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+    } finally {
         Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
     }
 }
@@ -5167,6 +5387,7 @@ function Show-CleanupMenu {
         Write-Host " K) Agendar ChkDsk no Reboot"
         Write-Host " L) Remover Pasta Windows.old"
         Write-Host " M) Limpar Arquivos e Pastas Vazias (Temp)"
+        Write-Host " N) Remover Arquivos Duplicados (Downloads/Documentos/etc.)"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -5186,6 +5407,7 @@ function Show-CleanupMenu {
             'K' { New-ChkDsk; Show-SuccessMessage }
             'L' { Remove-WindowsOld; Show-SuccessMessage }            # NOVO: função órfã, agora acessível
             'M' { Clear-EmptyFilesAndFolders; Show-SuccessMessage }   # NOVO: deleta arquivos 0 byte e pastas vazias (só em %TEMP%/Windows\Temp)
+            'N' { Remove-DuplicateFiles; Show-SuccessMessage }        # NOVO: fora da Rotina Completa (Z) de propósito — requer revisão humana
             'Z' { Invoke-Cleanup; Show-SuccessMessage } # Chama o orquestrador de Limpeza
             'X' { return }
             default {

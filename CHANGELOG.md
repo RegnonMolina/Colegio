@@ -2,6 +2,23 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [2.3.0] - 2026-08-14
+
+### Adicionado
+- **`Remove-DuplicateFiles`** — nova função de limpeza: procura arquivos duplicados em pastas e subpastas por **duas formas complementares**:
+  - **Hash (SHA256)** — conteúdo idêntico, sempre confiável. Só calcula hash dentro de grupos do mesmo tamanho (otimização).
+  - **Nome semelhante** — padrões clássicos do Windows/navegador (`arquivo (1).ext`, `arquivo - Cópia.ext`, `arquivo - Copy.ext`, `arquivo_copy.ext`...), exigindo também o mesmo tamanho. Como o conteúdo pode diferir (hash não bate), esse grupo fica **só no relatório por padrão** — não remove nada sozinho; `-IncluirCandidatosPorNome` habilita a remoção também desse grupo.
+  - Mantém **sempre 1 cópia** por grupo (a mais antiga por padrão, `-Manter MaisNovo` inverte) — nunca remove todas as cópias.
+  - Protege nomes de sistema (`desktop.ini`, `Thumbs.db`, `.gitkeep`...) e ignora arquivos abaixo de `-TamanhoMinimoKB` (padrão 1 KB).
+  - Pastas padrão: Downloads, Documentos, Área de Trabalho, Imagens, Vídeos, Música do usuário.
+  - Suporta `-WhatIf`/`-Confirm`; `ConfirmImpact=High` pede confirmação por padrão (mesmo padrão de `Restore-SystemDefaults`).
+  - **Deliberadamente fora da Rotina Completa de Limpeza (`Z`)** — requer revisão humana antes de rodar, não é acionada automaticamente por nenhuma rotina desatendida.
+  - Menu: `⚙️ Limpeza e Otimização → N`. GUI: categoria Limpeza, com parâmetros estruturados (pastas, método, qual manter, tamanho mínimo, incluir candidatos por nome).
+  - **Testado ao vivo** contra arquivos reais (não só sintaxe): grupos de hash reduzidos a 1 cópia, candidatos por nome preservados por padrão, arquivos protegidos e únicos intocados, `-WhatIf` não apaga nada, `-IncluirCandidatosPorNome` remove o grupo de revisão quando pedido.
+
+### Corrigido
+- **GUI: "Simular (WhatIf)" vazava para as próximas execuções** — o runspace de fundo é reaproveitado entre cliques; `$WhatIfPreference` só era setado quando o checkbox estava marcado, nunca resetado no `else`, então uma ação rodada com Simular deixava TODAS as ações seguintes em modo simulação (mesmo sem marcar) até fechar a janela. Corrigido: agora sempre define `$global:WhatIf`/`$WhatIfPreference` nas duas direções a cada execução.
+
 ## [2.2.2] - 2026-08-14
 
 ### Corrigido (bug real: "cliquei em Personalizar, travou o app")

@@ -74,6 +74,13 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpar WinSxS (Componentes)';        Func='Clear-WinSxS';                Desc='Limpeza de componentes do WinSxS via DISM (StartComponentCleanup).'; Destr=$true }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpeza Profunda do Sistema';        Func='Clear-DeepSystemCleanup';     Desc='Rotina de limpeza profunda (cleanmgr /sagerun + caches diversos).'; Destr=$true }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Otimizar Volumes (Desfrag/ReTrim)';  Func='Optimize-Volumes';            Desc='Desfragmenta (HDD) ou faz ReTrim (SSD) dos volumes.'; Destr=$false }
+        [pscustomobject]@{ Cat='Limpeza'; Titulo='Remover Arquivos Duplicados';        Func='Remove-DuplicateFiles';       Desc='Procura duplicatas em Downloads/Documentos/Área de Trabalho/Imagens/Vídeos/Música (com subpastas), por conteúdo idêntico (hash) e por padrão de nome ("arquivo (1).ext", "arquivo - Cópia.ext"...). Mantém sempre 1 cópia por grupo. Duplicatas só por nome (conteúdo diferente) ficam só no relatório por padrão.'; Destr=$true; Params=@(
+                                            @{ Nome='Path';    Rotulo='Pastas-raiz (vazio = Downloads/Documentos/Área de Trabalho/Imagens/Vídeos/Música)'; Tipo='paths'; Default=''; Exemplo='Ex.: D:\Fotos;E:\Backup (separe varias pastas por ;)' }
+                                            @{ Nome='Metodo';  Rotulo='Método de detecção'; Tipo='choice'; Default='Ambos'; Opcoes=@('Ambos','Hash','NomeSimilar') }
+                                            @{ Nome='Manter';  Rotulo='Qual cópia manter em cada grupo'; Tipo='choice'; Default='MaisAntigo'; Opcoes=@('MaisAntigo','MaisNovo') }
+                                            @{ Nome='TamanhoMinimoKB'; Rotulo='Ignorar arquivos menores que (KB)'; Tipo='text'; Default='1' }
+                                            @{ Nome='IncluirCandidatosPorNome'; Rotulo='Remover também os candidatos por nome (conteúdo pode diferir — cautela!)'; Tipo='switch'; Default=$false }
+                                          ) }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Remover Pasta Windows.old';          Func='Remove-WindowsOld';           Desc='Remove a pasta Windows.old (versao anterior do Windows). Libera bastante espaco.'; Destr=$true }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Rotina Completa de Limpeza';         Func='Invoke-Cleanup';              Desc='Executa todas as tarefas de limpeza em sequencia.'; Destr=$true }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Verificacao DISM';                   Func='Invoke-DISM-Scan';            Desc='DISM /RestoreHealth — repara a imagem de componentes do Windows.'; Destr=$false }
@@ -698,7 +705,12 @@ function Invoke-MaintenanceGuiWindow {
 
         $script = {
             param($FuncName, $Simular, $Splat, $Extra)
-            if ($Simular) { $global:WhatIf = $true; $WhatIfPreference = $true } else { $global:WhatIf = $false }
+            # CORREÇÃO: sempre define os dois (nas duas direções) -- o runspace de fundo é
+            # reaproveitado entre cliques, então só setar quando $Simular=true "vazava" pro
+            # próximo clique sem Simular marcado (ficava preso em modo simulação até fechar
+            # a janela e abrir de novo).
+            $global:WhatIf = [bool]$Simular
+            $WhatIfPreference = [bool]$Simular
             try { & $FuncName @Splat @Extra }
             catch { Write-Log "ERRO na GUI ao executar $FuncName : $($_.Exception.Message)" -Type Error }
         }
