@@ -366,7 +366,7 @@ $script:GuiXaml = @'
       <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                     Cursor="SizeWE" Style="{StaticResource Splitter}"/>
 
-      <!-- NOVO: coluna do meio virou um grid de 2 linhas -- a lista de acoes em cima e,
+      <!-- NOVO: coluna do meio virou um grid de 2 linhas: a lista de acoes em cima e,
            fixo embaixo dela, um resumo do que a acao selecionada faz (o usuario pediu pra
            ver "quais tarefas ela executa" sem precisar olhar o painel de Detalhe a direita). -->
       <Grid Grid.Column="2">
