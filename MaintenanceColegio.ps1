@@ -1154,6 +1154,262 @@ function Convert-IvmsCctvVideos {
     }
 }
 
+function Invoke-CamFix {
+    <#
+    .SYNOPSIS
+        Organiza fotos/vídeos/arquivos de uma pasta: renomeia por data EXIF
+        (rename), limpa espaços duplicados no nome (clean), remove pastas
+        vazias (emptyfolders) ou separa duplicatas por sufixo " 2"/" 3"
+        (dedupe-suffix).
+    .DESCRIPTION
+        Porta do script pessoal "Renomear_fotos_EXIF.ps1" do Regnon (alias
+        Camfix), adaptado pra rodar integrado ao menu/GUI deste script: usa
+        -WhatIf/-Confirm (SupportsShouldProcess) no lugar dos antigos
+        -Execute/-DryRun (mesmo comportamento — sem -WhatIf executa de
+        verdade, com -WhatIf só mostra o que faria) e Write-Log/
+        Grant-WriteProgress no lugar do módulo Tools.psm1 opcional (que só
+        existia na máquina pessoal dele — sem ele o script original já caía
+        num Write-Progress simples, que é o que esta versão sempre usa).
+
+        Subcomandos (-Command):
+          rename         Renomeia fotos/vídeos pra "<Pasta>_aa-mm-dd_NN.ext"
+                          usando a data EXIF (requer exiftool no PATH,
+                          https://exiftool.org). Sem data no EXIF, tenta achar
+                          AAAA-MM-DD no nome atual; sem nenhuma data, usa
+                          "<Pasta>_NN.ext". Por padrão só mexe em extensões de
+                          foto conhecidas — use -IncludeVideos ou -AllFiles
+                          pra abranger mais.
+          clean          Remove espaços duplicados/nas pontas do nome dos
+                          arquivos da pasta.
+          emptyfolders   Remove pastas vazias (sempre recursivo, independente
+                          de -Recurse).
+          dedupe-suffix  Localiza arquivos "nome 2.ext"/"nome 3.ext" que já
+                          têm um "nome.ext" original na mesma pasta e MOVE
+                          (não deleta) pra uma subpasta _DUPLICADOS_PADRAO,
+                          pra revisão.
+    .PARAMETER Command
+        Qual operação rodar: rename, clean, emptyfolders ou dedupe-suffix.
+    .PARAMETER Path
+        Pasta-raiz onde operar.
+    .PARAMETER Recurse
+        Inclui subpastas (não se aplica a emptyfolders, que já é sempre recursivo).
+    .PARAMETER IncludeVideos
+        (Só pra -Command rename) Além de fotos, também renomeia vídeos pela data EXIF.
+    .PARAMETER AllFiles
+        (Só pra -Command rename) Renomeia QUALQUER arquivo pela data EXIF/nome, não só fotos/vídeos conhecidos.
+    .EXAMPLE
+        Invoke-CamFix -Command rename -Path 'D:\Fotos\Viagem' -Recurse
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('rename', 'clean', 'emptyfolders', 'dedupe-suffix')]
+        [string]$Command,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [switch]$Recurse,
+        [switch]$IncludeVideos,
+        [switch]$AllFiles
+    )
+
+    # --- Helpers locais (escopo só desta função) ---
+    function Get-UniqueNameInFolder {
+        param([string]$Directory, [string]$BaseName, [string]$Extension)
+        $candidate = $BaseName + $Extension
+        $targetPath = Join-Path $Directory $candidate
+        if (-not (Test-Path -LiteralPath $targetPath)) { return $candidate }
+        $i = 2
+        do {
+            $candidate = "{0}_{1:D2}{2}" -f $BaseName, $i, $Extension
+            $targetPath = Join-Path $Directory $candidate
+            $i++
+        } while (Test-Path -LiteralPath $targetPath)
+        return $candidate
+    }
+    function Get-CamFixFiles {
+        param([string]$Root, [switch]$Recurse)
+        if ($Recurse) { Get-ChildItem -LiteralPath $Root -File -Recurse | Sort-Object FullName }
+        else { Get-ChildItem -LiteralPath $Root -File | Sort-Object Name }
+    }
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        Write-Log "Pasta não encontrada: $Path" -Type Error
+        return
+    }
+
+    $activity = "CamFix ($Command)"
+
+    try {
+        switch ($Command) {
+            'rename' {
+                if (-not (Get-Command exiftool -ErrorAction SilentlyContinue)) {
+                    Write-Log "exiftool não encontrado no PATH. Instale em https://exiftool.org e adicione ao PATH do sistema." -Type Error
+                    return
+                }
+                $folderName = Split-Path $Path -Leaf
+                $files = Get-CamFixFiles -Root $Path -Recurse:$Recurse
+                $photoExt = @('jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'tif', 'tiff', 'bmp')
+                $videoExt = @('mp4', 'mov', 'm4v', 'avi', '3gp', '3gpp', 'mkv', 'wmv')
+                $counterByDay = @{}
+                $noDateCounter = 0
+                $total = $files.Count
+                $i = 0
+                $renomeados = 0
+                foreach ($f in $files) {
+                    $i++
+                    if ($i % 25 -eq 0 -or $i -eq $total) {
+                        Grant-WriteProgress -Activity $activity -Status "$i/$total - $($f.Name)" -PercentComplete ([math]::Round(($i / [math]::Max(1, $total)) * 100))
+                    }
+                    $ext = $f.Extension.TrimStart('.').ToLowerInvariant()
+                    if (-not $AllFiles) {
+                        $isPhoto = $photoExt -contains $ext
+                        $isVideo = $videoExt -contains $ext
+                        if (-not $isPhoto -and -not ($IncludeVideos -and $isVideo)) { continue }
+                    }
+                    $dt = $null
+                    try {
+                        $exif = exiftool -DateTimeOriginal -s -s -s "$($f.FullName)" 2>$null
+                        if ($exif) { $dt = [datetime]::ParseExact($exif, 'yyyy:MM:dd HH:mm:ss', $null) }
+                    } catch { $dt = $null }
+                    if (-not $dt) {
+                        $m = [regex]::Match($f.BaseName, '(?<Y>\d{4})-(?<M>\d{2})-(?<D>\d{2})')
+                        if ($m.Success) {
+                            $dt = Get-Date -Year ([int]$m.Groups['Y'].Value) -Month ([int]$m.Groups['M'].Value) -Day ([int]$m.Groups['D'].Value) -Hour 12 -Minute 0 -Second 0
+                        }
+                    }
+                    if ($dt) {
+                        $datePart = $dt.ToString('yy-MM-dd')
+                        if (-not $counterByDay.ContainsKey($datePart)) { $counterByDay[$datePart] = 1 } else { $counterByDay[$datePart]++ }
+                        $seq = $counterByDay[$datePart].ToString('D2')
+                        $baseFinal = "{0}_{1}_{2}" -f $folderName, $datePart, $seq
+                    } else {
+                        $noDateCounter++
+                        $baseFinal = "{0}_{1}" -f $folderName, $noDateCounter.ToString('D2')
+                    }
+                    $newName = Get-UniqueNameInFolder -Directory $f.DirectoryName -BaseName $baseFinal -Extension $f.Extension
+                    if ($newName -eq $f.Name) { continue }
+                    if ($PSCmdlet.ShouldProcess($f.FullName, "renomear para '$newName'")) {
+                        if (-not $WhatIf) {
+                            try {
+                                Rename-Item -LiteralPath $f.FullName -NewName $newName -ErrorAction Stop
+                                $renomeados++
+                                Write-Log "Renomeado: '$($f.Name)' -> '$newName'" -Type Success
+                            } catch {
+                                Write-Log "ERRO ao renomear '$($f.Name)': $($_.Exception.Message)" -Type Error
+                            }
+                        } else {
+                            Write-Log "Modo WhatIf: '$($f.Name)' seria renomeado para '$newName'." -Type Debug
+                        }
+                    }
+                }
+                Write-Log "CamFix rename concluído: $renomeados arquivo(s) renomeado(s) de $total analisado(s)." -Type Success
+            }
+            'clean' {
+                $files = Get-CamFixFiles -Root $Path -Recurse:$Recurse
+                $total = $files.Count
+                $i = 0
+                $renomeados = 0
+                foreach ($f in $files) {
+                    $i++
+                    if ($i % 50 -eq 0 -or $i -eq $total) {
+                        Grant-WriteProgress -Activity $activity -Status "$i/$total - $($f.Name)" -PercentComplete ([math]::Round(($i / [math]::Max(1, $total)) * 100))
+                    }
+                    $newBase = ($f.BaseName -replace '\s+', ' ').Trim()
+                    $newName = $newBase + $f.Extension.ToLower()
+                    if ($newName -eq $f.Name) { continue }
+                    if ($PSCmdlet.ShouldProcess($f.FullName, "renomear para '$newName'")) {
+                        if (-not $WhatIf) {
+                            try {
+                                Rename-Item -LiteralPath $f.FullName -NewName $newName -ErrorAction Stop
+                                $renomeados++
+                                Write-Log "Renomeado: '$($f.Name)' -> '$newName'" -Type Success
+                            } catch {
+                                Write-Log "ERRO ao renomear '$($f.Name)': $($_.Exception.Message)" -Type Error
+                            }
+                        } else {
+                            Write-Log "Modo WhatIf: '$($f.Name)' seria renomeado para '$newName'." -Type Debug
+                        }
+                    }
+                }
+                Write-Log "CamFix clean concluído: $renomeados arquivo(s) renomeado(s) de $total analisado(s)." -Type Success
+            }
+            'emptyfolders' {
+                $dirs = Get-ChildItem -LiteralPath $Path -Directory -Recurse | Sort-Object FullName -Descending
+                $total = $dirs.Count
+                $i = 0
+                $removidas = 0
+                foreach ($d in $dirs) {
+                    $i++
+                    if ($i % 50 -eq 0 -or $i -eq $total) {
+                        Grant-WriteProgress -Activity $activity -Status "$i/$total - $($d.Name)" -PercentComplete ([math]::Round(($i / [math]::Max(1, $total)) * 100))
+                    }
+                    $items = Get-ChildItem -LiteralPath $d.FullName -Force -ErrorAction SilentlyContinue
+                    if ($items.Count -ne 0) { continue }
+                    if ($PSCmdlet.ShouldProcess($d.FullName, "remover pasta vazia")) {
+                        if (-not $WhatIf) {
+                            try {
+                                Remove-Item -LiteralPath $d.FullName -Force -ErrorAction Stop
+                                $removidas++
+                                Write-Log "Pasta vazia removida: '$($d.FullName)'" -Type Success
+                            } catch {
+                                Write-Log "ERRO ao remover '$($d.FullName)': $($_.Exception.Message)" -Type Error
+                            }
+                        } else {
+                            Write-Log "Modo WhatIf: pasta vazia '$($d.FullName)' seria removida." -Type Debug
+                        }
+                    }
+                }
+                Write-Log "CamFix emptyfolders concluído: $removidas pasta(s) vazia(s) removida(s)." -Type Success
+            }
+            'dedupe-suffix' {
+                $dupDir = Join-Path $Path '_DUPLICADOS_PADRAO'
+                $files = Get-CamFixFiles -Root $Path -Recurse:$Recurse | Where-Object { $_.FullName -notlike "$dupDir\*" }
+                $total = $files.Count
+                $i = 0
+                $movidos = 0
+                foreach ($f in $files) {
+                    $i++
+                    if ($i % 50 -eq 0 -or $i -eq $total) {
+                        Grant-WriteProgress -Activity $activity -Status "$i/$total - $($f.Name)" -PercentComplete ([math]::Round(($i / [math]::Max(1, $total)) * 100))
+                    }
+                    $m = [regex]::Match($f.BaseName, '^(?<base>.+?)\s(?<n>\d+)$')
+                    if (-not $m.Success) { continue }
+                    $orig = Join-Path $f.DirectoryName ($m.Groups['base'].Value + $f.Extension)
+                    if (-not (Test-Path -LiteralPath $orig)) { continue }
+                    if ($PSCmdlet.ShouldProcess($f.FullName, "mover para '$dupDir' (duplicata de '$(Split-Path $orig -Leaf)')")) {
+                        if (-not $WhatIf) {
+                            try {
+                                if (-not (Test-Path -LiteralPath $dupDir)) { New-Item -ItemType Directory -Path $dupDir -Force -ErrorAction Stop | Out-Null }
+                                $target = Join-Path $dupDir $f.Name
+                                $k = 1
+                                while (Test-Path -LiteralPath $target) {
+                                    $target = Join-Path $dupDir ("{0}__dup{1}{2}" -f $f.BaseName, $k, $f.Extension)
+                                    $k++
+                                }
+                                Move-Item -LiteralPath $f.FullName -Destination $target -ErrorAction Stop
+                                $movidos++
+                                Write-Log "Duplicata movida: '$($f.Name)' -> '$dupDir'" -Type Success
+                            } catch {
+                                Write-Log "ERRO ao mover '$($f.Name)': $($_.Exception.Message)" -Type Error
+                            }
+                        } else {
+                            Write-Log "Modo WhatIf: '$($f.Name)' seria movido para '$dupDir' (duplicata de '$(Split-Path $orig -Leaf)')." -Type Debug
+                        }
+                    }
+                }
+                Write-Log "CamFix dedupe-suffix concluído: $movidos arquivo(s) movido(s) de $total analisado(s)." -Type Success
+            }
+        }
+    } catch {
+        Write-Log "ERRO GERAL no CamFix ($Command): $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+    } finally {
+        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    }
+}
+
 function Clear-WUCache {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
@@ -2614,6 +2870,723 @@ function Update-PowerShell {
         } finally {
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
         }
+    }
+}
+
+function Install-PowerShellProfile {
+    <#
+    .SYNOPSIS
+        Instala/atualiza o perfil PowerShell de produtividade (logs, limpeza,
+        rede, PSReadLine/oh-my-posh/Terminal-Icons/zoxide/PSFzf) no notebook
+        onde este script está rodando.
+    .DESCRIPTION
+        Grava uma cópia "limpa" do perfil pessoal do Regnon
+        (Microsoft.PowerShell_profile.ps1) em $PROFILE.CurrentUserCurrentHost
+        desta máquina. "Limpa" porque tira 3 itens que só existem no
+        computador pessoal dele e não fariam sentido/não funcionariam em
+        outro notebook: a função Projetos (abre um script do Google Drive
+        pessoal), a função Megasync/mega (idem, aponta pra outro script
+        pessoal — e ainda estava duplicada 2x no arquivo original) e o
+        alias Camfix (que virou a função Invoke-CamFix deste mesmo script,
+        na categoria Ferramentas — não precisa mais do alias). O resto é
+        idêntico ao perfil original: funções de log/limpeza/rede, aliases,
+        e o bloco de "power-ups" (PSReadLine, Terminal-Icons, zoxide, PSFzf,
+        oh-my-posh — cada um só ativa se a ferramenta já estiver instalada
+        na máquina, então não quebra nada se faltar alguma).
+
+        Se já existir um profile no destino, faz backup automático em
+        C:\ScriptsLogs\PerfilPowerShell_Backup_<data>\ antes de sobrescrever
+        (a menos que -SemBackup). Cria a pasta do profile se não existir.
+        Suporta -WhatIf/-Confirm. Depois de instalado, é preciso abrir um
+        novo terminal (ou rodar ". $PROFILE") pra carregar.
+    .PARAMETER SemBackup
+        Desativa o backup automático do profile existente antes de sobrescrever.
+    .EXAMPLE
+        Install-PowerShellProfile
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param(
+        [switch]$SemBackup
+    )
+
+    $conteudoProfile = @'
+###############################################
+#          ⚡ PERFIL POWERHELL UNIFICADO 100%  #
+#          Código completo, funções e aliases #
+###############################################
+# Reorganizado em 2026-08-03. Nenhuma lógica foi removida, renomeada ou alterada
+# nesta reorganização — apenas reordenação em seções, categorização e comentários.
+# Itens problemáticos encontrados (duplicatas, aliases quebrados, stubs vazios)
+# foram sinalizados com "⚠️" e preservados como estavam. Ver PROFILE_INDEX.md.
+# Backup do arquivo original: Microsoft.PowerShell_profile.BACKUP-20260803.ps1
+
+# ============================================================================
+# [CONFIGURAÇÃO INICIAL]
+# ============================================================================
+
+$Global:ProfileSilentLoad = $true
+
+if (-not (Get-Variable -Name WhatIf -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:WhatIf = $false
+}
+
+$Global:CustomAliases = @()
+$Global:CustomFunctions = [ordered]@{}
+
+$Global:LogPath = Join-Path $env:LOCALAPPDATA "PowerShell-Logs"
+if (-not (Test-Path $Global:LogPath)) {
+    New-Item -ItemType Directory -Path $Global:LogPath -Force | Out-Null
+}
+$Global:LogFile = Join-Path $Global:LogPath "activity-log.txt"
+
+# ⚠️ Register-CustomAlias existe mas não é usada por nenhum alias do profile —
+# todos os aliases abaixo são criados com Set-Alias direto, então $Global:CustomAliases
+# nunca é populada (o que deixa Show-ProfileHelp / Show-AliasHelp sempre "vazios").
+function Register-CustomAlias {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Command
+    )
+    try {
+        Set-Alias -Name $Name -Value $Command -ErrorAction Stop
+        $Global:CustomAliases += @{ Name = $Name; Command = $Command }
+    }
+    catch {
+        Write-Warning "[Alias] Falhou ao criar '$Name' → '$Command' : $($_.Exception.Message)"
+    }
+}
+
+# ============================================================================
+# [FUNÇÕES DE PRODUTIVIDADE]
+# ============================================================================
+
+# --- Log, Progresso e Tratamento de Erros (ordem alfabética) ---
+
+function Confirm-User {
+    param([Parameter(Mandatory=$true)][string]$Question)
+    $answer = Read-Host "$Question (s/n)"
+    return ($answer -eq "s" -or $answer -eq "S")
+}
+
+function Grant-WriteProgress {
+    param(
+        [Parameter(Mandatory=$true)][string]$Activity,
+        [Parameter(Mandatory=$true)][string]$Status,
+        [Parameter(Mandatory=$true)][int]$PercentComplete
+    )
+    try {
+        Write-Progress -Activity $Activity -Status $Status -PercentComplete $PercentComplete
+    } catch {
+        Write-Log "Erro ao exibir Write-Progress: $($_.Exception.Message)" -Type Error
+    }
+}
+
+function Protect-Action {
+    param([Parameter(Mandatory=$true)][ScriptBlock]$Action, [string]$Description = "Ação Desconhecida")
+    try {
+        & $Action
+        Write-Log "$Description executada com sucesso." -Type Success
+    } catch {
+        $err = Update-SystemErrorMessage $_.Exception.Message
+        Write-Log "Erro em ${Description}: $err" -Type Error
+    }
+}
+
+function Require-Admin {
+    if (-not (Test-IsAdmin)) {
+        Write-Log "Este comando exige privilégios de Administrador. Abortando." -Type Error
+        throw "Permissão insuficiente."
+    }
+}
+
+function Test-IsAdmin {
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal   = New-Object Security.Principal.WindowsPrincipal($currentUser)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+}
+
+function Update-SystemErrorMessage {
+    param(
+        [Parameter(Mandatory=$true)][string]$Message
+    )
+    if ($Message -match "Access is denied") {
+        return "Acesso negado — Execute como Administrador."
+    }
+    elseif ($Message -match "The process cannot access the file") {
+        return "O arquivo está em uso — feche programas que possam estar bloqueando."
+    }
+    elseif ($Message -match "not recognized as the name of a cmdlet") {
+        return "Comando não encontrado — módulo ausente ou não carregado."
+    }
+    else { return $Message }
+}
+
+function Write-Log {
+    param(
+        [Parameter(Mandatory)][string]$Message,
+        [ValidateSet("Info","Warning","Error","Success","Debug")]
+        [string]$Type = "Info"
+    )
+    if ($Global:ProfileSilentLoad) { return }
+    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    Write-Host "[$timestamp] [$Type] $Message"
+}
+
+# --- Limpeza e Otimização do Sistema (ordem alfabética) ---
+
+function Clear-DeepSystemCleanup {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Limpando arquivos de logs do sistema..." -Type Info
+    $paths = @(
+        "$env:SystemRoot\Logs\CBS\*.log",
+        "$env:SystemRoot\Logs\DISM\*.log",
+        "$env:SystemRoot\Minidump\*.dmp",
+        "$env:SystemRoot\Memory.dmp"
+    )
+    foreach ($path in $paths) {
+        if (Test-Path $path) {
+            if (-not $WhatIf) {
+                Remove-Item $path -Force -Recurse -ErrorAction SilentlyContinue
+            } else {
+                Write-Log "Modo WhatIf: $path seria limpo." -Type Debug
+            }
+        }
+    }
+    Write-Log "Limpeza profunda concluída." -Type Success
+}
+
+function Clear-Prefetch {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Limpando Prefetch..." -Type Info
+    if (Test-Path "$env:SystemRoot\Prefetch") {
+        if (-not $WhatIf) {
+            Remove-Item "$env:SystemRoot\Prefetch\*" -Force -Recurse -ErrorAction SilentlyContinue
+        } else {
+            Write-Log "Modo WhatIf: Prefetch seria limpo." -Type Debug
+        }
+    }
+    Write-Log "Prefetch limpo." -Type Success
+}
+
+function Clear-PrintSpooler {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Limpando spooler de impressão..." -Type Info
+    if (-not $WhatIf) {
+        Stop-Service -Name Spooler -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:SystemRoot\System32\spool\PRINTERS\*" -Force -Recurse -ErrorAction SilentlyContinue
+        Start-Service -Name Spooler -ErrorAction SilentlyContinue
+    } else {
+        Write-Log "Modo WhatIf: Spooler seria limpo." -Type Debug
+    }
+    Write-Log "Spooler limpo." -Type Success
+}
+
+function Clear-TemporaryFiles {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param()
+    Write-Log "Iniciando limpeza de arquivos temporários..." -Type Info
+    $tempPaths = @("$env:TEMP\*", "$env:SystemRoot\Temp\*")
+    foreach ($path in $tempPaths) {
+        if (Test-Path $path) {
+            if (-not $WhatIf) {
+                Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+            } else {
+                Write-Log "Modo WhatIf: Itens em $path seriam removidos." -Type Debug
+            }
+        }
+    }
+    Write-Log "Limpeza de arquivos temporários concluída." -Type Success
+}
+
+function Clear-WUCache {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param()
+    Write-Log "Iniciando limpeza de cache do Windows Update..." -Type Info
+    if (-not $WhatIf) {
+        Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Start-Service wuauserv -ErrorAction SilentlyContinue
+    } else {
+        Write-Log "Modo WhatIf: Cache do Windows Update seria limpo." -Type Debug
+    }
+    Write-Log "Cache do Windows Update limpo." -Type Success
+}
+
+function Clear-WinSxS {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Executando limpeza de componentes (WinSxS)..." -Type Info
+    if (-not $WhatIf) {
+        Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase | Out-Null
+    } else {
+        Write-Log "Modo WhatIf: DISM seria executado para limpar WinSxS." -Type Debug
+    }
+    Write-Log "WinSxS limpo." -Type Success
+}
+
+function Grant-Cleanup {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Executando todas as rotinas de limpeza..." -Type Info
+    Clear-ARP -WhatIf:$WhatIf
+    Clear-DNS -WhatIf:$WhatIf
+    Clear-Prefetch -WhatIf:$WhatIf
+    Clear-PrintSpooler -WhatIf:$WhatIf
+    Clear-TemporaryFiles -WhatIf:$WhatIf
+    Clear-WUCache -WhatIf:$WhatIf
+    Clear-WinSxS -WhatIf:$WhatIf
+    Clear-DeepSystemCleanup -WhatIf:$WhatIf
+    Remove-WindowsOld -WhatIf:$WhatIf
+    New-ChkDsk -WhatIf:$WhatIf
+    Optimize-Volumes -WhatIf:$WhatIf
+    Write-Log "Limpeza completa finalizada." -Type Success
+}
+
+function New-ChkDsk {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Agendando chkdsk no próximo boot..." -Type Info
+    if (-not $WhatIf) {
+        chkdsk $env:SystemDrive /f /r /x
+    } else {
+        Write-Log "Modo WhatIf: chkdsk seria agendado." -Type Debug
+    }
+}
+
+function Optimize-Volumes {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param()
+    Write-Log "Iniciando otimização dos volumes..." -Type Info
+    $volumes = Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter }
+    foreach ($vol in $volumes) {
+        if (-not $WhatIf) {
+            Optimize-Volume -DriveLetter $vol.DriveLetter -Defrag -ErrorAction SilentlyContinue
+        } else {
+            Write-Log "Modo WhatIf: Volume $($vol.DriveLetter): seria otimizado." -Type Debug
+        }
+    }
+    Write-Log "Otimização de volumes concluída." -Type Success
+}
+
+function Remove-WindowsOld {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    $path = "$env:SystemDrive\Windows.old"
+    if (Test-Path $path) {
+        Write-Log "Removendo $path ..." -Type Info
+        if (-not $WhatIf) {
+            Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+        } else {
+            Write-Log "Modo WhatIf: Windows.old seria removido." -Type Debug
+        }
+    } else {
+        Write-Log "Windows.old não encontrado." -Type Info
+    }
+}
+
+# --- Rede (ordem alfabética) ---
+
+function Clear-ARP {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Limpando cache ARP..." -Type Info
+    if (-not $WhatIf) {
+        netsh interface ip delete arpcache | Out-Null
+    } else {
+        Write-Log "Modo WhatIf: Cache ARP seria limpo." -Type Debug
+    }
+    Write-Log "Cache ARP limpo." -Type Success
+}
+
+function Clear-DNS {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Limpando cache DNS..." -Type Info
+    if (-not $WhatIf) {
+        ipconfig /flushdns | Out-Null
+    } else {
+        Write-Log "Modo WhatIf: Cache DNS seria limpo." -Type Debug
+    }
+    Write-Log "Cache DNS limpo." -Type Success
+}
+
+function Disable-IPv6 {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Desabilitando IPv6..." -Type Info
+    if (-not $WhatIf) {
+        Disable-NetAdapterBinding -Name "*" -ComponentID ms_tcpip6 -Confirm:$false -ErrorAction SilentlyContinue
+        Write-Log "IPv6 desabilitado." -Type Success
+    } else {
+        Write-Log "Modo WhatIf: IPv6 seria desabilitado." -Type Debug
+    }
+}
+
+# ⚠️ Nomes de interface fixos ("Ethernet"/"Wi-Fi") — falha silenciosamente se a interface
+# real tiver outro nome. Além disso, o DNS do Google só é aplicado na Ethernet e o da
+# Cloudflare só no Wi-Fi (não os dois em ambas), apesar do nome da função sugerir escolha única.
+function Set-DnsGoogleCloudflare {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Configurando DNS Google e Cloudflare..." -Type Info
+    if (-not $WhatIf) {
+        Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses ("8.8.8.8","8.8.4.4")
+        Set-DnsClientServerAddress -InterfaceAlias "Wi-Fi" -ServerAddresses ("1.1.1.1","1.0.0.1")
+        Write-Log "DNS configurado." -Type Success
+    } else {
+        Write-Log "Modo WhatIf: Configuração DNS seria aplicada." -Type Debug
+    }
+}
+
+# --- Utilidades Gerais (ordem alfabética) ---
+
+function flushdns {
+    Clear-DNS
+}
+
+function Get-Log {
+    Write-Log "Exibindo logs..." -Type Info
+    if (Test-Path $Global:LogFile) {
+        Get-Content $Global:LogFile -Tail 50
+    } else {
+        Write-Log "Arquivo de log não encontrado." -Type Warning
+    }
+}
+
+function Restart-Explorer {
+    Write-Log "Reiniciando Explorer..." -Type Info
+    Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+    Start-Process explorer.exe
+    Write-Log "Explorer reiniciado." -Type Success
+}
+
+function sysinfo {
+    Write-Log "Exibindo informações do sistema..." -Type Info
+    Get-ComputerInfo
+}
+
+# ============================================================================
+# [ALIASES]
+# ============================================================================
+# Lista única em ordem alfabética. Comentário à direita = categoria original / observações.
+
+Set-Alias ah           Show-AliasHelp                                                              # Helpers
+Set-Alias arpcache      Clear-ARP                                                                   # Rede
+Set-Alias chkdskfix     New-ChkDsk                                                                  # Limpeza
+Set-Alias clean         Clear-TemporaryFiles                                                        # Limpeza
+Set-Alias deepclean     Clear-DeepSystemCleanup                                                     # Limpeza
+Set-Alias dipv6         Disable-IPv6                                                                # Rede
+Set-Alias dnsfix        Clear-DNS                                                                   # Rede
+Set-Alias ep            Edit-Profile                                                                # Helpers
+Set-Alias flush         flushdns                                                                    # Utilidades
+Set-Alias google-dns    Set-DnsGoogleCloudflare                                                     # Rede
+Set-Alias pfclean       Clear-Prefetch                                                              # Limpeza
+Set-Alias ph            Show-ProfileHelp                                                            # Helpers
+Set-Alias rexplorer     Restart-Explorer                                                            # Utilidades
+Set-Alias rh            reload-profile                                                              # Helpers
+Set-Alias spoolfix      Clear-PrintSpooler                                                          # Limpeza
+Set-Alias sys           sysinfo                                                                     # Utilidades
+Set-Alias tempclean     Clear-TemporaryFiles                                                        # Limpeza
+Set-Alias volsopt       Optimize-Volumes                                                            # Limpeza
+Set-Alias winsxs        Clear-WinSxS                                                                # Limpeza
+Set-Alias wuclean       Clear-WUCache                                                               # Limpeza
+Set-Alias cleanup       Grant-Cleanup                                                               # Limpeza
+
+# ============================================================================
+# [HELPERS]
+# ============================================================================
+
+function Edit-Profile {
+    notepad $PROFILE
+}
+
+# --- Manifesto usado por Get-Profile-Help: nome -> {Categoria, Descrição} ---
+# Único lugar a atualizar ao adicionar/remover algo do profile. Tipo e Alvo são
+# descobertos automaticamente em tempo real (Get-Command / Get-Variable), então
+# nunca ficam desatualizados.
+$Global:ProfileCategoryMap = @{
+    # ConfiguracaoInicial
+    'ProfileSilentLoad'      = @{ Categoria = 'ConfiguracaoInicial'; Descricao = 'Controla se Write-Log imprime mensagens durante o carregamento do profile' }
+    'WhatIf'                 = @{ Categoria = 'ConfiguracaoInicial'; Descricao = 'Flag global: simula (WhatIf) as funções de limpeza/otimização sem executar de fato' }
+    'CustomAliases'          = @{ Categoria = 'ConfiguracaoInicial'; Descricao = '⚠️ Deveria rastrear aliases registrados via Register-CustomAlias, mas fica sempre vazio' }
+    'CustomFunctions'        = @{ Categoria = 'ConfiguracaoInicial'; Descricao = '⚠️ Reservado para rastrear funções customizadas, mas nunca é populado' }
+    'LogPath'                = @{ Categoria = 'ConfiguracaoInicial'; Descricao = 'Pasta onde o log de atividades do profile é gravado' }
+    'LogFile'                = @{ Categoria = 'ConfiguracaoInicial'; Descricao = 'Caminho completo do arquivo de log de atividades' }
+    'Register-CustomAlias'   = @{ Categoria = 'ConfiguracaoInicial'; Descricao = '⚠️ Não é chamada por nenhum alias do profile hoje; todos usam Set-Alias direto' }
+
+    # LogTratamento
+    'Confirm-User'             = @{ Categoria = 'LogTratamento'; Descricao = 'Pergunta s/n ao usuário e retorna booleano' }
+    'Grant-WriteProgress'      = @{ Categoria = 'LogTratamento'; Descricao = 'Wrapper de Write-Progress com tratamento de erro' }
+    'Protect-Action'           = @{ Categoria = 'LogTratamento'; Descricao = 'Executa um ScriptBlock dentro de try/catch com log automático' }
+    'Require-Admin'            = @{ Categoria = 'LogTratamento'; Descricao = 'Lança exceção se a sessão não estiver rodando como Administrador' }
+    'Test-IsAdmin'             = @{ Categoria = 'LogTratamento'; Descricao = 'Retorna $true se a sessão atual é Administrador' }
+    'Update-SystemErrorMessage'= @{ Categoria = 'LogTratamento'; Descricao = 'Traduz mensagens de erro comuns do Windows para português' }
+    'Write-Log'                = @{ Categoria = 'LogTratamento'; Descricao = 'Função central de log; respeita $Global:ProfileSilentLoad' }
+
+    # Limpeza
+    'Clear-DeepSystemCleanup' = @{ Categoria = 'Limpeza'; Descricao = 'Remove logs do CBS/DISM, minidumps e memory.dmp' }
+    'Clear-Prefetch'          = @{ Categoria = 'Limpeza'; Descricao = 'Limpa a pasta Prefetch do Windows' }
+    'Clear-PrintSpooler'      = @{ Categoria = 'Limpeza'; Descricao = 'Reinicia o serviço Spooler e limpa a fila de impressão' }
+    'Clear-TemporaryFiles'    = @{ Categoria = 'Limpeza'; Descricao = 'Limpa %TEMP% e o Temp do Windows' }
+    'Clear-WUCache'           = @{ Categoria = 'Limpeza'; Descricao = 'Limpa o cache de download do Windows Update' }
+    'Clear-WinSxS'            = @{ Categoria = 'Limpeza'; Descricao = 'Executa DISM /StartComponentCleanup /ResetBase' }
+    'Grant-Cleanup'           = @{ Categoria = 'Limpeza'; Descricao = 'Orquestra todas as rotinas de limpeza (rede + sistema) em sequência' }
+    'New-ChkDsk'              = @{ Categoria = 'Limpeza'; Descricao = 'Agenda chkdsk /f /r /x no próximo boot' }
+    'Optimize-Volumes'        = @{ Categoria = 'Limpeza'; Descricao = 'Executa Optimize-Volume -Defrag em todos os volumes fixos' }
+    'Remove-WindowsOld'       = @{ Categoria = 'Limpeza'; Descricao = 'Remove a pasta Windows.old, se existir' }
+
+    # Rede
+    'Clear-ARP'                    = @{ Categoria = 'Rede'; Descricao = 'Limpa o cache ARP (netsh interface ip delete arpcache)' }
+    'Clear-DNS'                    = @{ Categoria = 'Rede'; Descricao = 'Limpa o cache DNS (ipconfig /flushdns)' }
+    'Disable-IPv6'                 = @{ Categoria = 'Rede'; Descricao = 'Desabilita o binding IPv6 em todos os adaptadores' }
+    'Set-DnsGoogleCloudflare'      = @{ Categoria = 'Rede'; Descricao = '⚠️ Nomes de interface fixos (Ethernet/Wi-Fi); Google só na Ethernet, Cloudflare só no Wi-Fi' }
+
+    # Utilidades
+    'flushdns'          = @{ Categoria = 'Utilidades'; Descricao = 'Atalho que chama Clear-DNS' }
+    'Get-Log'            = @{ Categoria = 'Utilidades'; Descricao = 'Mostra as últimas 50 linhas do log de atividades' }
+    'Restart-Explorer'   = @{ Categoria = 'Utilidades'; Descricao = 'Mata e reinicia o processo explorer.exe' }
+    'sysinfo'            = @{ Categoria = 'Utilidades'; Descricao = 'Executa Get-ComputerInfo' }
+
+    # Helpers
+    'Edit-Profile'      = @{ Categoria = 'Helpers'; Descricao = 'Abre $PROFILE no notepad' }
+    'Get-Profile-Help'  = @{ Categoria = 'Helpers'; Descricao = 'Este comando: lista/filtra/busca tudo o que está definido no profile' }
+    'reload-profile'    = @{ Categoria = 'Helpers'; Descricao = 'Recarrega o $PROFILE na sessão atual (dot-source)' }
+    'Show-AliasHelp'    = @{ Categoria = 'Helpers'; Descricao = '⚠️ Mostra $Global:CustomAliases, que fica sempre vazio (ver Register-CustomAlias)' }
+    'Show-ProfileHelp'  = @{ Categoria = 'Helpers'; Descricao = '⚠️ Mostra $Global:CustomFunctions/$Global:CustomAliases, que ficam sempre vazios' }
+
+    # Aliases (alvo já documentado no comentário de cada Set-Alias, acima)
+    'ah'          = @{ Categoria = 'Helpers';    Descricao = 'Alias de Show-AliasHelp' }
+    'arpcache'    = @{ Categoria = 'Rede';       Descricao = 'Alias de Clear-ARP' }
+    'chkdskfix'   = @{ Categoria = 'Limpeza';    Descricao = 'Alias de New-ChkDsk' }
+    'clean'       = @{ Categoria = 'Limpeza';    Descricao = 'Alias de Clear-TemporaryFiles' }
+    'cleanup'     = @{ Categoria = 'Limpeza';    Descricao = 'Alias de Grant-Cleanup (roda todas as limpezas)' }
+    'deepclean'   = @{ Categoria = 'Limpeza';    Descricao = 'Alias de Clear-DeepSystemCleanup' }
+    'dipv6'       = @{ Categoria = 'Rede';       Descricao = 'Alias de Disable-IPv6' }
+    'dnsfix'      = @{ Categoria = 'Rede';       Descricao = 'Alias de Clear-DNS' }
+    'ep'          = @{ Categoria = 'Helpers';    Descricao = 'Alias de Edit-Profile' }
+    'flush'       = @{ Categoria = 'Utilidades'; Descricao = 'Alias de flushdns' }
+    'google-dns'  = @{ Categoria = 'Rede';       Descricao = 'Alias de Set-DnsGoogleCloudflare' }
+    'pfclean'     = @{ Categoria = 'Limpeza';    Descricao = 'Alias de Clear-Prefetch' }
+    'ph'          = @{ Categoria = 'Helpers';    Descricao = 'Alias de Show-ProfileHelp' }
+    'rexplorer'   = @{ Categoria = 'Utilidades'; Descricao = 'Alias de Restart-Explorer' }
+    'rh'          = @{ Categoria = 'Helpers';    Descricao = 'Alias de reload-profile' }
+    'spoolfix'    = @{ Categoria = 'Limpeza';    Descricao = 'Alias de Clear-PrintSpooler' }
+    'sys'         = @{ Categoria = 'Utilidades'; Descricao = 'Alias de sysinfo' }
+    'tempclean'   = @{ Categoria = 'Limpeza';    Descricao = 'Alias de Clear-TemporaryFiles' }
+    'volsopt'     = @{ Categoria = 'Limpeza';    Descricao = 'Alias de Optimize-Volumes' }
+    'winsxs'      = @{ Categoria = 'Limpeza';    Descricao = 'Alias de Clear-WinSxS' }
+    'wuclean'     = @{ Categoria = 'Limpeza';    Descricao = 'Alias de Clear-WUCache' }
+}
+
+<#
+.SYNOPSIS
+    Lista, filtra e pesquisa tudo que está definido neste profile (funções, aliases e variáveis globais).
+.PARAMETER Categoria
+    Filtra por domínio: ConfiguracaoInicial, LogTratamento, Limpeza, Rede, Utilidades,
+    Helpers — ou por tipo: Aliases, Funcoes, Variaveis.
+.PARAMETER Search
+    Filtra por texto (busca em Nome, Descrição e Alvo).
+.EXAMPLE
+    Get-Profile-Help -Categoria Aliases
+.EXAMPLE
+    Get-Profile-Help -Search "dns"
+#>
+function Get-Profile-Help {
+    param(
+        [string]$Categoria,
+        [string]$Search
+    )
+
+    $tiposEspeciais = @{ 'Aliases' = 'Alias'; 'Funcoes' = 'Função'; 'Variaveis' = 'Variável Global' }
+    $itens = New-Object System.Collections.Generic.List[object]
+
+    foreach ($nome in $Global:ProfileCategoryMap.Keys) {
+        $meta = $Global:ProfileCategoryMap[$nome]
+
+        $var = Get-Variable -Name $nome -Scope Global -ErrorAction SilentlyContinue
+        if ($var) {
+            $itens.Add([PSCustomObject]@{ Nome = $nome; Tipo = 'Variável Global'; Descricao = $meta.Descricao; Alvo = "`$Global:$nome"; Categoria = $meta.Categoria })
+        }
+
+        $fn = Get-Command -Name $nome -CommandType Function -ErrorAction SilentlyContinue
+        if ($fn) {
+            $itens.Add([PSCustomObject]@{ Nome = $nome; Tipo = 'Função'; Descricao = $meta.Descricao; Alvo = $nome; Categoria = $meta.Categoria })
+        }
+
+        $al = Get-Command -Name $nome -CommandType Alias -ErrorAction SilentlyContinue
+        if ($al) {
+            $itens.Add([PSCustomObject]@{ Nome = $nome; Tipo = 'Alias'; Descricao = $meta.Descricao; Alvo = $al.Definition; Categoria = $meta.Categoria })
+        }
+    }
+
+    if ($Categoria) {
+        if ($tiposEspeciais.ContainsKey($Categoria)) {
+            $tipoAlvo = $tiposEspeciais[$Categoria]
+            $itens = $itens | Where-Object { $_.Tipo -eq $tipoAlvo }
+        } else {
+            $itens = $itens | Where-Object { $_.Categoria -eq $Categoria }
+        }
+    }
+
+    if ($Search) {
+        $itens = $itens | Where-Object {
+            $_.Nome -like "*$Search*" -or $_.Descricao -like "*$Search*" -or $_.Alvo -like "*$Search*"
+        }
+    }
+
+    # Retorna objetos (não Format-Table) para continuar "pipeable" — ex.: Get-Profile-Help | Where-Object {...}
+    # A exibição em tabela acontece automaticamente pela formatação padrão do PowerShell.
+    $itens | Sort-Object Categoria, Nome | Select-Object Nome, Tipo, Descricao, Alvo, Categoria
+}
+
+function reload-profile {
+    Write-Host "Reloading profile..." -ForegroundColor Cyan
+    . $PROFILE
+    Write-Host "Profile recarregado!" -ForegroundColor Green
+}
+
+function Show-AliasHelp {
+    Write-Host "==== Aliases definidos nos módulos auxiliares ===="
+    if ($Global:CustomAliases.Count -eq 0) {
+        Write-Host "Nenhum alias encontrado nos módulos." -ForegroundColor Yellow
+        return
+    }
+    $aliasesGrouped = $Global:CustomAliases | Group-Object -Property Command | Sort-Object Name
+    foreach ($group in $aliasesGrouped) {
+        $sortedAliases = $group.Group | Sort-Object Name
+        foreach ($alias in $sortedAliases) {
+            Write-Host "$($alias.Name): $($group.Name)" -ForegroundColor Cyan
+        }
+    }
+    Write-Host "================================================="
+}
+
+function Show-ProfileHelp {
+    Write-Host "=========== Profile Help ============"
+    Write-Host "Funções carregadas:"
+    $Global:CustomFunctions.GetEnumerator() | ForEach-Object { Write-Host "  $_.Key" }
+    Write-Host "Aliases carregados:"
+    if ($Global:CustomAliases.Count -eq 0) {
+        Write-Host "  Nenhum alias encontrado." -ForegroundColor Yellow
+    }
+    else {
+        foreach ($alias in $Global:CustomAliases) {
+            Write-Host "  $($alias.Name) (comando: $($alias.Command))"
+        }
+    }
+    Write-Host "----------------------------------"
+}
+
+# ============================================================================
+# [FINALIZAÇÃO]
+# ============================================================================
+
+$Global:ProfileSilentLoad = $false
+Write-Host "Profile completo e unificado carregado com sucesso." -ForegroundColor Green
+
+# ============================================================================
+# [POWER-UPS]
+# Bloco AUTOCONTIDO: prompt (oh-my-posh), previsão de comandos (PSReadLine),
+# ícones (Terminal-Icons), navegação rápida (zoxide) e busca fuzzy (PSFzf).
+# Cada item só carrega se a ferramenta existir — se faltar algo, o profile
+# continua sem erro.
+# ============================================================================
+
+# --- PSReadLine: previsão inline baseada no histórico + navegação melhor ---
+if (Get-Module PSReadLine -ListAvailable) {
+    Import-Module PSReadLine -ErrorAction SilentlyContinue
+    try {
+        Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
+        Set-PSReadLineOption -PredictionViewStyle ListView
+    } catch {
+        # PSReadLine mais antigo: cai pra previsão só do histórico
+        try { Set-PSReadLineOption -PredictionSource History } catch {}
+    }
+    Set-PSReadLineOption -HistorySearchCursorMovesToEnd
+    Set-PSReadLineOption -MaximumHistoryCount 10000
+    # Setas ↑/↓ filtram o histórico pelo texto já digitado
+    Set-PSReadLineKeyHandler -Key UpArrow   -Function HistorySearchBackward
+    Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
+    # Tab abre menu de conclusão (em vez de ciclar um a um)
+    Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
+}
+
+# --- Terminal-Icons: ícones de arquivo/pasta no ls / Get-ChildItem ---
+if (Get-Module Terminal-Icons -ListAvailable) {
+    Import-Module Terminal-Icons -ErrorAction SilentlyContinue
+}
+
+# --- zoxide: 'z pedaço-do-nome' pula pra pasta; 'zi' abre seletor interativo ---
+if (Get-Command zoxide -ErrorAction SilentlyContinue) {
+    Invoke-Expression (& { (zoxide init powershell | Out-String) })
+}
+
+# --- PSFzf: Ctrl+R = busca fuzzy no histórico | Ctrl+T = busca arquivos ---
+if ((Get-Command fzf -ErrorAction SilentlyContinue) -and (Get-Module PSFzf -ListAvailable)) {
+    Import-Module PSFzf -ErrorAction SilentlyContinue
+    Set-PsFzfOption -PSReadlineChordProvider 'Ctrl+t' -PSReadlineChordReverseHistory 'Ctrl+r'
+}
+
+# --- oh-my-posh: prompt temático (exige a Nerd Font 'CaskaydiaCove NF') ---
+# Trocar de tema: veja todos com  Get-PoshThemes  e mude o nome abaixo.
+if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
+    $poshTheme = if ($env:POSH_THEMES_PATH) { Join-Path $env:POSH_THEMES_PATH 'powerlevel10k_rainbow.omp.json' } else { $null }
+    if ($poshTheme -and (Test-Path $poshTheme)) {
+        oh-my-posh init pwsh --config $poshTheme | Invoke-Expression
+    } else {
+        oh-my-posh init pwsh | Invoke-Expression   # tema padrão se o arquivo não existir
+    }
+}
+# ======================= FIM DOS POWER-UPS ==================================
+'@
+
+    $activity = "Instalação do Perfil PowerShell"
+
+    try {
+        $destino = $PROFILE.CurrentUserCurrentHost
+        Grant-WriteProgress -Activity $activity -Status "Preparando..." -PercentComplete 10
+        $pastaDestino = Split-Path -Parent $destino
+        if (-not (Test-Path -LiteralPath $pastaDestino)) {
+            if ($PSCmdlet.ShouldProcess($pastaDestino, "criar pasta do profile")) {
+                if (-not $WhatIf) { New-Item -ItemType Directory -Path $pastaDestino -Force -ErrorAction Stop | Out-Null }
+            }
+        }
+
+        if (Test-Path -LiteralPath $destino) {
+            if (-not $SemBackup) {
+                $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
+                $backupDir = "C:\ScriptsLogs\PerfilPowerShell_Backup_$ts"
+                if ($PSCmdlet.ShouldProcess($destino, "fazer backup antes de sobrescrever")) {
+                    if (-not $WhatIf) {
+                        New-Item -ItemType Directory -Path $backupDir -Force -ErrorAction SilentlyContinue | Out-Null
+                        Copy-Item -LiteralPath $destino -Destination (Join-Path $backupDir (Split-Path -Leaf $destino)) -Force -ErrorAction Stop
+                        Write-Log "Backup do profile existente salvo em '$backupDir'." -Type Info
+                    } else {
+                        Write-Log "Modo WhatIf: profile existente em '$destino' seria salvo em backup antes de sobrescrever." -Type Debug
+                    }
+                }
+            } else {
+                Write-Log "AVISO: -SemBackup ativo — profile existente em '$destino' será sobrescrito sem backup." -Type Warning
+            }
+        }
+
+        Grant-WriteProgress -Activity $activity -Status "Gravando profile em '$destino'..." -PercentComplete 60
+        if ($PSCmdlet.ShouldProcess($destino, "instalar/atualizar perfil PowerShell")) {
+            if (-not $WhatIf) {
+                Set-Content -LiteralPath $destino -Value $conteudoProfile -Encoding UTF8 -Force -ErrorAction Stop
+                Write-Log "Perfil PowerShell instalado em '$destino'. Abra um novo terminal (ou rode '. `$PROFILE') pra carregar." -Type Success
+            } else {
+                Write-Log "Modo WhatIf: perfil seria gravado em '$destino'." -Type Debug
+            }
+        }
+    } catch {
+        Write-Log "ERRO ao instalar o perfil PowerShell: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+    } finally {
+        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
     }
 }
 

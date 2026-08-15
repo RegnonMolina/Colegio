@@ -256,6 +256,9 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Instalação'; Titulo='Atualizar PowerShell';        Func='Update-PowerShell';        Desc='Instala/atualiza o PowerShell (aka.ms/install-powershell).'; Destr=$false }
         [pscustomobject]@{ Cat='Instalação'; Titulo='Atualizar Windows e Drivers';  Func='Update-WindowsAndDrivers'; Desc='Atualiza o Windows (PSWindowsUpdate) e drivers (winget).'; Destr=$false }
         [pscustomobject]@{ Cat='Instalação'; Titulo='Instalar Aplicativos';         Func='Install-Applications';     Desc='Escolha os aplicativos abaixo (winget; usa Apps.json se existir) e clique em Executar.'; Destr=$false; Params=$paramsInstalarApps }
+        [pscustomobject]@{ Cat='Instalação'; Titulo='Instalar Perfil PowerShell (produtividade)'; Func='Install-PowerShellProfile'; Desc='Instala uma copia "limpa" do perfil pessoal do Regnon neste notebook: funcoes de log/limpeza/rede, aliases, e PSReadLine/oh-my-posh/Terminal-Icons/zoxide/PSFzf (cada um so ativa se ja estiver instalado). Faz backup automatico do perfil existente antes de sobrescrever. Precisa abrir um terminal novo depois pra carregar.'; Destr=$true; Params=@(
+                                            @{ Nome='SemBackup'; Rotulo='Desativar o backup automatico do perfil existente antes de sobrescrever'; Tipo='switch'; Default=$false }
+                                          ) }
 
         # --- Avancado ---
         [pscustomobject]@{ Cat='Avançado'; Titulo='Configuracoes de GPO e Registro'; Func='Grant-GPORegistrySettings'; Desc='Aplica configuracoes de GPO via registro (Edge/Chrome/driver search...).'; Destr=$false }
@@ -273,6 +276,13 @@ function Get-GuiActionCatalog {
                                             @{ Nome='SourceFiles'; Rotulo='Video(s) de origem (.mp4 do iVMS-4200)'; Tipo='files'; Default=''; Exemplo='Clique no botao para escolher 1+ arquivos (pode clicar de novo pra somar mais).'; Arquivo=$true }
                                             @{ Nome='DestFolder'; Rotulo='Pasta de destino'; Tipo='text'; Default=''; Exemplo='Ex.: C:\Videos\Convertidos'; Pasta=$true }
                                             @{ Nome='SobrescreverExistente'; Rotulo='Sobrescrever se ja existir arquivo com o mesmo nome no destino'; Tipo='switch'; Default=$false }
+                                          ) }
+        [pscustomobject]@{ Cat='Ferramentas'; Titulo='Organizar Fotos/Videos (CamFix)'; Func='Invoke-CamFix'; Desc='Porta do script pessoal Camfix do Regnon. rename: renomeia fotos/videos pela data EXIF (requer exiftool no PATH). clean: remove espacos duplicados no nome dos arquivos. emptyfolders: remove pastas vazias (sempre recursivo). dedupe-suffix: move (nao apaga) arquivos "nome 2.ext" que ja tem um "nome.ext" original pra uma subpasta _DUPLICADOS_PADRAO, pra revisao.'; Destr=$true; Params=@(
+                                            @{ Nome='Command'; Rotulo='O que fazer'; Tipo='choice'; Default='rename'; Opcoes=@('rename','clean','emptyfolders','dedupe-suffix') }
+                                            @{ Nome='Path'; Rotulo='Pasta-raiz'; Tipo='text'; Default=''; Exemplo='Ex.: D:\Fotos\Viagem'; Pasta=$true }
+                                            @{ Nome='Recurse'; Rotulo='Incluir subpastas (emptyfolders ja e sempre recursivo)'; Tipo='switch'; Default=$false }
+                                            @{ Nome='IncludeVideos'; Rotulo='(so rename) Tambem renomear videos pela data EXIF'; Tipo='switch'; Default=$false }
+                                            @{ Nome='AllFiles'; Rotulo='(so rename) Renomear qualquer arquivo, nao so fotos/videos conhecidos'; Tipo='switch'; Default=$false }
                                           ) }
     )
 }
