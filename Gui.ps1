@@ -148,6 +148,18 @@ function Get-GuiAppIconPath {
 #   Param: @{ Nome; Rotulo; Tipo='text'|'paths'|'files'|'switch'|'choice'|'password'; Default; Opcoes; Pasta=$true; Arquivo=$true }
 # ----------------------------------------------------------------------------
 function Get-GuiActionCatalog {
+    # NOVO: gera um checkbox por app pra "Instalar Aplicativos" (mesma fonte que
+    # Install-Applications/Show-AppInstallPicker usam: Get-ScriptSupremoAppsList ->
+    # Apps.json ao lado do script, ou a lista embutida). Cada Param carrega o app
+    # inteiro em AppObj; MontarSplatExtra junta os marcados num unico -Apps em vez
+    # de mandar cada checkbox como parametro proprio pra Install-Applications.
+    $paramsInstalarApps = @()
+    try {
+        foreach ($appDisp in (Get-ScriptSupremoAppsList)) {
+            $paramsInstalarApps += @{ Nome = "App_$($appDisp.Id)"; Rotulo = "$($appDisp.Name)  ($($appDisp.Id))"; Tipo = 'switch'; Default = $true; AppObj = $appDisp }
+        }
+    } catch { $paramsInstalarApps = @() }
+
     @(
         # --- Limpeza e Otimizacao ---
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Agendar ChkDsk no Reboot';           Func='New-ChkDsk';                  Desc='Agenda verificacao de disco (chkdsk) na proxima reinicializacao.'; Destr=$false }
@@ -213,44 +225,44 @@ function Get-GuiActionCatalog {
                                           ) }
 
         # --- Personalizacao ---
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Ajustes de UI (Widgets/Barra)';   Func='Grant-UITweaks';              Desc='Aplica ajustes de UI conforme a config global (widgets, alinhamento, pesquisa).'; Destr=$false }
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Ativar Tema Escuro';              Func='Enable-DarkTheme';            Desc='Ativa o modo escuro do Windows.'; Destr=$false }
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Finalizar Tarefa na Barra';       Func='Enable-TaskbarEndTask';       Desc='Adiciona "Finalizar tarefa" no menu da barra de tarefas.'; Destr=$false }
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Habilitar Sudo';                  Func='Enable-Sudo';                 Desc='Ativa o sudo embutido (Windows 11 24H2+).'; Destr=$false }
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Historico da Area de Transferencia'; Func='Enable-ClipboardHistory';  Desc='Ativa o historico da area de transferencia (Win+V).'; Destr=$false }
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Menu de Contexto Classico';       Func='Enable-ClassicContextMenu';   Desc='Restaura o menu de contexto classico (Windows 11).'; Destr=$false }
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Restaurar Apps apos Reinicio';    Func='Enable-RestartAppsAfterReboot';Desc='Reabre apps apos reiniciar.'; Destr=$false }
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Segundos no Relogio';             Func='Enable-TaskbarSeconds';       Desc='Mostra os segundos no relogio da barra de tarefas.'; Destr=$false }
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Updates de Outros Produtos MS';   Func='Enable-OtherMicrosoftUpdates';Desc='Recebe updates de outros produtos Microsoft.'; Destr=$false }
-        [pscustomobject]@{ Cat='Personalizacao'; Titulo='Windows Update Antecipado';       Func='Enable-WindowsUpdateFast';    Desc='Ativa atualizacoes antecipadas do Windows Update.'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Ajustes de UI (Widgets/Barra)';   Func='Grant-UITweaks';              Desc='Aplica ajustes de UI conforme a config global (widgets, alinhamento, pesquisa).'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Ativar Tema Escuro';              Func='Enable-DarkTheme';            Desc='Ativa o modo escuro do Windows.'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Finalizar Tarefa na Barra';       Func='Enable-TaskbarEndTask';       Desc='Adiciona "Finalizar tarefa" no menu da barra de tarefas.'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Habilitar Sudo';                  Func='Enable-Sudo';                 Desc='Ativa o sudo embutido (Windows 11 24H2+).'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Historico da Area de Transferencia'; Func='Enable-ClipboardHistory';  Desc='Ativa o historico da area de transferencia (Win+V).'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Menu de Contexto Classico';       Func='Enable-ClassicContextMenu';   Desc='Restaura o menu de contexto classico (Windows 11).'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Restaurar Apps apos Reinicio';    Func='Enable-RestartAppsAfterReboot';Desc='Reabre apps apos reiniciar.'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Segundos no Relogio';             Func='Enable-TaskbarSeconds';       Desc='Mostra os segundos no relogio da barra de tarefas.'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Updates de Outros Produtos MS';   Func='Enable-OtherMicrosoftUpdates';Desc='Recebe updates de outros produtos Microsoft.'; Destr=$false }
+        [pscustomobject]@{ Cat='Personalização'; Titulo='Windows Update Antecipado';       Func='Enable-WindowsUpdateFast';    Desc='Ativa atualizacoes antecipadas do Windows Update.'; Destr=$false }
 
         # --- Diagnosticos ---
-        [pscustomobject]@{ Cat='Diagnosticos'; Titulo='Diagnosticos Avancados';   Func='Invoke-All-DiagnosticsAdvanced'; Desc='Executa todos os diagnosticos avancados.'; Destr=$false }
-        [pscustomobject]@{ Cat='Diagnosticos'; Titulo='Informacoes do Sistema';   Func='Show-SystemInfo';             Desc='Exibe informacoes gerais do sistema.'; Destr=$false }
-        [pscustomobject]@{ Cat='Diagnosticos'; Titulo='Testar Memoria';           Func='Test-Memory';                 Desc='Agenda/executa o diagnostico de memoria.'; Destr=$false }
-        [pscustomobject]@{ Cat='Diagnosticos'; Titulo='Uso de Disco';             Func='Show-DiskUsage';              Desc='Exibe o uso de disco por unidade.'; Destr=$false }
+        [pscustomobject]@{ Cat='Diagnósticos'; Titulo='Diagnosticos Avancados';   Func='Invoke-All-DiagnosticsAdvanced'; Desc='Executa todos os diagnosticos avancados.'; Destr=$false }
+        [pscustomobject]@{ Cat='Diagnósticos'; Titulo='Informacoes do Sistema';   Func='Show-SystemInfo';             Desc='Exibe informacoes gerais do sistema.'; Destr=$false }
+        [pscustomobject]@{ Cat='Diagnósticos'; Titulo='Testar Memoria';           Func='Test-Memory';                 Desc='Agenda/executa o diagnostico de memoria.'; Destr=$false }
+        [pscustomobject]@{ Cat='Diagnósticos'; Titulo='Uso de Disco';             Func='Show-DiskUsage';              Desc='Exibe o uso de disco por unidade.'; Destr=$false }
 
         # --- Restauracao ---
-        [pscustomobject]@{ Cat='Restauracao'; Titulo='Backup do Registro';              Func='Backup-Registry';        Desc='Faz backup do registro do Windows.'; Destr=$false }
-        [pscustomobject]@{ Cat='Restauracao'; Titulo='Desfazer Reforco de Privacidade'; Func='Undo-PrivacyHardening';  Desc='Desfaz os ajustes agressivos de privacidade.'; Destr=$false }
-        [pscustomobject]@{ Cat='Restauracao'; Titulo='Desfazer Tudo (Rotina)';          Func='Invoke-Undo';            Desc='Executa toda a rotina de restauracao/reversao.'; Destr=$true }
-        [pscustomobject]@{ Cat='Restauracao'; Titulo='Reinstalar OneDrive';             Func='Restore-OneDrive';       Desc='Reinstala o OneDrive.'; Destr=$false }
-        [pscustomobject]@{ Cat='Restauracao'; Titulo='Restaurar Registro';              Func='Restore-Registry';       Desc='Restaura o registro (HKLM\SOFTWARE, HKLM\SYSTEM, HKCU) a partir de uma pasta de backup gerada por "Backup do Registro".'; Destr=$true; Params=@(
+        [pscustomobject]@{ Cat='Restauração'; Titulo='Backup do Registro';              Func='Backup-Registry';        Desc='Faz backup do registro do Windows.'; Destr=$false }
+        [pscustomobject]@{ Cat='Restauração'; Titulo='Desfazer Reforco de Privacidade'; Func='Undo-PrivacyHardening';  Desc='Desfaz os ajustes agressivos de privacidade.'; Destr=$false }
+        [pscustomobject]@{ Cat='Restauração'; Titulo='Desfazer Tudo (Rotina)';          Func='Invoke-Undo';            Desc='Executa toda a rotina de restauracao/reversao.'; Destr=$true }
+        [pscustomobject]@{ Cat='Restauração'; Titulo='Reinstalar OneDrive';             Func='Restore-OneDrive';       Desc='Reinstala o OneDrive.'; Destr=$false }
+        [pscustomobject]@{ Cat='Restauração'; Titulo='Restaurar Registro';              Func='Restore-Registry';       Desc='Restaura o registro (HKLM\SOFTWARE, HKLM\SYSTEM, HKCU) a partir de uma pasta de backup gerada por "Backup do Registro".'; Destr=$true; Params=@(
                                             @{ Nome='BkpPath'; Rotulo='Pasta do backup do registro'; Tipo='text'; Default=''; Exemplo='Ex.: C:\Users\SeuUsuario\Documents\reg_backup_20260814_140000'; Pasta=$true }
                                           ) }
-        [pscustomobject]@{ Cat='Restauracao'; Titulo='Restaurar TODOS os Padroes';      Func='Restore-SystemDefaults'; Desc='Reverte os tweaks aplicados, voltando o sistema ao padrao.'; Destr=$true }
+        [pscustomobject]@{ Cat='Restauração'; Titulo='Restaurar TODOS os Padroes';      Func='Restore-SystemDefaults'; Desc='Reverte os tweaks aplicados, voltando o sistema ao padrao.'; Destr=$true }
 
         # --- Instalacao e Ferramentas ---
-        [pscustomobject]@{ Cat='Instalacao'; Titulo='Atualizar PowerShell';        Func='Update-PowerShell';        Desc='Instala/atualiza o PowerShell (aka.ms/install-powershell).'; Destr=$false }
-        [pscustomobject]@{ Cat='Instalacao'; Titulo='Atualizar Windows e Drivers';  Func='Update-WindowsAndDrivers'; Desc='Atualiza o Windows (PSWindowsUpdate) e drivers (winget).'; Destr=$false }
-        [pscustomobject]@{ Cat='Instalacao'; Titulo='Instalar Aplicativos';         Func='Install-Applications';     Desc='Instala os aplicativos definidos (winget; usa Apps.json se existir).'; Destr=$false }
+        [pscustomobject]@{ Cat='Instalação'; Titulo='Atualizar PowerShell';        Func='Update-PowerShell';        Desc='Instala/atualiza o PowerShell (aka.ms/install-powershell).'; Destr=$false }
+        [pscustomobject]@{ Cat='Instalação'; Titulo='Atualizar Windows e Drivers';  Func='Update-WindowsAndDrivers'; Desc='Atualiza o Windows (PSWindowsUpdate) e drivers (winget).'; Destr=$false }
+        [pscustomobject]@{ Cat='Instalação'; Titulo='Instalar Aplicativos';         Func='Install-Applications';     Desc='Escolha os aplicativos abaixo (winget; usa Apps.json se existir) e clique em Executar.'; Destr=$false; Params=$paramsInstalarApps }
 
         # --- Avancado ---
-        [pscustomobject]@{ Cat='Avancado'; Titulo='Configuracoes de GPO e Registro'; Func='Grant-GPORegistrySettings'; Desc='Aplica configuracoes de GPO via registro (Edge/Chrome/driver search...).'; Destr=$false }
-        [pscustomobject]@{ Cat='Avancado'; Titulo='Desativar UAC';                   Func='Disable-UAC';               Desc='Desativa o Controle de Conta de Usuario (UAC).'; Destr=$false }
-        [pscustomobject]@{ Cat='Avancado'; Titulo='Tweaks de Painel de Controle';    Func='Grant-ControlPanelTweaks';  Desc='Aplica ajustes de Painel de Controle/Explorer.'; Destr=$false }
-        [pscustomobject]@{ Cat='Avancado'; Titulo='Tweaks de Privacidade';           Func='Grant-PrivacyTweaks';       Desc='Aplica os tweaks de privacidade no registro.'; Destr=$false }
-        [pscustomobject]@{ Cat='Avancado'; Titulo='Tweaks Extras';                   Func='Grant-ExtraTweaks';         Desc='Aplica tweaks extras de otimizacao/seguranca.'; Destr=$false }
+        [pscustomobject]@{ Cat='Avançado'; Titulo='Configuracoes de GPO e Registro'; Func='Grant-GPORegistrySettings'; Desc='Aplica configuracoes de GPO via registro (Edge/Chrome/driver search...).'; Destr=$false }
+        [pscustomobject]@{ Cat='Avançado'; Titulo='Desativar UAC';                   Func='Disable-UAC';               Desc='Desativa o Controle de Conta de Usuario (UAC).'; Destr=$false }
+        [pscustomobject]@{ Cat='Avançado'; Titulo='Tweaks de Painel de Controle';    Func='Grant-ControlPanelTweaks';  Desc='Aplica ajustes de Painel de Controle/Explorer.'; Destr=$false }
+        [pscustomobject]@{ Cat='Avançado'; Titulo='Tweaks de Privacidade';           Func='Grant-PrivacyTweaks';       Desc='Aplica os tweaks de privacidade no registro.'; Destr=$false }
+        [pscustomobject]@{ Cat='Avançado'; Titulo='Tweaks Extras';                   Func='Grant-ExtraTweaks';         Desc='Aplica tweaks extras de otimizacao/seguranca.'; Destr=$false }
 
         # --- Rotinas ---
         [pscustomobject]@{ Cat='Rotinas'; Titulo='Manutencao Completa';       Func='Show-FullMaintenance'; Desc='Executa a manutencao completa (todos os grupos em sequencia).'; Destr=$true }
@@ -354,17 +366,35 @@ $script:GuiXaml = @'
       <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                     Cursor="SizeWE" Style="{StaticResource Splitter}"/>
 
-      <ListBox x:Name="LstAcoes" Grid.Column="2" Background="{DynamicResource Panel}"
-               Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Border}" FontSize="{DynamicResource FSBody}">
-        <ListBox.ItemTemplate>
-          <DataTemplate>
-            <StackPanel Orientation="Horizontal" Margin="2">
-              <TextBlock Text="{Binding Marca}" Width="18" Foreground="{Binding Cor}" FontWeight="Bold"/>
-              <TextBlock Text="{Binding Titulo}" Foreground="{Binding Cor}"/>
-            </StackPanel>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
+      <!-- NOVO: coluna do meio virou um grid de 2 linhas -- a lista de acoes em cima e,
+           fixo embaixo dela, um resumo do que a acao selecionada faz (o usuario pediu pra
+           ver "quais tarefas ela executa" sem precisar olhar o painel de Detalhe a direita). -->
+      <Grid Grid.Column="2">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" MinHeight="80"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ListBox x:Name="LstAcoes" Grid.Row="0" Background="{DynamicResource Panel}"
+                 Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Border}" FontSize="{DynamicResource FSBody}">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Orientation="Horizontal" Margin="2">
+                <TextBlock Text="{Binding Marca}" Width="18" Foreground="{Binding Cor}" FontWeight="Bold"/>
+                <TextBlock Text="{Binding Titulo}" Foreground="{Binding Cor}"/>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Border Grid.Row="1" Background="{DynamicResource PanelDark}" BorderBrush="{DynamicResource Border}"
+                BorderThickness="1" CornerRadius="4" Margin="0,6,0,0" Padding="10,8">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="110">
+            <TextBlock x:Name="TxtAcaoResumo" TextWrapping="Wrap" FontSize="{DynamicResource FSBody}"
+                       Foreground="{DynamicResource Muted}" Text="Selecione uma acao a esquerda pra ver o que ela faz."/>
+          </ScrollViewer>
+        </Border>
+      </Grid>
 
       <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                     Cursor="SizeWE" Style="{StaticResource Splitter}"/>
@@ -493,19 +523,19 @@ $script:PrefsXaml = @'
       <ComboBoxItem Content="Escuro"/>
       <ComboBoxItem Content="Claro"/>
       <ComboBoxItem Content="Alto Contraste"/>
-      <ComboBoxItem Content="Petroleo (CMS)"/>
+      <ComboBoxItem Content="Petróleo (CMS)"/>
     </ComboBox>
 
     <TextBlock Text="Tamanho da fonte" Foreground="{DynamicResource Ink}" FontWeight="SemiBold"/>
     <ComboBox x:Name="CboFonte" Margin="0,4,0,12">
       <ComboBoxItem Content="Pequeno"/>
-      <ComboBoxItem Content="Medio"/>
+      <ComboBoxItem Content="Médio"/>
       <ComboBoxItem Content="Grande"/>
     </ComboBox>
 
-    <CheckBox x:Name="ChkConfirmar" Content="Confirmar antes de acoes destrutivas" Foreground="{DynamicResource Ink}" Margin="0,4"/>
+    <CheckBox x:Name="ChkConfirmar" Content="Confirmar antes de ações destrutivas" Foreground="{DynamicResource Ink}" Margin="0,4"/>
     <CheckBox x:Name="ChkAutoScroll" Content="Rolar o log automaticamente" Foreground="{DynamicResource Ink}" Margin="0,4"/>
-    <CheckBox x:Name="ChkOcultarDestr" Content="Ocultar acoes destrutivas da lista" Foreground="{DynamicResource Ink}" Margin="0,4"/>
+    <CheckBox x:Name="ChkOcultarDestr" Content="Ocultar ações destrutivas da lista" Foreground="{DynamicResource Ink}" Margin="0,4"/>
 
     <TextBlock Text="Ocultar categorias inteiras" Foreground="{DynamicResource Ink}" FontWeight="SemiBold" Margin="0,14,0,4"/>
     <StackPanel x:Name="PnlCategoriasOcultas"/>
@@ -674,6 +704,7 @@ function Invoke-MaintenanceGuiWindow {
     $btnPers    = & $F 'BtnPersonalizar'
     $lstCat     = & $F 'LstCategorias'
     $lstAcoes   = & $F 'LstAcoes'
+    $txtAcaoResumo = & $F 'TxtAcaoResumo'
     $detTitulo  = & $F 'TxtDetTitulo'
     $detCat     = & $F 'TxtDetCat'
     $detFunc    = & $F 'TxtDetFunc'
@@ -913,7 +944,10 @@ function Invoke-MaintenanceGuiWindow {
                     [void]$pnlParams.Children.Add($c)
                 }
             }
-            $st.ParamControls[$p.Nome] = @{ Ctrl=$c; Tipo=$p.Tipo }
+            # AppObj (so' presente nos checkboxes gerados p/ "Instalar Aplicativos") marca
+            # esse controle como item de uma lista de apps -- MontarSplatExtra junta todos
+            # os marcados num unico -Apps em vez de mandar cada um como parametro proprio.
+            $st.ParamControls[$p.Nome] = @{ Ctrl=$c; Tipo=$p.Tipo; AppObj=$p.AppObj }
 
             # Exemplo (dica curta) logo abaixo do campo, quando definido no catalogo.
             # FIX: $p e' Hashtable -- PSObject.Properties.Name nunca contem 'Exemplo' (mesma
@@ -946,8 +980,15 @@ function Invoke-MaintenanceGuiWindow {
     # "Salvar preset..." (evita 3 copias da mesma logica de montagem).
     $MontarSplatExtra = {
         $splat = @{}
+        $appsMarcados = @()
         foreach ($nome in $st.ParamControls.Keys) {
             $pc = $st.ParamControls[$nome]
+            if ($pc.AppObj) {
+                # Checkbox de app (gerado em Get-GuiActionCatalog p/ "Instalar Aplicativos"):
+                # nao vira parametro proprio -- todos os marcados somam num unico -Apps.
+                if ([bool]$pc.Ctrl.IsChecked) { $appsMarcados += $pc.AppObj }
+                continue
+            }
             switch ($pc.Tipo) {
                 'switch'   { $splat[$nome] = [bool]$pc.Ctrl.IsChecked }
                 'choice'   { $v = '' + $pc.Ctrl.SelectedItem; if ($v) { $splat[$nome] = $v } }
@@ -957,6 +998,7 @@ function Invoke-MaintenanceGuiWindow {
                 default    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = $v } }
             }
         }
+        if ($appsMarcados.Count) { $splat['Apps'] = $appsMarcados }
         $extra = @()
         $rawExtra = ('' + $txtExtra.Text).Trim()
         if ($rawExtra) { $extra = @($rawExtra -split '\s+') }
@@ -966,13 +1008,21 @@ function Invoke-MaintenanceGuiWindow {
     $lstAcoes.Add_SelectionChanged({
       try {
         $sel = $lstAcoes.SelectedItem
-        if (-not $sel) { $btnExec.IsEnabled = $false; return }
+        if (-not $sel) {
+            $btnExec.IsEnabled = $false
+            $txtAcaoResumo.Text = 'Selecione uma ação à esquerda pra ver o que ela faz.'
+            return
+        }
         $a = $sel.Acao
         $st.Selecao = $a
         $detTitulo.Text = $a.Titulo
         $detCat.Text = "Categoria: $($a.Cat)"
         $detFunc.Text = $a.Func + '()'
         $detDesc.Text = if ($a.Desc) { $a.Desc } else { 'Sem descrição disponível.' }
+        # NOVO: mesmo resumo tambem aparece embaixo da propria lista de acoes (nao so no
+        # painel de Detalhe a direita) -- pedido do usuario pra ver de cara o que a acao
+        # selecionada faz, sem precisar olhar pro outro lado da tela.
+        $txtAcaoResumo.Text = if ($a.Desc) { "$($a.Titulo) — $($a.Desc)" } else { "$($a.Titulo) — sem descrição disponível." }
         $detAviso.Text = if ($a.Destr) { 'Ação destrutiva/irreversível. Confira antes de executar.' } else { '' }
         $txtExtra.Text = ''
         & $renderParams $a
@@ -987,6 +1037,34 @@ function Invoke-MaintenanceGuiWindow {
         $txtStatus.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, 'Muted')
         $btnExec.IsEnabled = $true
       } catch { Show-GuiHandlerError -Contexto 'Selecionar acao' -ErroObj $_ }
+    })
+
+    # NOVO: duplo-clique numa acao SEM parametros (nao precisa escolher pasta/arquivo/
+    # opcao antes) executa direto, sem precisar clicar em "Executar" depois. Acoes COM
+    # parametros (ex.: pasta, ou os checkboxes de "Instalar Aplicativos") ignoram o
+    # duplo-clique -- exigem preencher os campos e clicar em Executar, como ja fazem.
+    # WPF nao tem um evento "MouseDoubleClick" pronto (isso e' coisa do WinForms); o jeito
+    # certo e' checar ClickCount no MouseLeftButtonDown, que ja reflete a selecao atual
+    # porque o ListBoxItem processa o clique (e atualiza SelectedItem) antes de borbulhar
+    # ate o ListBox.
+    $lstAcoes.Add_MouseLeftButtonDown({
+        try {
+            if ($_.ClickCount -ne 2) { return }
+            # Confere se o clique caiu de fato em cima de um item (nao na area vazia
+            # abaixo do ultimo item, que herdaria a selecao anterior por engano).
+            $origem = $_.OriginalSource
+            while ($origem -and -not ($origem -is [System.Windows.Controls.ListBoxItem])) {
+                $origem = [System.Windows.Media.VisualTreeHelper]::GetParent($origem)
+            }
+            if (-not $origem) { return }
+            $sel = $lstAcoes.SelectedItem
+            if (-not $sel) { return }
+            $a = $sel.Acao
+            $temParams = ($a.PSObject.Properties.Name -contains 'Params') -and $a.Params
+            if (-not $temParams -and $btnExec.IsEnabled) {
+                $btnExec.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+            }
+        } catch { Show-GuiHandlerError -Contexto 'Duplo-clique em acao' -ErroObj $_ }
     })
 
     # Timer: tail do log + fim da execucao
@@ -1069,6 +1147,13 @@ function Invoke-MaintenanceGuiWindow {
             if (-not $preset) { return }
             foreach ($nomeParam in $st.ParamControls.Keys) {
                 $pc = $st.ParamControls[$nomeParam]
+                if ($pc.AppObj) {
+                    # Checkbox de app: nao existe uma chave propria no preset (todos os
+                    # marcados foram salvos juntos em .Apps) -- restaura comparando por Id.
+                    $appsSalvos = @($preset.Splat.Apps)
+                    $pc.Ctrl.IsChecked = [bool]($appsSalvos | Where-Object { $_.Id -eq $pc.AppObj.Id })
+                    continue
+                }
                 $valor = $preset.Splat.$nomeParam
                 switch ($pc.Tipo) {
                     'switch'   { $pc.Ctrl.IsChecked = [bool]$valor }

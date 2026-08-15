@@ -53,8 +53,8 @@ param (
     [Parameter(HelpMessage="Modo desatendido: executa a Rotina Colégio sem menu/prompts e encerra.")]
     [switch]$Unattended,
 
-    [Parameter(HelpMessage="Abre a interface grafica (WPF) em vez do menu de texto.")]
-    [switch]$Gui
+    [Parameter(HelpMessage="Abre a interface grafica (WPF) em vez do menu de texto. Ligado por padrao -- use -Gui:`$false pra cair no menu de texto classico.")]
+    [switch]$Gui = $true
 )
 #endregion
 
@@ -1106,6 +1106,12 @@ function Convert-IvmsCctvVideos {
 
             if ($PSCmdlet.ShouldProcess($origem, "converter para '$destino'")) {
                 if (-not $WhatIf) {
+                    # NOVO: log de "iniciando" ANTES de chamar o ffmpeg -- na GUI o andamento
+                    # é mostrado via tail do arquivo de log (Write-Progress não aparece lá),
+                    # entao sem essa linha a tela ficava muda durante a conversao de cada
+                    # arquivo (que pode demorar), só reportando no final. Com ela, cada
+                    # arquivo aparece no log assim que comeca a ser processado.
+                    Write-Log "Convertendo ($i/$total): '$nomeArquivo'..." -Type Info
                     # Comando base validado manualmente pelo Regnon: remux + correção de
                     # SAR (hevc_metadata) + tag hvc1 + audio AAC 64k/16kHz + faststart.
                     $ffmpegArgs = @(
@@ -2341,33 +2347,32 @@ function Remove-SystemBloatware {
 
 #region → FUNÇÕES DE INSTALAÇÃO DE APLICATIVOS (AJUSTADAS)
 
-function Show-AppInstallPicker {
+function Get-ScriptSupremoAppsList {
     <#
     .SYNOPSIS
-        Abre uma janela com checkbox pra escolher quais aplicativos instalar.
+        Lista padrão de apps instaláveis via winget: Apps.json ao lado do
+        script se existir, senão a lista embutida.
     .DESCRIPTION
-        Lê a mesma fonte de apps que Install-Applications usaria por padrão
-        (Apps.json ao lado do script, ou a lista embutida) e mostra cada um
-        com uma checkbox (todos marcados por padrão) — "Marcar todos"/
-        "Desmarcar todos" pra agilizar, "Instalar selecionados" confirma e
-        "Cancelar" desiste. Não instala nada — só devolve a lista escolhida;
-        quem instala é Install-Applications -Apps <retorno>.
+        Fonte única usada por Install-Applications (quando -Apps não é
+        informado), Show-AppInstallPicker e o catálogo da GUI
+        (Get-GuiActionCatalog, pra gerar os checkboxes por app) — evita
+        manter a mesma lista duplicada em vários lugares.
     .OUTPUTS
-        Array de apps selecionados (@{Name; Id}), ou $null se cancelado/fechado sem selecionar nada.
+        Array de apps (@{Name; Id}).
     #>
     [CmdletBinding()]
     param()
 
-    Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue
-    Add-Type -AssemblyName PresentationCore      -ErrorAction SilentlyContinue
-    Add-Type -AssemblyName WindowsBase           -ErrorAction SilentlyContinue
-
-    # Mesma fonte/ordem de Install-Applications (Apps.json ao lado do script, ou embutida).
-    $appsJson = if ($PSScriptRoot) { Join-Path $PSScriptRoot "Apps.json" } else { $null }
+    $appsJson = Join-Path $PSScriptRoot "Apps.json"
     $apps = $null
-    if ($appsJson -and (Test-Path $appsJson)) {
-        try { $apps = @(Get-Content $appsJson -Raw -Encoding UTF8 | ConvertFrom-Json) }
-        catch { Write-Log "Apps.json inválido — usando lista embutida. Detalhe: $($_.Exception.Message)" -Type Warning; $apps = $null }
+    if (Test-Path $appsJson) {
+        try {
+            $apps = @(Get-Content $appsJson -Raw -Encoding UTF8 | ConvertFrom-Json)
+            Write-Log "Lista de apps carregada de Apps.json ($($apps.Count) apps)." -Type Info
+        } catch {
+            Write-Log "Apps.json inválido — usando lista embutida. Detalhe: $($_.Exception.Message)" -Type Warning
+            $apps = $null
+        }
     }
     if (-not $apps) {
         $apps = @(
@@ -2384,6 +2389,31 @@ function Show-AppInstallPicker {
             @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"}
         )
     }
+    return $apps
+}
+
+function Show-AppInstallPicker {
+    <#
+    .SYNOPSIS
+        Abre uma janela com checkbox pra escolher quais aplicativos instalar.
+    .DESCRIPTION
+        Lê a mesma fonte de apps que Install-Applications usaria por padrão
+        (Get-ScriptSupremoAppsList: Apps.json ao lado do script, ou a lista
+        embutida) e mostra cada um com uma checkbox (todos marcados por
+        padrão) — "Marcar todos"/"Desmarcar todos" pra agilizar, "Instalar
+        selecionados" confirma e "Cancelar" desiste. Não instala nada — só
+        devolve a lista escolhida; quem instala é Install-Applications -Apps <retorno>.
+    .OUTPUTS
+        Array de apps selecionados (@{Name; Id}), ou $null se cancelado/fechado sem selecionar nada.
+    #>
+    [CmdletBinding()]
+    param()
+
+    Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue
+    Add-Type -AssemblyName PresentationCore      -ErrorAction SilentlyContinue
+    Add-Type -AssemblyName WindowsBase           -ErrorAction SilentlyContinue
+
+    $apps = Get-ScriptSupremoAppsList
 
     try {
         $win = New-Object System.Windows.Window
@@ -2496,34 +2526,8 @@ function Install-Applications {
                 Write-Log "Lista de apps recebida via parâmetro -Apps ($($apps.Count) app(s) selecionado(s))." -Type Info
             } else {
                 # #13: lista de apps externalizável — usa Apps.json ao lado do script se existir,
-                # senão cai no padrão embutido abaixo. ($app.Name/$app.Id funcionam tanto pra
-                # hashtable embutida quanto pro objeto vindo do JSON.)
-                $appsJson = Join-Path $PSScriptRoot "Apps.json"
-                $apps = $null
-                if (Test-Path $appsJson) {
-                    try {
-                        $apps = @(Get-Content $appsJson -Raw -Encoding UTF8 | ConvertFrom-Json)
-                        Write-Log "Lista de apps carregada de Apps.json ($($apps.Count) apps)." -Type Info
-                    } catch {
-                        Write-Log "Apps.json inválido — usando lista embutida. Detalhe: $($_.Exception.Message)" -Type Warning
-                        $apps = $null
-                    }
-                }
-                if (-not $apps) {
-                    $apps = @(
-                        @{Name = "7-Zip"; Id = "7zip.7zip"},
-                        @{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
-                        @{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
-                        @{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
-                        @{Name = "Google Chrome"; Id = "Google.Chrome"},
-                        @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
-                        @{Name = "CodecGuide.K-LiteCodecPack.Full"; Id = "CodecGuide.K-LiteCodecPack.Full"},
-                        @{Name = "Microsoft Office"; Id = "Microsoft.Office"},
-                        @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
-                        @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
-                        @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"}
-                    )
-                }
+                # senão cai no padrão embutido (Get-ScriptSupremoAppsList).
+                $apps = Get-ScriptSupremoAppsList
             }
             $totalApps = $apps.Count
             $installedCount = 0
@@ -5958,17 +5962,22 @@ function Start-ScriptSupremo {
     try {
         Show-EnvironmentCheck   # #8/#9/#11: pré-flight (ambiente + baseline de espaço)
 
-        if ($Gui) {
-            # Interface grafica (WPF) em vez do menu de texto.
-            Show-Gui
-            return
-        }
-
         if ($Unattended) {
             # #12: modo desatendido — roda a Rotina Colégio sem menu/prompts e encerra.
+            # Checado ANTES de $Gui de proposito: -Gui agora e' $true por padrao, entao sem
+            # essa ordem uma automacao com -Unattended (ex.: tarefa agendada) abriria uma
+            # janela em vez de rodar silenciosa.
             Write-Log "🤖 Modo desatendido: executando a Rotina Colégio sem menu..." -Type Warning
             Invoke-Colegio
             Show-CleanupReport
+            return
+        }
+
+        if ($Gui) {
+            # Interface grafica (WPF) em vez do menu de texto. NOVO: ligado por padrao --
+            # ao carregar o script (local ou via irm | iex, sem argumentos), a GUI ja abre
+            # direto. Use -Gui:$false pra cair no menu de texto classico.
+            Show-Gui
             return
         }
 
