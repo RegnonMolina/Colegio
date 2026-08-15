@@ -1011,6 +1011,143 @@ function Remove-DuplicateFiles {
     }
 }
 
+function Convert-IvmsCctvVideos {
+    <#
+    .SYNOPSIS
+        Converte vídeos exportados do iVMS-4200 (H.265/HEVC com aspect ratio
+        errado) para um MP4 compatível, via ffmpeg.
+    .DESCRIPTION
+        Reaplica, arquivo por arquivo, o comando ffmpeg validado manualmente
+        pelo Regnon: remuxa o vídeo (-c:v copy, sem recodificar) corrigindo o
+        SAR (sample aspect ratio) via bitstream filter hevc_metadata, marca o
+        codec como hvc1 no container (compatibilidade com QuickTime/iOS/
+        macOS), recodifica o áudio para AAC 64kbps/16kHz e ativa faststart
+        (MOOV atom no início do arquivo). Como o vídeo não é recodificado, é
+        rápido e sem perda de qualidade — só remux + correção de metadado.
+
+        Cada arquivo de -SourceFiles é salvo em -DestFolder com o MESMO nome
+        do arquivo de origem. Se já existir um arquivo com esse nome no
+        destino, por padrão gera um nome alternativo (não sobrescreve) — use
+        -SobrescreverExistente para forçar a sobrescrita.
+
+        Requer ffmpeg no PATH do sistema (ex.: winget install ffmpeg ou
+        winget install Gyan.FFmpeg). Suporta -WhatIf/-Confirm.
+    .PARAMETER SourceFiles
+        Caminho(s) completo(s) do(s) arquivo(s) de vídeo de origem (ex.: os
+        .mp4 exportados de dentro das pastas de gravação do iVMS-4200).
+    .PARAMETER DestFolder
+        Pasta de destino onde os vídeos convertidos serão salvos (criada se
+        não existir).
+    .PARAMETER SobrescreverExistente
+        Se já existir um arquivo com o mesmo nome em -DestFolder, sobrescreve
+        em vez de gerar um nome alternativo (padrão: não sobrescreve).
+    .EXAMPLE
+        Convert-IvmsCctvVideos -SourceFiles 'C:\...\DIREÇÃO_..._4012182.mp4' -DestFolder 'C:\Videos\Convertidos'
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Low')]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$SourceFiles,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestFolder,
+
+        [switch]$SobrescreverExistente
+    )
+
+    # --- Helper local (escopo só desta função) ---
+    function Get-SafeVideoDestination {
+        param([string]$TargetDir, [string]$FileName)
+        $dest = Join-Path $TargetDir $FileName
+        $i = 1
+        $base = [System.IO.Path]::GetFileNameWithoutExtension($FileName)
+        $ext = [System.IO.Path]::GetExtension($FileName)
+        while (Test-Path -LiteralPath $dest) {
+            $dest = Join-Path $TargetDir ("{0}_conv{1}{2}" -f $base, $i, $ext)
+            $i++
+        }
+        return $dest
+    }
+
+    $activity = "Conversão de Vídeos iVMS-4200"
+
+    if (-not (Test-CommandExists 'ffmpeg')) {
+        Write-Log "ffmpeg não encontrado no PATH. Instale com 'winget install ffmpeg' (ou Gyan.FFmpeg) e tente novamente." -Type Error
+        return
+    }
+
+    $arquivosValidos = @($SourceFiles | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique)
+    $invalidos = @($SourceFiles | Where-Object { $_ -and -not (Test-Path -LiteralPath $_ -PathType Leaf) })
+    foreach ($inv in $invalidos) { Write-Log "AVISO: arquivo de origem não encontrado, ignorado: $inv" -Type Warning }
+    if ($arquivosValidos.Count -eq 0) {
+        Write-Log "Nenhum arquivo de origem válido informado. Nada a fazer." -Type Warning
+        return
+    }
+
+    Write-Log "Iniciando conversão de $($arquivosValidos.Count) vídeo(s) para '$DestFolder'..." -Type Info
+
+    try {
+        if (-not (Test-Path -LiteralPath $DestFolder)) {
+            if ($PSCmdlet.ShouldProcess($DestFolder, "criar pasta de destino")) {
+                if (-not $WhatIf) { New-Item -ItemType Directory -Path $DestFolder -Force -ErrorAction Stop | Out-Null }
+            }
+        }
+
+        $total = $arquivosValidos.Count
+        $processados = 0
+        $falhas = 0
+        $i = 0
+        foreach ($origem in $arquivosValidos) {
+            $i++
+            $nomeArquivo = Split-Path -Leaf $origem
+            Grant-WriteProgress -Activity $activity -Status "Convertendo ($i/$total): $nomeArquivo" -PercentComplete ([math]::Round(($i / $total) * 100))
+
+            $destino = if ($SobrescreverExistente) { Join-Path $DestFolder $nomeArquivo } else { Get-SafeVideoDestination -TargetDir $DestFolder -FileName $nomeArquivo }
+
+            if ($PSCmdlet.ShouldProcess($origem, "converter para '$destino'")) {
+                if (-not $WhatIf) {
+                    # Comando base validado manualmente pelo Regnon: remux + correção de
+                    # SAR (hevc_metadata) + tag hvc1 + audio AAC 64k/16kHz + faststart.
+                    $ffmpegArgs = @(
+                        '-y', '-i', $origem,
+                        '-map', '0:v:0', '-map', '0:a:0?',
+                        '-c:v', 'copy',
+                        '-bsf:v', 'hevc_metadata=sample_aspect_ratio=2/1',
+                        '-tag:v', 'hvc1',
+                        '-c:a', 'aac', '-b:a', '64k', '-ar', '16000',
+                        '-avoid_negative_ts', 'make_zero',
+                        '-movflags', '+faststart',
+                        $destino
+                    )
+                    try {
+                        $saida = & ffmpeg @ffmpegArgs 2>&1
+                        if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $destino)) {
+                            $processados++
+                            Write-Log "Convertido: '$origem' -> '$destino'" -Type Success
+                        } else {
+                            $falhas++
+                            Write-Log "ERRO: ffmpeg terminou com código $LASTEXITCODE ao converter '$origem'." -Type Error
+                            $saida | Select-Object -Last 20 | ForEach-Object { Write-Log "  ffmpeg: $_" -Type Debug }
+                        }
+                    } catch {
+                        $falhas++
+                        Write-Log "ERRO ao converter '$origem': $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+                    }
+                } else {
+                    Write-Log "Modo WhatIf: '$origem' seria convertido para '$destino'." -Type Debug
+                }
+            }
+        }
+
+        Write-Log "Conversão concluída: $processados vídeo(s) convertido(s), $falhas falha(s)." -Type $(if ($falhas -eq 0) { 'Success' } else { 'Warning' })
+    } catch {
+        Write-Log "ERRO GERAL na conversão de vídeos: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+    } finally {
+        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    }
+}
+
 function Clear-WUCache {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
@@ -2204,10 +2341,142 @@ function Remove-SystemBloatware {
 
 #region → FUNÇÕES DE INSTALAÇÃO DE APLICATIVOS (AJUSTADAS)
 
+function Show-AppInstallPicker {
+    <#
+    .SYNOPSIS
+        Abre uma janela com checkbox pra escolher quais aplicativos instalar.
+    .DESCRIPTION
+        Lê a mesma fonte de apps que Install-Applications usaria por padrão
+        (Apps.json ao lado do script, ou a lista embutida) e mostra cada um
+        com uma checkbox (todos marcados por padrão) — "Marcar todos"/
+        "Desmarcar todos" pra agilizar, "Instalar selecionados" confirma e
+        "Cancelar" desiste. Não instala nada — só devolve a lista escolhida;
+        quem instala é Install-Applications -Apps <retorno>.
+    .OUTPUTS
+        Array de apps selecionados (@{Name; Id}), ou $null se cancelado/fechado sem selecionar nada.
+    #>
+    [CmdletBinding()]
+    param()
+
+    Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue
+    Add-Type -AssemblyName PresentationCore      -ErrorAction SilentlyContinue
+    Add-Type -AssemblyName WindowsBase           -ErrorAction SilentlyContinue
+
+    # Mesma fonte/ordem de Install-Applications (Apps.json ao lado do script, ou embutida).
+    $appsJson = if ($PSScriptRoot) { Join-Path $PSScriptRoot "Apps.json" } else { $null }
+    $apps = $null
+    if ($appsJson -and (Test-Path $appsJson)) {
+        try { $apps = @(Get-Content $appsJson -Raw -Encoding UTF8 | ConvertFrom-Json) }
+        catch { Write-Log "Apps.json inválido — usando lista embutida. Detalhe: $($_.Exception.Message)" -Type Warning; $apps = $null }
+    }
+    if (-not $apps) {
+        $apps = @(
+            @{Name = "7-Zip"; Id = "7zip.7zip"},
+            @{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
+            @{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
+            @{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
+            @{Name = "Google Chrome"; Id = "Google.Chrome"},
+            @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
+            @{Name = "CodecGuide.K-LiteCodecPack.Full"; Id = "CodecGuide.K-LiteCodecPack.Full"},
+            @{Name = "Microsoft Office"; Id = "Microsoft.Office"},
+            @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
+            @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
+            @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"}
+        )
+    }
+
+    try {
+        $win = New-Object System.Windows.Window
+        $win.Title = "Selecionar aplicativos para instalar"
+        $win.Width = 420
+        $win.Height = 560
+        $win.WindowStartupLocation = 'CenterScreen'
+        $win.Topmost = $true
+        $win.ResizeMode = 'CanResize'
+
+        $grid = New-Object System.Windows.Controls.Grid
+        $rowList = New-Object System.Windows.Controls.RowDefinition
+        $rowList.Height = New-Object System.Windows.GridLength(1, [System.Windows.GridUnitType]::Star)
+        $rowBtns = New-Object System.Windows.Controls.RowDefinition
+        $rowBtns.Height = 'Auto'
+        [void]$grid.RowDefinitions.Add($rowList)
+        [void]$grid.RowDefinitions.Add($rowBtns)
+
+        $scroll = New-Object System.Windows.Controls.ScrollViewer
+        $scroll.VerticalScrollBarVisibility = 'Auto'
+        $panel = New-Object System.Windows.Controls.StackPanel
+        $panel.Margin = '12'
+        $scroll.Content = $panel
+        [System.Windows.Controls.Grid]::SetRow($scroll, 0)
+        [void]$grid.Children.Add($scroll)
+
+        $checks = @()
+        foreach ($app in $apps) {
+            $cb = New-Object System.Windows.Controls.CheckBox
+            $cb.Content = "$($app.Name)  ($($app.Id))"
+            $cb.IsChecked = $true
+            $cb.Margin = '0,4,0,4'
+            $cb.Tag = $app
+            [void]$panel.Children.Add($cb)
+            $checks += $cb
+        }
+
+        $pnlBtns = New-Object System.Windows.Controls.StackPanel
+        $pnlBtns.Orientation = 'Horizontal'
+        $pnlBtns.HorizontalAlignment = 'Right'
+        $pnlBtns.Margin = '12'
+        [System.Windows.Controls.Grid]::SetRow($pnlBtns, 1)
+
+        $btnTodos = New-Object System.Windows.Controls.Button
+        $btnTodos.Content = 'Marcar todos'
+        $btnTodos.Margin = '0,0,8,0'
+        $btnTodos.Padding = '8,4'
+        $btnTodos.Add_Click({ foreach ($c in $checks) { $c.IsChecked = $true } }.GetNewClosure())
+
+        $btnNenhum = New-Object System.Windows.Controls.Button
+        $btnNenhum.Content = 'Desmarcar todos'
+        $btnNenhum.Margin = '0,0,8,0'
+        $btnNenhum.Padding = '8,4'
+        $btnNenhum.Add_Click({ foreach ($c in $checks) { $c.IsChecked = $false } }.GetNewClosure())
+
+        $btnInstalar = New-Object System.Windows.Controls.Button
+        $btnInstalar.Content = 'Instalar selecionados'
+        $btnInstalar.Margin = '0,0,8,0'
+        $btnInstalar.Padding = '8,4'
+        $btnInstalar.IsDefault = $true
+        $btnInstalar.Add_Click({ $win.DialogResult = $true; $win.Close() }.GetNewClosure())
+
+        $btnCancelar = New-Object System.Windows.Controls.Button
+        $btnCancelar.Content = 'Cancelar'
+        $btnCancelar.Padding = '8,4'
+        $btnCancelar.IsCancel = $true
+        $btnCancelar.Add_Click({ $win.DialogResult = $false; $win.Close() }.GetNewClosure())
+
+        [void]$pnlBtns.Children.Add($btnTodos)
+        [void]$pnlBtns.Children.Add($btnNenhum)
+        [void]$pnlBtns.Children.Add($btnInstalar)
+        [void]$pnlBtns.Children.Add($btnCancelar)
+        [void]$grid.Children.Add($pnlBtns)
+
+        $win.Content = $grid
+
+        $resultado = $win.ShowDialog()
+        if ($resultado -ne $true) { return $null }
+
+        return @($checks | Where-Object { $_.IsChecked } | ForEach-Object { $_.Tag })
+    } catch {
+        Write-Log "ERRO ao abrir o seletor de aplicativos: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        return $null
+    }
+}
+
 function Install-Applications {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-       
+        # NOVO: lista opcional de apps pra instalar (cada item com Name/Id), vinda do
+        # seletor com checkbox (Show-AppInstallPicker). Sem isso, mantém o comportamento
+        # original: carrega Apps.json (se existir) ou a lista embutida padrão, e instala tudo.
+        [object[]]$Apps = $null
             )
     Write-Log "Iniciando instalação de aplicativos..." -Type Info
     $activity = "Instalação de Aplicativos via Winget"
@@ -2222,34 +2491,39 @@ function Install-Applications {
             }
             Write-Log "Winget encontrado. Prosseguindo com a instalação." -Type Success
 
-            # #13: lista de apps externalizável — usa Apps.json ao lado do script se existir,
-            # senão cai no padrão embutido abaixo. ($app.Name/$app.Id funcionam tanto pra
-            # hashtable embutida quanto pro objeto vindo do JSON.)
-            $appsJson = Join-Path $PSScriptRoot "Apps.json"
-            $apps = $null
-            if (Test-Path $appsJson) {
-                try {
-                    $apps = @(Get-Content $appsJson -Raw -Encoding UTF8 | ConvertFrom-Json)
-                    Write-Log "Lista de apps carregada de Apps.json ($($apps.Count) apps)." -Type Info
-                } catch {
-                    Write-Log "Apps.json inválido — usando lista embutida. Detalhe: $($_.Exception.Message)" -Type Warning
-                    $apps = $null
+            if ($Apps) {
+                $apps = @($Apps)
+                Write-Log "Lista de apps recebida via parâmetro -Apps ($($apps.Count) app(s) selecionado(s))." -Type Info
+            } else {
+                # #13: lista de apps externalizável — usa Apps.json ao lado do script se existir,
+                # senão cai no padrão embutido abaixo. ($app.Name/$app.Id funcionam tanto pra
+                # hashtable embutida quanto pro objeto vindo do JSON.)
+                $appsJson = Join-Path $PSScriptRoot "Apps.json"
+                $apps = $null
+                if (Test-Path $appsJson) {
+                    try {
+                        $apps = @(Get-Content $appsJson -Raw -Encoding UTF8 | ConvertFrom-Json)
+                        Write-Log "Lista de apps carregada de Apps.json ($($apps.Count) apps)." -Type Info
+                    } catch {
+                        Write-Log "Apps.json inválido — usando lista embutida. Detalhe: $($_.Exception.Message)" -Type Warning
+                        $apps = $null
+                    }
                 }
-            }
-            if (-not $apps) {
-                $apps = @(
-                    @{Name = "7-Zip"; Id = "7zip.7zip"},
-                    @{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
-                    @{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
-                    @{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
-                    @{Name = "Google Chrome"; Id = "Google.Chrome"},
-                    @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
-                    @{Name = "CodecGuide.K-LiteCodecPack.Full"; Id = "CodecGuide.K-LiteCodecPack.Full"},
-                    @{Name = "Microsoft Office"; Id = "Microsoft.Office"},
-                    @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
-                    @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
-                    @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"}
-                )
+                if (-not $apps) {
+                    $apps = @(
+                        @{Name = "7-Zip"; Id = "7zip.7zip"},
+                        @{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
+                        @{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
+                        @{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
+                        @{Name = "Google Chrome"; Id = "Google.Chrome"},
+                        @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
+                        @{Name = "CodecGuide.K-LiteCodecPack.Full"; Id = "CodecGuide.K-LiteCodecPack.Full"},
+                        @{Name = "Microsoft Office"; Id = "Microsoft.Office"},
+                        @{Name = "Microsoft PowerToys"; Id = "Microsoft.PowerToys"},
+                        @{Name = "Notepad++"; Id = "Notepad++.Notepad++"},
+                        @{Name = "VLC Media Player"; Id = "VideoLAN.VLC"}
+                    )
+                }
             }
             $totalApps = $apps.Count
             $installedCount = 0
@@ -5023,15 +5297,15 @@ Write-Log "   MENU DE PERSONALIZAÇÃO E NOVOS RECURSOS   " -Type Info
 Write-Log "=============================================" -Type Info
         Write-Log "Exibindo menu de Personalização e Novos Recursos..." Blue
 
-Write-Log " A. Executar Todos os Ajustes de Personalização (Sequência)" -Type Success
+Write-Log " A. Ativar atualizações antecipadas do Windows Update"
 Write-Log " B. Ativar 'Finalizar tarefa' na barra de tarefas"
-Write-Log " C. Ativar atualizações antecipadas do Windows Update"
+Write-Log " C. Ativar histórico da área de transferência"
 Write-Log " D. Ativar modo escuro"
-Write-Log " E. Ativar histórico da área de transferência"
-Write-Log " F. Restauração de apps após reinício"
-Write-Log " G. Mostrar segundos no relógio"
+Write-Log " E. Habilitar sudo embutido (Windows 11 24H2+)"
+Write-Log " F. Mostrar segundos no relógio"
+Write-Log " G. Restauração de apps após reinício"
 Write-Log " H. Updates para outros produtos Microsoft"
-Write-Log " I. Habilitar sudo embutido (Windows 11 24H2+)"
+Write-Log " Z. Executar Todos os Ajustes de Personalização (Sequência)" -Type Success
 Write-Log "`n X. Voltar ao Menu Anterior"
 Write-Log "=============================================" -Type Info
 
@@ -5039,7 +5313,15 @@ Write-Log "=============================================" -Type Info
         Write-Log "Opção escolhida no menu de Personalização: $key" Blue
 
         switch ($key) {
-            'A' {
+            'A' { Enable-WindowsUpdateFast; Show-SuccessMessage }
+            'B' { Enable-TaskbarEndTask; Show-SuccessMessage }
+            'C' { Enable-ClipboardHistory; Show-SuccessMessage }
+            'D' { Enable-DarkTheme; Show-SuccessMessage }
+            'E' { Enable-Sudo; Show-SuccessMessage }
+            'F' { Enable-TaskbarSeconds; Show-SuccessMessage }
+            'G' { Enable-RestartAppsAfterReboot; Show-SuccessMessage }
+            'H' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
+            'Z' {
 Write-Log "Executando: Todos os Ajustes de Personalização..." -Type Warning
                 Enable-TaskbarEndTask
                 Enable-WindowsUpdateFast
@@ -5052,14 +5334,6 @@ Write-Log "Executando: Todos os Ajustes de Personalização..." -Type Warning
 Write-Log "Todos os Ajustes de Personalização Concluídos!" -Type Success
                 [Console]::ReadKey($true) | Out-Null
             }
-            'B' { Enable-TaskbarEndTask; Show-SuccessMessage }
-            'C' { Enable-WindowsUpdateFast; Show-SuccessMessage }
-            'D' { Enable-DarkTheme; Show-SuccessMessage }
-            'E' { Enable-ClipboardHistory; Show-SuccessMessage }
-            'F' { Enable-RestartAppsAfterReboot; Show-SuccessMessage }
-            'G' { Enable-TaskbarSeconds; Show-SuccessMessage }
-            'H' { Enable-OtherMicrosoftUpdates; Show-SuccessMessage }
-            'I' { Enable-Sudo; Show-SuccessMessage }
             'x' { return }
             'X' { return }
             default {
@@ -5076,46 +5350,46 @@ function Show-AdvancedSettingsMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " MENU: CONFIGURAÇÕES AVANÇADAS" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Aplicar Configurações de GPO e Registro"
-        Write-Host " B) Ajustar Tema para Desempenho"
+        Write-Host " A) Ajustar Tema para Desempenho"
+        Write-Host " B) Aplicar Configurações de GPO e Registro"
         Write-Host " C) Desativar UAC"
-        Write-Host " D) Habilitar Menu de Contexto Clássico"
+        Write-Host " D) Habilitar Fim de Tarefa na Barra de Tarefas"
         Write-Host " E) Habilitar Histórico da Área de Transferência"
-        Write-Host " F) Habilitar Opções de Energia Avançadas"
-        Write-Host " G) Habilitar SMBv1 (se necessário para redes antigas)"
-        Write-Host " H) Habilitar Sudo (se disponível e desejado)"
-        Write-Host " I) Habilitar Fim de Tarefa na Barra de Tarefas"
-        Write-Host " J) Habilitar Segundos na Barra de Tarefas"
-        Write-Host " K) Habilitar Reforço de Segurança do Windows"
-        Write-Host " L) Otimizar Desempenho do Explorer"
-        Write-Host " M) Otimizar Volumes (Desfragmentar/ReTrim)"
-        Write-Host " N) Otimizações Gerais de Sistema"
-        Write-Host " O) Renomear Notebook"
-        Write-Host " P) Mostrar Menu de Login Automático"
-        Write-Host " Q) Personalização e Novos Recursos (submenu)"
+        Write-Host " F) Habilitar Menu de Contexto Clássico"
+        Write-Host " G) Habilitar Opções de Energia Avançadas"
+        Write-Host " H) Habilitar Reforço de Segurança do Windows"
+        Write-Host " I) Habilitar Segundos na Barra de Tarefas"
+        Write-Host " J) Habilitar SMBv1 (se necessário para redes antigas)"
+        Write-Host " K) Habilitar Sudo (se disponível e desejado)"
+        Write-Host " L) Mostrar Menu de Login Automático"
+        Write-Host " M) Otimizações Gerais de Sistema"
+        Write-Host " N) Otimizar Desempenho do Explorer"
+        Write-Host " O) Otimizar Volumes (Desfragmentar/ReTrim)"
+        Write-Host " P) Personalização e Novos Recursos (submenu)"
+        Write-Host " Q) Renomear Notebook"
         Write-Host " Z) Rotina Completa (Executa todas as opções acima)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Grant-GPORegistrySettings; Show-SuccessMessage }
-            'B' { Set-PerformanceTheme; Show-SuccessMessage }
+            'A' { Set-PerformanceTheme; Show-SuccessMessage }
+            'B' { Grant-GPORegistrySettings; Show-SuccessMessage }
             'C' { Disable-UAC; Show-SuccessMessage }
-            'D' { Enable-ClassicContextMenu; Show-SuccessMessage }
+            'D' { Enable-TaskbarEndTask; Show-SuccessMessage }
             'E' { Enable-ClipboardHistory; Show-SuccessMessage }
-            'F' { Enable-PowerOptions; Show-SuccessMessage }
-            'G' { Enable-SMBv1; Show-SuccessMessage }
-            'H' { Enable-Sudo; Show-SuccessMessage }
-            'I' { Enable-TaskbarEndTask; Show-SuccessMessage }
-            'J' { Enable-TaskbarSeconds; Show-SuccessMessage }
-            'K' { Enable-WindowsHardening; Show-SuccessMessage }
-            'L' { Optimize-ExplorerPerformance; Show-SuccessMessage }
-            'M' { Optimize-Volumes; Show-SuccessMessage }
-            'N' { Grant-SystemOptimizations; Show-SuccessMessage }
-            'O' { Rename-Notebook; Show-SuccessMessage }
-            'P' { Show-AutoLoginMenu } # Esta função já tem sua própria UI
-            'Q' { Show-PersonalizationTweaksMenu } # NOVO: submenu de personalização (antes só acessível via menu órfão)
+            'F' { Enable-ClassicContextMenu; Show-SuccessMessage }
+            'G' { Enable-PowerOptions; Show-SuccessMessage }
+            'H' { Enable-WindowsHardening; Show-SuccessMessage }
+            'I' { Enable-TaskbarSeconds; Show-SuccessMessage }
+            'J' { Enable-SMBv1; Show-SuccessMessage }
+            'K' { Enable-Sudo; Show-SuccessMessage }
+            'L' { Show-AutoLoginMenu } # Esta função já tem sua própria UI
+            'M' { Grant-SystemOptimizations; Show-SuccessMessage }
+            'N' { Optimize-ExplorerPerformance; Show-SuccessMessage }
+            'O' { Optimize-Volumes; Show-SuccessMessage }
+            'P' { Show-PersonalizationTweaksMenu } # NOVO: submenu de personalização (antes só acessível via menu órfão)
+            'Q' { Rename-Notebook; Show-SuccessMessage }
             'Z' { Invoke-Tweaks; Show-SuccessMessage } # Chama o orquestrador de tweaks
             'X' { return }
             default {
@@ -5132,10 +5406,10 @@ function Show-AppsMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " MENU: INSTALAÇÃO E FERRAMENTAS" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Instalar Aplicativos Definidos"
-        Write-Host " B) Gerenciar Programas e Recursos (Abrir)"
-        Write-Host " C) Desinstalar Aplicativos UWP (Microsoft Store)"
-        Write-Host " D) Atualizar Windows e Drivers (PSWindowsUpdate + winget)"
+        Write-Host " A) Atualizar Windows e Drivers (PSWindowsUpdate + winget)"
+        Write-Host " B) Desinstalar Aplicativos UWP (Microsoft Store)"
+        Write-Host " C) Gerenciar Programas e Recursos (Abrir)"
+        Write-Host " D) Instalar Aplicativos (escolher da lista)"
         Write-Host " E) Instalar/Atualizar PowerShell"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
@@ -5143,10 +5417,21 @@ function Show-AppsMenu {
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Install-Applications; Show-SuccessMessage }
-            'B' { Start-Process "appwiz.cpl"; Show-SuccessMessage } # Abre "Programas e Recursos"
-            'C' { Start-Process "ms-settings:appsfeatures"; Show-SuccessMessage } # Abre "Aplicativos e Recursos" (UWP)
-            'D' { Update-WindowsAndDrivers; Show-SuccessMessage }   # NOVO: função órfã, agora acessível
+            'A' { Update-WindowsAndDrivers; Show-SuccessMessage }   # NOVO: função órfã, agora acessível
+            'B' { Start-Process "ms-settings:appsfeatures"; Show-SuccessMessage } # Abre "Aplicativos e Recursos" (UWP)
+            'C' { Start-Process "appwiz.cpl"; Show-SuccessMessage } # Abre "Programas e Recursos"
+            'D' {
+                # NOVO: abre o seletor com checkbox (Show-AppInstallPicker) em vez de instalar
+                # a lista inteira direto -- deixa escolher quais apps instalar antes de rodar.
+                $appsEscolhidos = Show-AppInstallPicker
+                if ($null -eq $appsEscolhidos -or $appsEscolhidos.Count -eq 0) {
+                    Write-Host 'Nenhum aplicativo selecionado. Instalação cancelada.' -ForegroundColor Yellow
+                    Start-Sleep -Seconds 1
+                } else {
+                    Install-Applications -Apps $appsEscolhidos
+                    Show-SuccessMessage
+                }
+            }
             'E' { Update-PowerShell; Show-SuccessMessage }          # NOVO: função órfã, agora acessível
             'Z' { Invoke-AppsAndTools; Show-SuccessMessage } # Chama o orquestrador
             'X' { return }
@@ -5165,8 +5450,8 @@ function Show-DiagnosticsMenu {
         Write-Host " MENU: DIAGNÓSTICOS" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " A) Executar Todos os Diagnósticos Avançados"
-        Write-Host " B) Mostrar Uso de Disco"
-        Write-Host " C) Mostrar Informações do Sistema"
+        Write-Host " B) Mostrar Informações do Sistema"
+        Write-Host " C) Mostrar Uso de Disco"
         Write-Host " D) Testar Memória"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
@@ -5175,8 +5460,8 @@ function Show-DiagnosticsMenu {
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Invoke-All-DiagnosticsAdvanced; Show-SuccessMessage }
-            'B' { Show-DiskUsage; Show-SuccessMessage }
-            'C' { Show-SystemInfo; Show-SuccessMessage }
+            'B' { Show-SystemInfo; Show-SuccessMessage }
+            'C' { Show-DiskUsage; Show-SuccessMessage }
             'D' { Test-Memory; Show-SuccessMessage }
             'Z' { Invoke-Diagnose; Show-SuccessMessage } # Chama o orquestrador de Diagnósticos
             'X' { return }
@@ -5195,13 +5480,13 @@ function Show-NetworkMenu {
         Write-Host " MENU: REDE E OUTROS" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " A) Adicionar Rede Wi-Fi"
-        Write-Host " B) Limpar Cache ARP"
-        Write-Host " C) Limpar Cache DNS"
-        Write-Host " D) Limpar Spooler de Impressão"
-        Write-Host " E) Desativar IPv6"
-        Write-Host " F) Instalar Impressoras de Rede"
-        Write-Host " G) Executar Todos os Ajustes de Rede Avançados"
-        Write-Host " H) Configurar DNS Google/Cloudflare"
+        Write-Host " B) Configurar DNS Google/Cloudflare"
+        Write-Host " C) Desativar IPv6"
+        Write-Host " D) Executar Todos os Ajustes de Rede Avançados"
+        Write-Host " E) Instalar Impressoras de Rede"
+        Write-Host " F) Limpar Cache ARP"
+        Write-Host " G) Limpar Cache DNS"
+        Write-Host " H) Limpar Spooler de Impressão"
         Write-Host " I) Mostrar Informações de Rede"
         Write-Host " J) Testar Velocidade da Internet"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
@@ -5211,13 +5496,13 @@ function Show-NetworkMenu {
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Add-WiFiNetwork; Show-SuccessMessage }
-            'B' { Clear-ARP; Show-SuccessMessage }
-            'C' { Clear-DNS; Show-SuccessMessage }
-            'D' { Clear-PrintSpooler; Show-SuccessMessage }
-            'E' { Disable-IPv6; Show-SuccessMessage }
-            'F' { Install-NetworkPrinters; Show-SuccessMessage }
-            'G' { Invoke-All-NetworkAdvanced; Show-SuccessMessage }
-            'H' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
+            'B' { Set-DnsGoogleCloudflare; Show-SuccessMessage }
+            'C' { Disable-IPv6; Show-SuccessMessage }
+            'D' { Invoke-All-NetworkAdvanced; Show-SuccessMessage }
+            'E' { Install-NetworkPrinters; Show-SuccessMessage }
+            'F' { Clear-ARP; Show-SuccessMessage }
+            'G' { Clear-DNS; Show-SuccessMessage }
+            'H' { Clear-PrintSpooler; Show-SuccessMessage }
             'I' { Show-NetworkInfo; Show-SuccessMessage }
             'J' { Test-InternetSpeed; Show-SuccessMessage }
             'Z' { Invoke-NetworkUtilities; Show-SuccessMessage } # Chama o orquestrador de Redes
@@ -5236,15 +5521,15 @@ function Show-ExternalScriptsMenu {
 		Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host "`n[SCRIPTS EXTERNOS]" -ForegroundColor Cyan
 		Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Rodar Ativador get.activated.win"
+        Write-Host " A) Atualizar Script Supremo pela URL"
         Write-Host " B) Executar Chris Titus Toolbox"
-        Write-Host " C) Atualizar Script Supremo pela URL"
+        Write-Host " C) Rodar Ativador get.activated.win"
         Write-Host " X) Voltar" -ForegroundColor Red
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Invoke-WindowsActivator }
+            'A' { Update-ScriptFromCloud }
             'B' { Invoke-ChrisTitusToolbox }
-            'C' { Update-ScriptFromCloud }
+            'C' { Invoke-WindowsActivator }
             'X' { return }
         }
         Show-SuccessMessage
@@ -5257,38 +5542,38 @@ function Show-RestoreMenu {
 		Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host "`n[RESTAURAR / BACKUP]" -ForegroundColor Cyan
 		Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Criar ponto de restauração"
-        Write-Host " B) Backup do Registro"
-        Write-Host " C) Restaurar Registro (pasta)"
-        Write-Host " D) Restaurar configurações visuais"
-        Write-Host " E) Restaurar UAC padrão"
+        Write-Host " A) Backup do Registro"
+        Write-Host " B) Criar ponto de restauração"
+        Write-Host " C) Desfazer Reforço de Privacidade Agressivo"
+        Write-Host " D) Reabilitar notificações Action Center"
+        Write-Host " E) Reinstalar Apps essenciais"
         Write-Host " F) Reinstalar OneDrive"
-        Write-Host " G) Reinstalar Apps essenciais"
-        Write-Host " H) Restaurar menu de contexto clássico"
+        Write-Host " G) Restaurar configurações visuais"
+        Write-Host " H) Restaurar IPv6"
         Write-Host " I) Restaurar macros Office"
-        Write-Host " J) Restaurar IPv6"
-        Write-Host " K) Reabilitar notificações Action Center"
+        Write-Host " J) Restaurar menu de contexto clássico"
+        Write-Host " K) Restaurar Registro (pasta)"
         Write-Host " L) Restaurar Registro a partir de Backup (pasta)"
-        Write-Host " M) Desfazer Reforço de Privacidade Agressivo"
-        Write-Host " N) Restaurar TODOS os Padrões do Sistema (reverte tweaks)"
+        Write-Host " M) Restaurar TODOS os Padrões do Sistema (reverte tweaks)"
+        Write-Host " N) Restaurar UAC padrão"
         Write-Host " Z) Desfazer Tudo (Rotina completa de Restauração)" -ForegroundColor Green
         Write-Host " X) Voltar" -ForegroundColor Red
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { New-SystemRestorePoint }
-            'B' { Backup-Registry }
-            'C' { Restore-Registry }
-            'D' { Restore-VisualPerformanceDefault }
-            'E' { Restore-DefaultUAC }
+            'A' { Backup-Registry }
+            'B' { New-SystemRestorePoint }
+            'C' { Undo-PrivacyHardening }          # NOVO: função órfã, agora acessível
+            'D' { Grant-ActionCenter-Notifications }
+            'E' { Restore-BloatwareSafe }
             'F' { Restore-OneDrive }
-            'G' { Restore-BloatwareSafe }
-            'H' { Enable-ClassicContextMenu }
+            'G' { Restore-VisualPerformanceDefault }
+            'H' { Restore-DefaultIPv6 }
             'I' { Restore-OfficeMacros }
-            'J' { Restore-DefaultIPv6 }
-            'K' { Grant-ActionCenter-Notifications }
+            'J' { Enable-ClassicContextMenu }
+            'K' { Restore-Registry }
             'L' { Restore-Registry-FromBackup }   # NOVO: função órfã, agora acessível
-            'M' { Undo-PrivacyHardening }          # NOVO: função órfã, agora acessível
-            'N' { Restore-SystemDefaults }         # NOVO: função órfã, agora acessível
+            'M' { Restore-SystemDefaults }         # NOVO: função órfã, agora acessível
+            'N' { Restore-DefaultUAC }
             'Z' { Invoke-Undo }                    # Preserva o comportamento antigo do "G) Restaurações" do menu principal
             'X' { return }
         }
@@ -5464,40 +5749,40 @@ function Show-CleanupMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " MENU: LIMPEZA E OTIMIZAÇÃO" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Backup do Registro"
-        Write-Host " B) Limpeza Profunda do Sistema"
-        Write-Host " C) Limpar Prefetch"
-        Write-Host " D) Limpar Arquivos Temporários"
-        Write-Host " E) Limpar WinSxS (Limpeza de Componentes)"
-        Write-Host " F) Limpar Cache do Windows Update"
-        Write-Host " G) Desativar Cortana e Pesquisa"
-        Write-Host " H) Desativar SMBv1"
-        Write-Host " I) Iniciar Verificação DISM"
-        Write-Host " J) Iniciar Verificação SFC"
-        Write-Host " K) Agendar ChkDsk no Reboot"
-        Write-Host " L) Remover Pasta Windows.old"
-        Write-Host " M) Limpar Arquivos e Pastas Vazias (Temp)"
-        Write-Host " N) Remover Arquivos Duplicados (move p/ revisão por padrão, com backup)"
+        Write-Host " A) Agendar ChkDsk no Reboot"
+        Write-Host " B) Backup do Registro"
+        Write-Host " C) Desativar Cortana e Pesquisa"
+        Write-Host " D) Desativar SMBv1"
+        Write-Host " E) Iniciar Verificação DISM"
+        Write-Host " F) Iniciar Verificação SFC"
+        Write-Host " G) Limpar Arquivos e Pastas Vazias (Temp)"
+        Write-Host " H) Limpar Arquivos Temporários"
+        Write-Host " I) Limpar Cache do Windows Update"
+        Write-Host " J) Limpar Prefetch"
+        Write-Host " K) Limpar WinSxS (Limpeza de Componentes)"
+        Write-Host " L) Limpeza Profunda do Sistema"
+        Write-Host " M) Remover Arquivos Duplicados (move p/ revisão por padrão, com backup)"
+        Write-Host " N) Remover Pasta Windows.old"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Backup-Registry; Show-SuccessMessage }
-            'B' { Clear-DeepSystemCleanup; Show-SuccessMessage }
-            'C' { Clear-Prefetch; Show-SuccessMessage }
-            'D' { Clear-TemporaryFiles; Show-SuccessMessage }
-            'E' { Clear-WinSxS; Show-SuccessMessage }
-            'F' { Clear-WUCache; Show-SuccessMessage }
-            'G' { Disable-Cortana-AndSearch; Show-SuccessMessage }
-            'H' { Disable-SMBv1; Show-SuccessMessage }
-            'I' { Invoke-DISM-Scan; Show-SuccessMessage }
-            'J' { Invoke-SFC-Scan; Show-SuccessMessage }
-            'K' { New-ChkDsk; Show-SuccessMessage }
-            'L' { Remove-WindowsOld; Show-SuccessMessage }            # NOVO: função órfã, agora acessível
-            'M' { Clear-EmptyFilesAndFolders; Show-SuccessMessage }   # NOVO: deleta arquivos 0 byte e pastas vazias (só em %TEMP%/Windows\Temp)
-            'N' { Remove-DuplicateFiles; Show-SuccessMessage }        # NOVO: fora da Rotina Completa (Z) de propósito — requer revisão humana
+            'A' { New-ChkDsk; Show-SuccessMessage }
+            'B' { Backup-Registry; Show-SuccessMessage }
+            'C' { Disable-Cortana-AndSearch; Show-SuccessMessage }
+            'D' { Disable-SMBv1; Show-SuccessMessage }
+            'E' { Invoke-DISM-Scan; Show-SuccessMessage }
+            'F' { Invoke-SFC-Scan; Show-SuccessMessage }
+            'G' { Clear-EmptyFilesAndFolders; Show-SuccessMessage }   # NOVO: deleta arquivos 0 byte e pastas vazias (só em %TEMP%/Windows\Temp)
+            'H' { Clear-TemporaryFiles; Show-SuccessMessage }
+            'I' { Clear-WUCache; Show-SuccessMessage }
+            'J' { Clear-Prefetch; Show-SuccessMessage }
+            'K' { Clear-WinSxS; Show-SuccessMessage }
+            'L' { Clear-DeepSystemCleanup; Show-SuccessMessage }
+            'M' { Remove-DuplicateFiles; Show-SuccessMessage }        # NOVO: fora da Rotina Completa (Z) de propósito — requer revisão humana
+            'N' { Remove-WindowsOld; Show-SuccessMessage }            # NOVO: função órfã, agora acessível
             'Z' { Invoke-Cleanup; Show-SuccessMessage } # Chama o orquestrador de Limpeza
             'X' { return }
             default {
@@ -5514,36 +5799,36 @@ function Show-BloatwareMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " MENU: PRIVACIDADE E SEGURANÇA" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Remover Aplicativos Pré-instalados (Bloatware)"
-        Write-Host " B) Forçar Remoção Completa do OneDrive"
-        Write-Host " C) Remover Windows Copilot"
-        Write-Host " D) Desativar Windows Recall"
-        Write-Host " E) Desativar Tarefas Agendadas de Bloatware"
-        Write-Host " F) Desativar Serviços Desnecessários"
-        Write-Host " G) Remover Pins do Menu Iniciar e Barra de Tarefas"
-        Write-Host " H) Remover Pastas de Bloatware Seguras"
-        Write-Host " I) Parar Processos de Bloatware em Execução"
-        Write-Host " J) Aplicar Prevenção de Bloatware e Privacidade"
-        Write-Host " K) Aplicar Endurecimento de Privacidade Agressivo"
-        Write-Host " L) Reforçar Segurança de Macros do Office"
+        Write-Host " A) Aplicar Endurecimento de Privacidade Agressivo"
+        Write-Host " B) Aplicar Prevenção de Bloatware e Privacidade"
+        Write-Host " C) Desativar Serviços Desnecessários"
+        Write-Host " D) Desativar Tarefas Agendadas de Bloatware"
+        Write-Host " E) Desativar Windows Recall"
+        Write-Host " F) Forçar Remoção Completa do OneDrive"
+        Write-Host " G) Parar Processos de Bloatware em Execução"
+        Write-Host " H) Reforçar Segurança de Macros do Office"
+        Write-Host " I) Remover Aplicativos Pré-instalados (Bloatware)"
+        Write-Host " J) Remover Pastas de Bloatware Seguras"
+        Write-Host " K) Remover Pins do Menu Iniciar e Barra de Tarefas"
+        Write-Host " L) Remover Windows Copilot"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Remove-SystemBloatware; Show-SuccessMessage } # Assumindo que Remove-SystemBloatware é a função para isso
-            'B' { Remove-SystemBloatware; Show-SuccessMessage }
-            'C' { Remove-SystemBloatware; Show-SuccessMessage }
-            'D' { Disable-WindowsRecall; Show-SuccessMessage }
-            'E' { Remove-SystemBloatware; Show-SuccessMessage }
-            'F' { Disable-UnnecessaryServices; Show-SuccessMessage }
+            'A' { Enable-PrivacyHardening; Show-SuccessMessage }   # NOVO: função órfã, agora acessível
+            'B' { Grant-PrivacyAndBloatwarePrevention; Show-SuccessMessage }
+            'C' { Disable-UnnecessaryServices; Show-SuccessMessage }
+            'D' { Remove-SystemBloatware; Show-SuccessMessage }
+            'E' { Disable-WindowsRecall; Show-SuccessMessage }
+            'F' { Remove-SystemBloatware; Show-SuccessMessage }
             'G' { Remove-SystemBloatware; Show-SuccessMessage }
-            'H' { Restore-BloatwareSafe; Show-SuccessMessage } # Assumindo que esta remove pastas seguras
-            'I' { Remove-SystemBloatware; Show-SuccessMessage }
-            'J' { Grant-PrivacyAndBloatwarePrevention; Show-SuccessMessage }
-            'K' { Enable-PrivacyHardening; Show-SuccessMessage }   # NOVO: função órfã, agora acessível
-            'L' { Grant-HardenOfficeMacros; Show-SuccessMessage }  # NOVO: função órfã, agora acessível
+            'H' { Grant-HardenOfficeMacros; Show-SuccessMessage }  # NOVO: função órfã, agora acessível
+            'I' { Remove-SystemBloatware; Show-SuccessMessage } # Assumindo que Remove-SystemBloatware é a função para isso
+            'J' { Restore-BloatwareSafe; Show-SuccessMessage } # Assumindo que esta remove pastas seguras
+            'K' { Remove-SystemBloatware; Show-SuccessMessage }
+            'L' { Remove-SystemBloatware; Show-SuccessMessage }
             'Z' { Invoke-Bloatware; Show-SuccessMessage } # Chama o orquestrador de Bloatware
             'X' { return }
             default {
@@ -5560,22 +5845,22 @@ function Show-SystemPerformanceMenu {
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " MENU: SISTEMA E DESEMPENHO" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
-        Write-Host " A) Otimizar Desempenho do Explorer"
-        Write-Host " B) Definir Plano de Energia Otimizado"
-        Write-Host " C) Ajustar Efeitos Visuais para Desempenho"
-        Write-Host " D) Realizar Otimizações Gerais do Sistema"
-        Write-Host " E) Criar Ponto de Restauração do Sistema"
+        Write-Host " A) Ajustar Efeitos Visuais para Desempenho"
+        Write-Host " B) Criar Ponto de Restauração do Sistema"
+        Write-Host " C) Definir Plano de Energia Otimizado"
+        Write-Host " D) Otimizar Desempenho do Explorer"
+        Write-Host " E) Realizar Otimizações Gerais do Sistema"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
 
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Optimize-ExplorerPerformance; Show-SuccessMessage }
-            'B' { Set-OptimizedPowerPlan; Show-SuccessMessage }
-            'C' { Set-VisualPerformance; Show-SuccessMessage }
-            'D' { Grant-SystemOptimizations; Show-SuccessMessage }
-            'E' { New-SystemRestorePoint; Show-SuccessMessage }
+            'A' { Set-VisualPerformance; Show-SuccessMessage }
+            'B' { New-SystemRestorePoint; Show-SuccessMessage }
+            'C' { Set-OptimizedPowerPlan; Show-SuccessMessage }
+            'D' { Optimize-ExplorerPerformance; Show-SuccessMessage }
+            'E' { Grant-SystemOptimizations; Show-SuccessMessage }
             'Z' { Invoke-Tweaks; Show-SuccessMessage } # Chama o orquestrador
             'X' { return }
             default {
@@ -5614,16 +5899,16 @@ function Show-MainMenu {
         Write-Host " SCRIPT DE MANUTENÇÃO WINDOWS - MENU PRINCIPAL" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host " A) Configurações Avançadas" -ForegroundColor Yellow
-        Write-Host " B) Instalação e Ferramentas" -ForegroundColor Yellow
-        Write-Host " C) Privacidade e Segurança" -ForegroundColor Yellow
-        Write-Host " D) Rede e Outros" -ForegroundColor Yellow
-        Write-Host " E) Sistema e Desempenho" -ForegroundColor Yellow
-		Write-Host " F) Scripts Externos" -ForegroundColor Yellow
-		Write-Host " G) Restaurações" -ForegroundColor Yellow
-        Write-Host " H) Rotina Colégio" -ForegroundColor Green
-        Write-Host " I) Limpeza e Otimização" -ForegroundColor Yellow
-        Write-Host " J) Diagnósticos" -ForegroundColor Yellow
-        Write-Host " K) Interface Gráfica (GUI)" -ForegroundColor Magenta
+        Write-Host " B) Diagnósticos" -ForegroundColor Yellow
+        Write-Host " C) Instalação e Ferramentas" -ForegroundColor Yellow
+        Write-Host " D) Interface Gráfica (GUI)" -ForegroundColor Magenta
+        Write-Host " E) Limpeza e Otimização" -ForegroundColor Yellow
+		Write-Host " F) Privacidade e Segurança" -ForegroundColor Yellow
+		Write-Host " G) Rede e Outros" -ForegroundColor Yellow
+        Write-Host " H) Restaurações" -ForegroundColor Yellow
+        Write-Host " I) Rotina Colégio" -ForegroundColor Green
+        Write-Host " J) Scripts Externos" -ForegroundColor Yellow
+        Write-Host " K) Sistema e Desempenho" -ForegroundColor Yellow
 		Write-Host " R) Reiniciar" -ForegroundColor Blue
         Write-Host " S) Desligar" -ForegroundColor Blue
         Write-Host " X) Sair" -ForegroundColor Red
@@ -5632,16 +5917,16 @@ function Show-MainMenu {
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
             'A' { Show-AdvancedSettingsMenu }
-            'B' { Show-AppsMenu } # Mapeado para o antigo "Aplicativos"
-            'C' { Show-BloatwareMenu } # Mapeado para o antigo "Remoção de Bloatware"
-            'D' { Show-NetworkMenu } # Mapeado para o antigo "Rede e Impressoras"
-            'E' { Show-SystemPerformanceMenu } # Mapeado para a função de desempenho
-			'F' { Show-ExternalScriptsMenu }
-			'G' { Show-RestoreMenu } # Antes: Invoke-Undo. Agora abre o menu completo de Restauração; a rotina "Desfazer Tudo" (Invoke-Undo) virou a opção Z lá dentro.
-			'H' { Invoke-Colegio }
-			'I' { Show-CleanupMenu }      # NOVO: menu de Limpeza e Otimização (antes órfão, inalcançável)
-			'J' { Show-DiagnosticsMenu }  # NOVO: menu de Diagnósticos (antes órfão, inalcançável)
-			'K' { Show-Gui }              # NOVO: abre a interface grafica (WPF)
+            'B' { Show-DiagnosticsMenu }  # NOVO: menu de Diagnósticos (antes órfão, inalcançável)
+            'C' { Show-AppsMenu } # Mapeado para o antigo "Aplicativos"
+            'D' { Show-Gui }              # NOVO: abre a interface grafica (WPF)
+            'E' { Show-CleanupMenu }      # NOVO: menu de Limpeza e Otimização (antes órfão, inalcançável)
+			'F' { Show-BloatwareMenu } # Mapeado para o antigo "Remoção de Bloatware"
+			'G' { Show-NetworkMenu } # Mapeado para o antigo "Rede e Impressoras"
+			'H' { Show-RestoreMenu } # Antes: Invoke-Undo. Agora abre o menu completo de Restauração; a rotina "Desfazer Tudo" (Invoke-Undo) virou a opção Z lá dentro.
+			'I' { Invoke-Colegio }
+			'J' { Show-ExternalScriptsMenu }
+			'K' { Show-SystemPerformanceMenu } # Mapeado para a função de desempenho
             'R' {
                 Write-Host 'Reiniciando o sistema...' -ForegroundColor Cyan
                 Restart-Computer -Force

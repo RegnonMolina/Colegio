@@ -145,7 +145,7 @@ function Get-GuiAppIconPath {
 # ----------------------------------------------------------------------------
 # Catalogo de acoes (fonte de verdade). Todas as Funcoes existem no script.
 # Destr = $true marca acoes destrutivas. Params (opcional) = parametros da acao.
-#   Param: @{ Nome; Rotulo; Tipo='text'|'paths'|'switch'|'choice'; Default; Opcoes }
+#   Param: @{ Nome; Rotulo; Tipo='text'|'paths'|'files'|'switch'|'choice'|'password'; Default; Opcoes; Pasta=$true; Arquivo=$true }
 # ----------------------------------------------------------------------------
 function Get-GuiActionCatalog {
     @(
@@ -255,6 +255,13 @@ function Get-GuiActionCatalog {
         # --- Rotinas ---
         [pscustomobject]@{ Cat='Rotinas'; Titulo='Manutencao Completa';       Func='Show-FullMaintenance'; Desc='Executa a manutencao completa (todos os grupos em sequencia).'; Destr=$true }
         [pscustomobject]@{ Cat='Rotinas'; Titulo='Rotina Colegio (completa)'; Func='Invoke-Colegio';       Desc='Rotina completa de manutencao do Colegio (checkpoint + backup + limpeza + tweaks + apps).'; Destr=$true }
+
+        # --- Ferramentas ---
+        [pscustomobject]@{ Cat='Ferramentas'; Titulo='Converter Videos iVMS-4200 (HEVC -> MP4)'; Func='Convert-IvmsCctvVideos'; Desc='Converte videos exportados do iVMS-4200 (H.265 com aspect ratio errado) para MP4 compativel via ffmpeg: remuxa o video (sem recodificar), corrige o SAR, marca hvc1, recodifica o audio pra AAC 64kbps/16kHz e ativa faststart. Salva no destino com o mesmo nome do arquivo de origem (nao sobrescreve por padrao). Requer ffmpeg no PATH.'; Destr=$false; Params=@(
+                                            @{ Nome='SourceFiles'; Rotulo='Video(s) de origem (.mp4 do iVMS-4200)'; Tipo='files'; Default=''; Exemplo='Clique no botao para escolher 1+ arquivos (pode clicar de novo pra somar mais).'; Arquivo=$true }
+                                            @{ Nome='DestFolder'; Rotulo='Pasta de destino'; Tipo='text'; Default=''; Exemplo='Ex.: C:\Videos\Convertidos'; Pasta=$true }
+                                            @{ Nome='SobrescreverExistente'; Rotulo='Sobrescrever se ja existir arquivo com o mesmo nome no destino'; Tipo='switch'; Default=$false }
+                                          ) }
     )
 }
 
@@ -841,7 +848,11 @@ function Invoke-MaintenanceGuiWindow {
                 # Acesso direto ($p.Pasta) funciona normalmente e retorna $null se a chave
                 # nao existir, entao dispensa checagem de existencia.
                 $temBotaoPasta = [bool]$p.Pasta -and ($c -is [System.Windows.Controls.TextBox])
-                if ($temBotaoPasta) {
+                # NOVO: campos marcados com Arquivo=$true no catalogo ganham um botao "Procurar
+                # arquivo(s)..." que abre um OpenFileDialog (com Multiselect) em vez do
+                # FolderBrowserDialog -- mesmo padrao do botao de pasta, so muda o dialogo.
+                $temBotaoArquivo = [bool]$p.Arquivo -and ($c -is [System.Windows.Controls.TextBox])
+                if ($temBotaoPasta -or $temBotaoArquivo) {
                     $gridPasta = New-Object System.Windows.Controls.Grid
                     $colTxt = New-Object System.Windows.Controls.ColumnDefinition
                     $colTxt.Width = New-Object System.Windows.GridLength(1, [System.Windows.GridUnitType]::Star)
@@ -854,29 +865,46 @@ function Invoke-MaintenanceGuiWindow {
                     [void]$gridPasta.Children.Add($c)
 
                     $btnPasta = New-Object System.Windows.Controls.Button
-                    $btnPasta.Content = '📂'
+                    $btnPasta.Content = if ($temBotaoArquivo) { '📄' } else { '📂' }
                     $btnPasta.Width = 34
                     $btnPasta.Margin = '4,0,0,0'
-                    $btnPasta.ToolTip = 'Procurar pasta...'
+                    $btnPasta.ToolTip = if ($temBotaoArquivo) { 'Procurar arquivo(s)...' } else { 'Procurar pasta...' }
                     [System.Windows.Controls.Grid]::SetColumn($btnPasta, 1)
 
                     # Referencias fechadas no clique via GetNewClosure (mesmo padrao ja usado
                     # no resto do arquivo para botoes criados em loop/dinamicamente).
                     $txtRef = $c
                     $ehListaDePastas = ($p.Tipo -eq 'paths')  # 'paths' aceita varias pastas separadas por ; (soma); os demais tipos substituem o valor
+                    $ehListaDeArquivos = ($p.Tipo -eq 'files') # 'files' aceita varios arquivos separados por ; (soma), igual 'paths'
+                    $ehArquivo = $temBotaoArquivo
                     $btnPasta.Add_Click({
                         try {
-                            $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
-                            $dlg.Description = 'Selecione a pasta'
-                            $dlg.ShowNewFolderButton = $true
-                            if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-                                if ($ehListaDePastas -and $txtRef.Text.Trim()) {
-                                    $txtRef.Text = $txtRef.Text.TrimEnd(';') + ';' + $dlg.SelectedPath
-                                } else {
-                                    $txtRef.Text = $dlg.SelectedPath
+                            if ($ehArquivo) {
+                                $dlg = New-Object System.Windows.Forms.OpenFileDialog
+                                $dlg.Title = 'Selecione o(s) arquivo(s)'
+                                $dlg.Multiselect = $true
+                                $dlg.Filter = 'Videos (*.mp4;*.mkv;*.avi;*.mov)|*.mp4;*.mkv;*.avi;*.mov|Todos os arquivos (*.*)|*.*'
+                                if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                                    $selecionados = $dlg.FileNames -join ';'
+                                    if ($ehListaDeArquivos -and $txtRef.Text.Trim()) {
+                                        $txtRef.Text = $txtRef.Text.TrimEnd(';') + ';' + $selecionados
+                                    } else {
+                                        $txtRef.Text = $selecionados
+                                    }
+                                }
+                            } else {
+                                $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
+                                $dlg.Description = 'Selecione a pasta'
+                                $dlg.ShowNewFolderButton = $true
+                                if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                                    if ($ehListaDePastas -and $txtRef.Text.Trim()) {
+                                        $txtRef.Text = $txtRef.Text.TrimEnd(';') + ';' + $dlg.SelectedPath
+                                    } else {
+                                        $txtRef.Text = $dlg.SelectedPath
+                                    }
                                 }
                             }
-                        } catch { Show-GuiHandlerError -Contexto 'Procurar pasta' -ErroObj $_ }
+                        } catch { Show-GuiHandlerError -Contexto 'Procurar pasta/arquivo' -ErroObj $_ }
                     }.GetNewClosure())
 
                     [void]$gridPasta.Children.Add($btnPasta)
@@ -924,6 +952,7 @@ function Invoke-MaintenanceGuiWindow {
                 'switch'   { $splat[$nome] = [bool]$pc.Ctrl.IsChecked }
                 'choice'   { $v = '' + $pc.Ctrl.SelectedItem; if ($v) { $splat[$nome] = $v } }
                 'paths'    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
+                'files'    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
                 'password' { $v = $pc.Ctrl.Password; if ($v) { $splat[$nome] = $v } }
                 default    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = $v } }
             }
@@ -1045,6 +1074,7 @@ function Invoke-MaintenanceGuiWindow {
                     'switch'   { $pc.Ctrl.IsChecked = [bool]$valor }
                     'choice'   { if ($valor) { $pc.Ctrl.SelectedItem = [string]$valor } }
                     'paths'    { $pc.Ctrl.Text = if ($valor) { (@($valor) -join ';') } else { '' } }
+                    'files'    { $pc.Ctrl.Text = if ($valor) { (@($valor) -join ';') } else { '' } }
                     'password' { $pc.Ctrl.Password = [string]$valor }
                     default    { $pc.Ctrl.Text = [string]$valor }
                 }
