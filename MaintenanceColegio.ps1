@@ -5288,8 +5288,8 @@ function Update-WindowsAndDrivers {
             Install-Module PSWindowsUpdate -Force -Scope CurrentUser -ErrorAction Stop
         }
         Import-Module PSWindowsUpdate -ErrorAction Stop
-        Get-WindowsUpdate -AcceptAll -Install -AutoReboot
-        Write-Log "Atualizações do Windows concluídas." -Type Success
+        Get-WindowsUpdate -AcceptAll -Install
+        Write-Log "Atualizações do Windows concluídas. Se alguma atualização exigir reinício, ele NÃO acontece sozinho -- reinicie manualmente quando for conveniente." -Type Success
     }
     catch {
         Write-Log "Erro ao atualizar o Windows (PSWindowsUpdate indisponível?): $_" -Type Error
