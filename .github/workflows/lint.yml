@@ -1,7 +1,9 @@
 name: Lint PowerShell
 
 # Escopo: arquivo de produção (o que colegiomundodosaber.com.br/script entrega).
-# ScriptSupremo.ps1 é uma cópia legada não auditada e fica fora do gate por ora.
+# ScriptSupremo.ps1 (cópia legada não auditada, com funções-fantasma e um segredo
+# vazado) foi removido do repositório em 2026-08-17 -- ver AUDITORIA_2026-08-17.md
+# (local, não versionado). Nada mais a excluir do gate por enquanto.
 
 on:
   push:

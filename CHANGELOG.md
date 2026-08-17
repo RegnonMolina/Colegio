@@ -2,6 +2,29 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [2.4.1] - 2026-08-17
+
+### Removido
+- **`ScriptSupremo.ps1`** removido do repositório — cópia legada que já estava fora do
+  gate de CI ("cópia legada não auditada", ver `.github/workflows/lint.yml`) e nunca
+  recebeu as correções aplicadas ao `MaintenanceColegio.ps1`. Auditoria de segurança
+  encontrou 2 problemas sérios só nela, que motivaram a remoção em vez de correção:
+  - **Senha real do Wi-Fi administrativo em texto claro no código-fonte** (já
+    corrigida no `MaintenanceColegio.ps1` desde a "versão de auditoria com scrub de
+    Wi-Fi", mas o scrub nunca chegou a esse arquivo antigo). Como o repositório é
+    público, tratar como exposta -- decisão do Regnon foi não trocar a senha por
+    enquanto.
+  - **6 funções chamadas pelo menu de texto e nunca definidas** (`Cleanup-System`,
+    `Invoke-AppsAndTools`, `Invoke-PrivacyTweaks`, `Invoke-RemoveAllBloatware`,
+    `Optimize-Drives`, `Remove-Bloatware`) -- mesma classe de bug já corrigida no
+    `MaintenanceColegio.ps1` na v2.0.0 ("antes eram funções-fantasma"), nunca
+    propagada pro arquivo antigo.
+  - `MaintenanceColegio.ps1` (o que `script.colegiomundodosaber.com.br` de fato
+    entrega) não foi alterado por esta remoção -- CI verde, catálogo da GUI 100%
+    íntegro (73/73 ações conferidas), tratamento de Wi-Fi já correto. Detalhe
+    completo da auditoria em `AUDITORIA_2026-08-17.md` (arquivo local, não
+    versionado de propósito -- não deve ir pro repositório público).
+
 ## [2.4.0] - 2026-08-14
 
 ### Alterado
