@@ -2833,6 +2833,139 @@ function Install-Applications {
     }
 }
 
+function Repair-SnippingTool {
+    <#
+    .SYNOPSIS
+        Repara a Ferramenta de Captura/Recorte nativa do Windows (Snipping Tool /
+        Snip & Sketch) quando ela não abre, não responde ao PrtScn ou está corrompida.
+    .DESCRIPTION
+        Cobre as três causas mais comuns de "print nativo não funciona":
+        1) Atalho PrtScn desviado do recorte de tela (tecla desabilitada nas Configurações);
+        2) Pacote AppX da Ferramenta de Captura corrompido — reregistra via Get-AppxPackage;
+        3) Como último recurso, reinstala o pacote (Microsoft.ScreenSketch) via winget.
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+
+    Write-Log "Iniciando reparo da Ferramenta de Captura nativa..." -Type Info
+    $activity = "Reparo da Ferramenta de Captura"
+
+    if (-not $PSCmdlet.ShouldProcess("Ferramenta de Captura (Snipping Tool)", "reparar")) { return }
+
+    try {
+        # --- 1) Garantir que a tecla PrtScn está mapeada pro recorte de tela ---
+        Grant-WriteProgress -Activity $activity -Status "Verificando atalho do Print Screen..." -PercentComplete 15
+        $chaveAtalho = 'HKCU:\Control Panel\Keyboard'
+        if (-not $WhatIf) {
+            if (-not (Test-Path $chaveAtalho)) { New-Item -Path $chaveAtalho -Force | Out-Null }
+            Set-ItemProperty -Path $chaveAtalho -Name 'PrintScreenKeyForSnippingEnabled' -Value 1 -Type DWord -Force -ErrorAction Stop
+            Write-Log "Atalho Print Screen reativado para abrir o recorte de tela." -Type Success
+        } else {
+            Write-Log "Modo WhatIf: atalho Print Screen seria reativado (PrintScreenKeyForSnippingEnabled=1)." -Type Debug
+        }
+
+        # --- 2) Reregistrar o pacote AppX da Ferramenta de Captura (corrige a maioria dos casos
+        #        de 'abre e fecha sozinho' ou 'não responde') ---
+        Grant-WriteProgress -Activity $activity -Status "Reregistrando o pacote da Ferramenta de Captura..." -PercentComplete 45
+        $pacote = Get-AppxPackage -Name 'Microsoft.ScreenSketch' -ErrorAction SilentlyContinue
+        if ($pacote) {
+            if (-not $WhatIf) {
+                try {
+                    $manifesto = Join-Path $pacote.InstallLocation 'AppXManifest.xml'
+                    Add-AppxPackage -DisableDevelopmentMode -Register $manifesto -ErrorAction Stop
+                    Write-Log "Pacote Microsoft.ScreenSketch reregistrado." -Type Success
+                } catch {
+                    Write-Log "Falha ao reregistrar Microsoft.ScreenSketch: $($_.Exception.Message)" -Type Warning
+                }
+            } else {
+                Write-Log "Modo WhatIf: Microsoft.ScreenSketch seria reregistrado." -Type Debug
+            }
+        } else {
+            Write-Log "Pacote Microsoft.ScreenSketch não encontrado (removido ou versão antiga do Windows)." -Type Warning
+        }
+
+        # --- 3) Último recurso: reinstalar via winget, se disponível ---
+        Grant-WriteProgress -Activity $activity -Status "Garantindo instalação via winget..." -PercentComplete 75
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            if (-not $WhatIf) {
+                $resultado = (winget install --id 9MZ95KL8MR0L -e --accept-package-agreements --accept-source-agreements --source msstore 2>&1)
+                if ($LASTEXITCODE -eq 0 -or $resultado -like "*already installed*" -or $resultado -like "*No available upgrade*") {
+                    Write-Log "Ferramenta de Captura confirmada/reinstalada via winget (Microsoft Store)." -Type Success
+                } else {
+                    Write-Log "winget não conseguiu confirmar a instalação via Store. Detalhes: $($resultado | Out-String)" -Type Warning
+                }
+            } else {
+                Write-Log "Modo WhatIf: Ferramenta de Captura seria reinstalada via winget (Microsoft Store)." -Type Debug
+            }
+        } else {
+            Write-Log "Winget não encontrado — pulando reinstalação via Microsoft Store." -Type Warning
+        }
+
+        Write-Log "Reparo da Ferramenta de Captura concluído. Pode ser necessário fazer logoff/login para valer o atalho." -Type Success
+    } catch {
+        Write-Log "ERRO ao reparar a Ferramenta de Captura: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+    } finally {
+        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    }
+}
+
+function Install-Lightshot {
+    <#
+    .SYNOPSIS
+        Instala (ou atualiza para) a última versão do Lightshot via winget.
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+
+    Write-Log "Instalando Lightshot (última versão via winget)..." -Type Info
+    $activity = "Instalação do Lightshot"
+
+    if (-not $PSCmdlet.ShouldProcess("Lightshot", "instalar/atualizar")) { return }
+
+    try {
+        Grant-WriteProgress -Activity $activity -Status "Verificando Winget..." -PercentComplete 20
+        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            Write-Log "Winget não está instalado. Não é possível instalar o Lightshot." -Type Error
+            return
+        }
+
+        Grant-WriteProgress -Activity $activity -Status "Instalando Skillbrains.Lightshot..." -PercentComplete 60
+        if (-not $WhatIf) {
+            $resultado = (winget install --id Skillbrains.Lightshot -e --accept-package-agreements --accept-source-agreements 2>&1)
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "Lightshot instalado (ou já estava na última versão)." -Type Success
+            } elseif ($resultado -like "*already installed*" -or $resultado -like "*No available upgrade*" -or $resultado -like "*already exists*") {
+                Write-Log "Lightshot já está instalado e atualizado." -Type Info
+            } else {
+                Write-Log "Falha ao instalar Lightshot: $($resultado | Out-String)" -Type Error
+            }
+        } else {
+            Write-Log "Modo WhatIf: Lightshot (Skillbrains.Lightshot) seria instalado via winget." -Type Debug
+        }
+    } catch {
+        Write-Log "ERRO ao instalar o Lightshot: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+    } finally {
+        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    }
+}
+
+function Invoke-ScreenshotToolFix {
+    <#
+    .SYNOPSIS
+        Orquestrador: repara a Ferramenta de Captura nativa e instala o Lightshot
+        em sequência — resolve o pedido comum de "print não funciona, instala o Lightshot".
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+
+    if (-not $PSCmdlet.ShouldProcess("ferramentas de captura de tela", "reparar nativa + instalar Lightshot")) { return }
+
+    try { Repair-SnippingTool -ErrorAction Stop -WhatIf:$WhatIf } catch { Write-Log "ERRO: Falha em Repair-SnippingTool: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Install-Lightshot -ErrorAction Stop -WhatIf:$WhatIf } catch { Write-Log "ERRO: Falha em Install-Lightshot: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+}
+
 function Update-PowerShell {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
@@ -3673,6 +3806,124 @@ function Add-WiFiNetwork {
             Remove-Item $profilePath -ErrorAction SilentlyContinue
             Write-Log "Arquivo de perfil Wi-Fi temporário removido." -Type Debug
         }
+    }
+}
+
+function Reset-GoogleDriveDesktop {
+    # Reset completo do Google Drive Desktop (Drive File Stream): encerra o processo,
+    # remove cache/configurações/contas conectadas localmente e reabre pra novo login.
+    # NÃO apaga nada da nuvem; arquivos locais só marcados "disponível offline" (cache) são removidos.
+    # ConfirmImpact=High: pede confirmação por padrão (menu texto e GUI), como Remove-DuplicateFiles.
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param()
+
+    Write-Log "Iniciando reset completo do Google Drive Desktop..." -Type Info
+
+    if (-not $PSCmdlet.ShouldProcess("Google Drive Desktop (todas as contas locais)", "resetar (encerrar, apagar cache/configuração e reabrir)")) {
+        return
+    }
+
+    try {
+        # --- 1) Localizar o executável antes de apagar a configuração ---
+        # Cobre tanto o nome antigo da pasta de instalação ("Drive File Stream") quanto
+        # o atual ("Google Drive"), já que o Google renomeou o produto ao longo do tempo.
+        $candidatosExecutavel = @(
+            "$env:ProgramFiles\Google\Drive File Stream\*\GoogleDriveFS.exe",
+            "${env:ProgramFiles(x86)}\Google\Drive File Stream\*\GoogleDriveFS.exe",
+            "$env:ProgramFiles\Google\Drive\*\GoogleDriveFS.exe",
+            "$env:LOCALAPPDATA\Google\DriveFS\GoogleDriveFS.exe"
+        )
+
+        $executavelDrive = foreach ($padrao in $candidatosExecutavel) {
+            Get-ChildItem -Path $padrao -File -ErrorAction SilentlyContinue |
+                Sort-Object { try { [version]$_.Directory.Name } catch { [version]'0.0' } } -Descending |
+                Select-Object -First 1 -ExpandProperty FullName
+            if ($executavelDrive) { break }
+        }
+        $executavelDrive = $executavelDrive | Select-Object -First 1
+
+        # --- 2) Encerrar o Google Drive ---
+        Write-Log "Encerrando o processo GoogleDriveFS..." -Type Info
+        if (-not $WhatIf) {
+            Get-Process -Name 'GoogleDriveFS' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            & taskkill.exe /F /IM GoogleDriveFS.exe 2>$null | Out-Null
+
+            $limite = (Get-Date).AddSeconds(15)
+            while ((Get-Process -Name 'GoogleDriveFS' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $limite) {
+                Start-Sleep -Milliseconds 500
+            }
+            if (Get-Process -Name 'GoogleDriveFS' -ErrorAction SilentlyContinue) {
+                throw 'Não foi possível encerrar completamente o Google Drive.'
+            }
+        } else {
+            Write-Log "Modo WhatIf: o processo GoogleDriveFS seria encerrado." -Type Debug
+        }
+
+        # --- 3) Validar (allowlist) os caminhos antes de remover — só pastas DriveFS
+        #        dentro de LocalAppData/AppData do usuário atual, nunca um caminho arbitrário ---
+        $pastaLocalAppData = [System.IO.Path]::GetFullPath($env:LOCALAPPDATA)
+        $pastaAppData = [System.IO.Path]::GetFullPath($env:APPDATA)
+
+        $pastasDrive = @(
+            (Join-Path $env:LOCALAPPDATA 'Google\DriveFS')
+            (Join-Path $env:APPDATA 'Google\DriveFS')
+        ) | Select-Object -Unique
+
+        foreach ($pasta in $pastasDrive) {
+            $caminhoCompleto = [System.IO.Path]::GetFullPath($pasta)
+            $localPermitido = $caminhoCompleto.StartsWith($pastaLocalAppData, [System.StringComparison]::OrdinalIgnoreCase) -or
+                               $caminhoCompleto.StartsWith($pastaAppData, [System.StringComparison]::OrdinalIgnoreCase)
+            $finalCorreto = $caminhoCompleto.EndsWith('\Google\DriveFS', [System.StringComparison]::OrdinalIgnoreCase)
+
+            if (-not $localPermitido -or -not $finalCorreto) {
+                throw "Caminho recusado por segurança: $caminhoCompleto"
+            }
+        }
+
+        # --- 4) Remover cache, configurações e contas conectadas ---
+        Write-Log "Removendo contas, configurações e cache local do Google Drive..." -Type Info
+        foreach ($pasta in $pastasDrive) {
+            if (Test-Path -LiteralPath $pasta) {
+                if (-not $WhatIf) {
+                    Write-Log "Removendo: $pasta" -Type Debug
+                    Remove-Item -LiteralPath $pasta -Recurse -Force -ErrorAction Stop
+                } else {
+                    Write-Log "Modo WhatIf: '$pasta' seria removida." -Type Debug
+                }
+            }
+        }
+
+        # --- 5) Limpar preferências no registro ---
+        $chaveRegistro = 'HKCU:\Software\Google\DriveFS'
+        if (Test-Path -LiteralPath $chaveRegistro) {
+            if (-not $WhatIf) {
+                Remove-Item -LiteralPath $chaveRegistro -Recurse -Force -ErrorAction Stop
+                Write-Log "Chave de registro '$chaveRegistro' removida." -Type Debug
+            } else {
+                Write-Log "Modo WhatIf: chave de registro '$chaveRegistro' seria removida." -Type Debug
+            }
+        }
+
+        # --- 6) Reabrir o Google Drive pra novo login ---
+        if (-not $executavelDrive -or -not (Test-Path -LiteralPath $executavelDrive)) {
+            $executavelDrive = Get-ChildItem -Path "$env:ProgramFiles\Google\Drive*\*\GoogleDriveFS.exe" -File -ErrorAction SilentlyContinue |
+                Sort-Object { try { [version]$_.Directory.Name } catch { [version]'0.0' } } -Descending |
+                Select-Object -First 1 -ExpandProperty FullName
+        }
+
+        if ($executavelDrive -and (Test-Path -LiteralPath $executavelDrive)) {
+            if (-not $WhatIf) {
+                Start-Process -FilePath $executavelDrive
+                Write-Log "Reset concluído. Google Drive reaberto — faça login novamente pelas contas desejadas." -Type Success
+            } else {
+                Write-Log "Modo WhatIf: Google Drive seria reaberto ('$executavelDrive')." -Type Debug
+            }
+        } else {
+            Write-Log "Reset concluído, mas o executável do Google Drive não foi localizado. Abra manualmente pelo menu Iniciar." -Type Warning
+        }
+    } catch {
+        Write-Log "ERRO ao resetar o Google Drive Desktop: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
     }
 }
 
@@ -6388,6 +6639,7 @@ function Show-AppsMenu {
         Write-Host " C) Gerenciar Programas e Recursos (Abrir)"
         Write-Host " D) Instalar Aplicativos (escolher da lista)"
         Write-Host " E) Instalar/Atualizar PowerShell"
+        Write-Host " F) Reparar Print/Ferramenta de Captura + Instalar Lightshot"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -6410,6 +6662,7 @@ function Show-AppsMenu {
                 }
             }
             'E' { Update-PowerShell; Show-SuccessMessage }          # NOVO: função órfã, agora acessível
+            'F' { Invoke-ScreenshotToolFix; Show-SuccessMessage }
             'Z' { Invoke-AppsAndTools; Show-SuccessMessage } # Chama o orquestrador
             'X' { return }
             default {
@@ -6466,6 +6719,7 @@ function Show-NetworkMenu {
         Write-Host " H) Limpar Spooler de Impressão"
         Write-Host " I) Mostrar Informações de Rede"
         Write-Host " J) Testar Velocidade da Internet"
+        Write-Host " K) Resetar Google Drive Desktop (destrutivo)" -ForegroundColor Yellow
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -6482,6 +6736,7 @@ function Show-NetworkMenu {
             'H' { Clear-PrintSpooler; Show-SuccessMessage }
             'I' { Show-NetworkInfo; Show-SuccessMessage }
             'J' { Test-InternetSpeed; Show-SuccessMessage }
+            'K' { Reset-GoogleDriveDesktop; Show-SuccessMessage }
             'Z' { Invoke-NetworkUtilities; Show-SuccessMessage } # Chama o orquestrador de Redes
             'X' { return }
             default {
