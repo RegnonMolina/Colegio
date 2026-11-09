@@ -23,3 +23,6 @@ Registry-Backup-*.reg
 *-ORIGINAL.ps1
 *-BACKUP.ps1
 *.bak
+
+# Logs do Playwright MCP (sessões de navegador do Claude)
+.playwright-mcp/
