@@ -2634,7 +2634,6 @@ function Get-ScriptSupremoAppsList {
         $apps = @(
             @{Name = "7-Zip"; Id = "7zip.7zip"},
             @{Name = "AnyDesk"; Id = "AnyDesk.AnyDesk"},
-            @{Name = "AutoHotKey"; Id = "AutoHotkey.AutoHotkey"},
             @{Name = "Foxit.FoxitReader"; Id =  "Foxit.FoxitReader"},
             @{Name = "Google Chrome"; Id = "Google.Chrome"},
             @{Name = "Google Drive"; Id = "Google.GoogleDrive"},
@@ -3727,44 +3726,54 @@ if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
 
 #region → FUNÇÕES DE REDE E IMPRESSORAS (AJUSTADAS)
 
+function Read-SenhaWifi([string]$ssid) {
+    # Janela com a senha mascarada. Não grava nada: devolve a senha em texto só para esta execução.
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    $janela = New-Object System.Windows.Forms.Form
+    $janela.Text = 'Wi-Fi'
+    $janela.Size = New-Object System.Drawing.Size(380, 170)
+    $janela.StartPosition = 'CenterScreen'
+    $janela.FormBorderStyle = 'FixedDialog'
+    $janela.MaximizeBox = $false; $janela.MinimizeBox = $false; $janela.TopMost = $true
+    $rotulo = New-Object System.Windows.Forms.Label
+    $rotulo.Text = "Senha da rede: $ssid"
+    $rotulo.Location = New-Object System.Drawing.Point(15, 15); $rotulo.AutoSize = $true
+    $campo = New-Object System.Windows.Forms.TextBox
+    $campo.Location = New-Object System.Drawing.Point(15, 45); $campo.Size = New-Object System.Drawing.Size(335, 25)
+    $campo.PasswordChar = [char]'*'
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'OK'; $ok.Location = New-Object System.Drawing.Point(180, 85); $ok.DialogResult = 'OK'
+    $cancelar = New-Object System.Windows.Forms.Button
+    $cancelar.Text = 'Pular'; $cancelar.Location = New-Object System.Drawing.Point(265, 85); $cancelar.DialogResult = 'Cancel'
+    $janela.AcceptButton = $ok; $janela.CancelButton = $cancelar
+    $janela.Controls.AddRange(@($rotulo, $campo, $ok, $cancelar))
+    try {
+        if ($janela.ShowDialog() -eq 'OK' -and $campo.Text) { return $campo.Text }
+        return $null
+    }
+    finally { $janela.Dispose() }
+}
+
 function Add-WiFiNetwork {
     [CmdletBinding(SupportsShouldProcess = $true)]
-    # CORREÇÃO (GUI): $WifiKey opcional -- passado explicitamente (ex.: campo da GUI),
-    # tem prioridade sobre env/arquivo e evita cair no Read-Host (que travaria em background).
+    # Cadastra a rede "VemProMundo - Adm" para todos os usuários. A senha é pedida numa janela
+    # (ou recebida por parâmetro, na GUI) e nunca fica em arquivo do repositório.
+    # O arquivo temporário do perfil, que contém a senha em texto claro, é apagado ao final.
     param([string]$WifiKey)
-    Write-Log -Message "Iniciando configuração da rede Wi-Fi 'VemProMundo - Adm'..." -Type Info
-    $profilePath = "$env:TEMP\VemProMundo_-_Adm.xml"
-    $wifiName = "VemProMundo - Adm"
+    $wifiName = 'VemProMundo - Adm'
+    Write-Log -Message "Configurando Wi-Fi '$wifiName'..." -Type Info
 
-    # SEGURANÇA (scrub p/ GitHub): a senha do Wi-Fi NÃO fica mais no código-fonte.
-    # É lida nesta ordem: 1) parâmetro $WifiKey; 2) variável de ambiente CMS_WIFI_KEY;
-    # 3) arquivo git-ignored 'WiFi.local.json' na pasta do script ({ "WiFiKey": "..." }); 4) digitação.
-    $wifiKey = if ($WifiKey) { $WifiKey } else { $env:CMS_WIFI_KEY }
-    if (-not $wifiKey) {
-        $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
-        $localSecret = Join-Path $scriptDir 'WiFi.local.json'
-        if (Test-Path $localSecret) {
-            try { $wifiKey = (Get-Content $localSecret -Raw -ErrorAction Stop | ConvertFrom-Json).WiFiKey }
-            catch { Write-Log "AVISO: falha ao ler WiFi.local.json: $($_.Exception.Message)" -Type Warning }
-        }
-    }
-    if (-not $wifiKey) {
-        Write-Log "Chave do Wi-Fi não encontrada (env CMS_WIFI_KEY nem WiFi.local.json). Solicitando digitação..." -Type Warning
-        $sec = Read-Host "Digite a senha do Wi-Fi '$wifiName'" -AsSecureString
-        if ($sec -and $sec.Length -gt 0) {
-            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
-            try { $wifiKey = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr) }
-            finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-        }
-    }
-    if (-not $wifiKey) {
-        Write-Log "Sem chave do Wi-Fi; configuração da rede '$wifiName' abortada." -Type Error
+    if (netsh wlan show profile name="$wifiName" 2>$null | Select-String 'Nome do perfil|Profile name') {
+        Write-Log -Message "Rede '$wifiName' já cadastrada." -Type Debug
         return
     }
+    if (-not $WifiKey) { $WifiKey = Read-SenhaWifi $wifiName }
+    if (-not $WifiKey) { Write-Log -Message "Senha não informada: rede '$wifiName' não cadastrada." -Type Warning; return }
 
-    try {
-        # Perfil Wi-Fi com segurança genérica (substitua pela chave real e tipo de autenticação)
-        $wifiProfile = @"
+    $chave = [System.Security.SecurityElement]::Escape($WifiKey)
+    $profilePath = Join-Path $env:TEMP 'VemProMundo_-_Adm.xml'
+    $wifiProfile = @"
 <?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
     <name>$wifiName</name>
@@ -3781,31 +3790,241 @@ function Add-WiFiNetwork {
             <sharedKey>
                 <keyType>passPhrase</keyType>
                 <protected>false</protected>
-                <keyMaterial>$wifiKey</keyMaterial>
+                <keyMaterial>$chave</keyMaterial>
             </sharedKey>
         </security>
     </MSM>
 </WLANProfile>
 "@
-        if ($PSCmdlet.ShouldProcess($wifiName, "adicionar rede Wi-Fi")) {
-            Write-Log "Salvando perfil Wi-Fi temporário para '$wifiName'..." -Type Debug
-            $wifiProfile | Out-File $profilePath -Encoding UTF8 -ErrorAction Stop
+    try {
+        if ($PSCmdlet.ShouldProcess($wifiName, 'adicionar rede Wi-Fi')) {
+            $wifiProfile | Out-File -FilePath $profilePath -Encoding UTF8 -ErrorAction Stop
+            netsh wlan add profile filename="$profilePath" user=all | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "netsh código $LASTEXITCODE" }
+            Write-Log -Message "Rede Wi-Fi '$wifiName' adicionada." -Type Success
+        }
+    }
+    catch { Write-Log -Message "ERRO ao adicionar Wi-Fi '$wifiName': $($_.Exception.Message)" -Type Error }
+    finally {
+        if (Test-Path -LiteralPath $profilePath) { Remove-Item -LiteralPath $profilePath -Force -ErrorAction SilentlyContinue }
+        $wifiProfile = $null; $chave = $null; $WifiKey = $null
+    }
+}
 
-            Write-Log "Adicionando perfil Wi-Fi '$wifiName'..." -Type Info
-            & netsh wlan add profile filename="$profilePath" user=current
-            if ($LASTEXITCODE -ne 0) {
-                throw "Falha ao adicionar perfil Wi-Fi via netsh. Código de saída: $LASTEXITCODE"
+function Read-SenhaConfirmada([string]$rotulo) {
+    # Pede a senha duas vezes na console. Devolve SecureString ou $null se não conferir.
+    $s1 = Read-Host $rotulo -AsSecureString
+    $s2 = Read-Host 'Repita a senha' -AsSecureString
+    $t1 = [System.Net.NetworkCredential]::new('', $s1).Password
+    $t2 = [System.Net.NetworkCredential]::new('', $s2).Password
+    $confere = ($t1 -eq $t2) -and (-not [string]::IsNullOrEmpty($t1))
+    $t1 = $null; $t2 = $null
+    if ($confere) { return $s1 }
+    return $null
+}
+
+function Invoke-ContasEscola {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    # Conta Suporte (administradora, para manutenção) e conta Colégio (padrão, para o uso diário).
+    # As senhas são digitadas na execução e nunca gravadas.
+    param()
+    Write-Log -Message "Configurando contas: Suporte (administração) e Colégio (padrão)..." -Type Info
+
+    if (Get-LocalUser -Name 'Suporte' -ErrorAction SilentlyContinue) {
+        Write-Log -Message "Conta Suporte já existe." -Type Debug
+    }
+    elseif ($PSCmdlet.ShouldProcess('Suporte', 'criar conta administradora')) {
+        $senha = Read-SenhaConfirmada 'Senha para a conta Suporte'
+        if ($senha) {
+            New-LocalUser -Name 'Suporte' -Password $senha -FullName 'Suporte CMS' -Description 'Administração do computador' | Out-Null
+            Add-LocalGroupMember -SID 'S-1-5-32-544' -Member 'Suporte'
+            Write-Log -Message "Conta Suporte criada como administradora." -Type Success
+        }
+        else { Write-Log -Message "Senhas não conferem: conta Suporte não criada." -Type Error }
+    }
+
+    if (Get-LocalUser -Name 'Colégio' -ErrorAction SilentlyContinue) {
+        Write-Log -Message "Conta Colégio já existe." -Type Debug
+    }
+    elseif ($PSCmdlet.ShouldProcess('Colégio', 'criar conta padrão')) {
+        $senha = Read-SenhaConfirmada 'Senha para a conta Colégio'
+        if ($senha) {
+            New-LocalUser -Name 'Colégio' -Password $senha -FullName 'Colégio Mundo do Saber' -Description 'Conta padrão do colégio' | Out-Null
+            Add-LocalGroupMember -SID 'S-1-5-32-545' -Member 'Colégio'
+            Write-Log -Message "Conta Colégio criada (padrão, sem administrador)." -Type Success
+        }
+        else { Write-Log -Message "Senhas não conferem: conta Colégio não criada." -Type Error }
+    }
+
+    # Tira Colégio dos administradores só com a sessão Suporte ativa (evita perder o acesso no meio)
+    if ($env:USERNAME -eq 'Suporte') {
+        Remove-LocalGroupMember -SID 'S-1-5-32-544' -Member 'Colégio' -ErrorAction SilentlyContinue
+        Write-Log -Message "Conta Colégio fora dos administradores (vale no próximo login)." -Type Success
+    }
+    else {
+        Write-Log -Message "Para tirar Colégio dos administradores, entre com a conta Suporte e rode de novo." -Type Warning
+    }
+}
+
+function Show-CheckboxPicker {
+    # Janela com checkbox, "Marcar todos" e "Desmarcar todos". Devolve os itens marcados ou $null.
+    # Cada item: @{ Texto = '...'; Valor = <qualquer>; Marcado = $true/$false }
+    [CmdletBinding()]
+    param([string]$Titulo, [object[]]$Itens)
+    Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue
+    Add-Type -AssemblyName PresentationCore -ErrorAction SilentlyContinue
+    Add-Type -AssemblyName WindowsBase -ErrorAction SilentlyContinue
+
+    $win = New-Object System.Windows.Window
+    $win.Title = $Titulo
+    $win.Width = 620; $win.Height = 600
+    $win.WindowStartupLocation = 'CenterScreen'; $win.Topmost = $true
+    $grid = New-Object System.Windows.Controls.Grid
+    $r1 = New-Object System.Windows.Controls.RowDefinition; $r1.Height = New-Object System.Windows.GridLength(1, [System.Windows.GridUnitType]::Star)
+    $r2 = New-Object System.Windows.Controls.RowDefinition; $r2.Height = 'Auto'
+    [void]$grid.RowDefinitions.Add($r1); [void]$grid.RowDefinitions.Add($r2)
+
+    $scroll = New-Object System.Windows.Controls.ScrollViewer
+    $scroll.VerticalScrollBarVisibility = 'Auto'
+    $painel = New-Object System.Windows.Controls.StackPanel
+    $painel.Margin = '12'
+    $scroll.Content = $painel
+    [System.Windows.Controls.Grid]::SetRow($scroll, 0)
+    [void]$grid.Children.Add($scroll)
+
+    $checks = @()
+    foreach ($item in $Itens) {
+        $cb = New-Object System.Windows.Controls.CheckBox
+        $cb.Content = $item.Texto
+        $cb.IsChecked = [bool]$item.Marcado
+        $cb.Margin = '0,3,0,3'
+        [void]$painel.Children.Add($cb)
+        $checks += [pscustomobject]@{ Caixa = $cb; Item = $item }
+    }
+
+    $botoes = New-Object System.Windows.Controls.StackPanel
+    $botoes.Orientation = 'Horizontal'; $botoes.HorizontalAlignment = 'Right'; $botoes.Margin = '12'
+    [System.Windows.Controls.Grid]::SetRow($botoes, 1)
+    [void]$grid.Children.Add($botoes)
+    $bMarcar = New-Object System.Windows.Controls.Button; $bMarcar.Content = 'Marcar todos'; $bMarcar.Padding = '10,4'; $bMarcar.Margin = '0,0,8,0'
+    $bDesmarcar = New-Object System.Windows.Controls.Button; $bDesmarcar.Content = 'Desmarcar todos'; $bDesmarcar.Padding = '10,4'; $bDesmarcar.Margin = '0,0,8,0'
+    $bOk = New-Object System.Windows.Controls.Button; $bOk.Content = 'Aplicar aos marcados'; $bOk.Padding = '10,4'; $bOk.Margin = '0,0,8,0'
+    $bCancelar = New-Object System.Windows.Controls.Button; $bCancelar.Content = 'Cancelar'; $bCancelar.Padding = '10,4'
+    foreach ($b in $bMarcar, $bDesmarcar, $bOk, $bCancelar) { [void]$botoes.Children.Add($b) }
+
+    $script:selecaoBloat = $null
+    $bMarcar.Add_Click({ foreach ($c in $checks) { $c.Caixa.IsChecked = $true } })
+    $bDesmarcar.Add_Click({ foreach ($c in $checks) { $c.Caixa.IsChecked = $false } })
+    $bOk.Add_Click({
+        $script:selecaoBloat = @($checks | Where-Object { $_.Caixa.IsChecked -eq $true } | ForEach-Object { $_.Item })
+        $win.DialogResult = $true; $win.Close()
+    })
+    $bCancelar.Add_Click({ $win.DialogResult = $false; $win.Close() })
+
+    $win.Content = $grid
+    [void]$win.ShowDialog()
+    return $script:selecaoBloat
+}
+
+function Invoke-BloatwareReview {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    # 1) Varre apps Appx (todas as contas) e programas Win32 instalados.
+    # 2) Mostra o relatório com checkbox (marcados os que costumam ser bloatware de fornecedor/consumo).
+    # 3) Remove só o que foi marcado. Gera o relatório em texto em C:\ScriptsLogs.
+    param()
+    Write-Log -Message "Varredura de bloatware: montando o relatório..." -Type Info
+
+    # Nunca mostrar componentes do Windows, Store, runtimes ou drivers
+    $nucleo = '^Microsoft\.Windows\.|^Microsoft\.Store|^Microsoft\.Desktop|^Microsoft\.UI|^Microsoft\.VCLibs|^Microsoft\.NET|^Microsoft\.SecHealthUI|^Microsoft\.AAD|^MicrosoftWindows\.Client|^Microsoft\.Winget|^Windows\.|^Microsoft\.Services\.Store|^Microsoft\.Xaml|^Microsoft\.AsyncText|^Microsoft\.Accounts|^Microsoft\.Credential|^Microsoft\.Bio|^Microsoft\.ECApp|^Microsoft\.LockApp|^Microsoft\.CloudExperience|^Microsoft\.Win32|^Microsoft\.Authentication'
+    # Marcados por padrão (podem ser desmarcados na janela)
+    $marcarPorPadrao = 'Bing|News|Weather|GetHelp|GetStarted|Maps|Solitaire|Clipchamp|Xbox|ZuneMusic|ZuneVideo|YourPhone|Phone|Feedback|Todos|Whiteboard|DevHome|Family|CrossDevice|MSTeams|OfficeHub|OutlookForWindows|PowerAutomate|Journal|MixedReality|Dropbox|Dolby|Lenovo|McAfee|Copilot|Edge\.GameAssist|Spotify|Netflix|TikTok|Facebook|Instagram|LinkedIn|Wallet|Skype|People|Paint3D|Print3D'
+    $fornecedorWin32 = 'McAfee|WebAdvisor|Copilot|Lenovo|Smart Connect|Dropbox|Teams'
+
+    $itens = @()
+    $vistos = @{}
+    foreach ($pac in (Get-AppxPackage -AllUsers | Where-Object { -not $_.IsFramework -and -not $_.NonRemovable })) {
+        if ($pac.Name -match $nucleo -or $vistos.ContainsKey($pac.Name)) { continue }
+        $vistos[$pac.Name] = $true
+        $marcado = [bool]($pac.Name -match $marcarPorPadrao)
+        $itens += [pscustomobject]@{ Texto = "[App] $($pac.Name)"; Valor = [pscustomobject]@{ Tipo = 'Appx'; Nome = $pac.Name; Completo = $pac.PackageFullName }; Marcado = $marcado }
+    }
+    $chaves = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    foreach ($p in (Get-ItemProperty $chaves -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -and $_.UninstallString })) {
+        $marcado = [bool]($p.DisplayName -match $fornecedorWin32)
+        $itens += [pscustomobject]@{ Texto = "[Programa] $($p.DisplayName) $($p.DisplayVersion)"; Valor = [pscustomobject]@{ Tipo = 'Win32'; Nome = $p.DisplayName; Desinstalar = [string]$p.UninstallString }; Marcado = $marcado }
+    }
+    if ($itens.Count -eq 0) { Write-Log -Message "Nenhum aplicativo candidato encontrado." -Type Info; return }
+
+    # Relatório em texto (para arquivo), antes da escolha
+    $pastaRel = 'C:\ScriptsLogs'
+    New-Item -ItemType Directory -Force -Path $pastaRel | Out-Null
+    $rel = Join-Path $pastaRel ("Bloatware_" + $env:COMPUTERNAME + '_' + (Get-Date -Format 'yyyyMMdd-HHmm') + '.txt')
+    $itens | ForEach-Object { ('[{0}] {1}' -f ($(if ($_.Marcado) { 'sugerido' } else { '-' })), $_.Texto) } | Set-Content -LiteralPath $rel -Encoding UTF8
+    Write-Log -Message "Relatório salvo em $rel" -Type Info
+
+    $escolhidos = Show-CheckboxPicker -Titulo 'Remover aplicativos (marque os que deseja desinstalar)' -Itens $itens
+    if (-not $escolhidos) { Write-Log -Message "Nenhum aplicativo escolhido ou janela cancelada." -Type Info; return }
+
+    foreach ($e in $escolhidos) {
+        $v = $e.Valor
+        if (-not $PSCmdlet.ShouldProcess($v.Nome, 'desinstalar')) { continue }
+        try {
+            if ($v.Tipo -eq 'Appx') {
+                Get-AppxPackage -AllUsers -Name $v.Nome | Remove-AppxPackage -AllUsers -ErrorAction Stop
+                Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq $v.Nome } | ForEach-Object {
+                    Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue | Out-Null
+                }
+                Write-Log -Message "App removido: $($v.Nome)" -Type Success
             }
-            Write-Log "Rede Wi-Fi '$wifiName' adicionada com sucesso." -Type Success
+            else {
+                $u = $v.Desinstalar
+                if ($u -match 'msiexec') {
+                    $guid = [regex]::Match($u, '\{[0-9A-Fa-f\-]{36}\}').Value
+                    $proc = Start-Process msiexec.exe -ArgumentList "/x $guid /qn /norestart" -Wait -PassThru
+                }
+                else {
+                    $caminho = ($u -replace '^"([^"]+)".*$', '$1') -replace '^([^ ]+\.exe).*$', '$1'
+                    $proc = Start-Process -FilePath $caminho -ArgumentList '/S' -Wait -PassThru
+                }
+                Write-Log -Message "Programa '$($v.Nome)': código de saída $($proc.ExitCode)." -Type Info
+            }
         }
-    } catch {
-        Write-Log "ERRO ao adicionar rede Wi-Fi '$wifiName': $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
-        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-    } finally {
-        if (Test-Path $profilePath) {
-            Remove-Item $profilePath -ErrorAction SilentlyContinue
-            Write-Log "Arquivo de perfil Wi-Fi temporário removido." -Type Debug
+        catch { Write-Log -Message "ERRO ao remover '$($v.Nome)': $($_.Exception.Message)" -Type Error }
+    }
+    Write-Log -Message "Remoção concluída para os itens marcados." -Type Success
+}
+
+function Install-NetworkPrinters {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    # Filas da unidade 2: TCP/IP porta 9100, com os nomes que já existem nas máquinas da U2.
+    # Os pacotes de driver (INF) ficam em $PastaDrivers, em subpastas L3250, C5810 e Samsung.
+    param([string]$PastaDrivers = 'G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers')
+    Write-Log -Message "Instalando impressoras da unidade 2..." -Type Info
+    $impressoras = @(
+        @{ Fila = 'EPSON-MUNDO2';   Driver = 'EPSON WF-C5810 Series';                            Ip = '172.17.40.157'; Pacote = 'C5810';   Inf = 'E1WF1BQE.INF' }
+        @{ Fila = 'EpsonMundo2';    Driver = 'EPSON L3250 Series';                               Ip = '172.17.40.26';  Pacote = 'L3250';   Inf = 'e_wf1ywe.inf' }
+        @{ Fila = 'Samsung Mundo2'; Driver = 'Samsung M337x 387x 407x Series PCL6 Class Driver'; Ip = '172.17.40.25';  Pacote = 'Samsung'; Inf = 'prnsacl1.inf' }
+    )
+    foreach ($i in $impressoras) {
+        if (-not $PSCmdlet.ShouldProcess($i.Fila, 'instalar impressora')) { continue }
+        try {
+            if ($i.Driver -notin (Get-PrinterDriver).Name) {
+                $inf = Join-Path $PastaDrivers "$($i.Pacote)\$($i.Inf)"
+                if (-not (Test-Path -LiteralPath $inf)) { Write-Log -Message "Pacote ausente: $inf (driver '$($i.Driver)' não instalado)." -Type Warning; continue }
+                pnputil /add-driver $inf /install | Out-Null
+                Add-PrinterDriver -Name $i.Driver -ErrorAction Stop
+            }
+            if (-not (Get-PrinterPort -Name $i.Ip -ErrorAction SilentlyContinue)) {
+                Add-PrinterPort -Name $i.Ip -PrinterHostAddress $i.Ip -PortNumber 9100
+            }
+            if (Get-Printer -Name $i.Fila -ErrorAction SilentlyContinue) {
+                Set-Printer -Name $i.Fila -DriverName $i.Driver -PortName $i.Ip
+            } else {
+                Add-Printer -Name $i.Fila -DriverName $i.Driver -PortName $i.Ip
+            }
+            Write-Log -Message "Impressora $($i.Fila) pronta em $($i.Ip)." -Type Success
         }
+        catch { Write-Log -Message "ERRO na impressora $($i.Fila): $($_.Exception.Message)" -Type Error }
     }
 }
 
@@ -3927,54 +4146,6 @@ function Reset-GoogleDriveDesktop {
     }
 }
 
-function Install-NetworkPrinters {
-   [CmdletBinding(SupportsShouldProcess=$true)]
-    param()
-    Write-Log -Message "Iniciando instalação de impressoras e drivers de rede..." -Type Info
-    $drivers = @(
-        @{Name="Samsung Universal Print Driver"; InfPath="G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\ssn3m.inf"},
-        @{Name="Epson L3250 Series"; InfPath="G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers\E_WF1YWE.INF"}
-    )
-    $printers = @(
-        @{Name="Samsung Mundo1"; IP="172.16.40.40"; Driver="Samsung Universal Print Driver"},
-        @{Name="Samsung Mundo2"; IP="172.17.40.25"; Driver="Samsung Universal Print Driver"},
-        @{Name="EpsonMundo1 (L3250 Series)"; IP="172.16.40.37"; Driver="Epson L3250 Series"},
-        @{Name="EpsonMundo2 (L3250 Series)"; IP="172.17.40.72"; Driver="Epson L3250 Series"}
-    )
-    foreach ($driver in $drivers) {
-        if ($PSCmdlet.ShouldProcess($driver.Name, "instalar driver")) {
-            try {
-                if (Test-Path $driver.InfPath) {
-                    Add-PrinterDriver -Name $driver.Name -InfPath $driver.InfPath -ErrorAction Stop
-                    Write-Log -Message "Driver $($driver.Name) instalado." -Type Success
-                } else {
-                    Write-Log -Message "Driver $($driver.InfPath) não encontrado." -Type Warning
-                }
-            } catch {
-                Write-Log -Message "Erro ao instalar driver $($driver.Name): $($_.Exception.Message)" -Type Error
-            }
-        }
-    }
-    foreach ($printer in $printers) {
-        $portName = "IP_$($printer.IP -replace '\.','_')"
-        if ($PSCmdlet.ShouldProcess($printer.Name, "instalar impressora")) {
-            try {
-                if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
-                    Add-PrinterPort -Name $portName -PrinterHostAddress $printer.IP -ErrorAction Stop
-                    Write-Log -Message "Porta $portName criada para $($printer.IP)." -Type Success
-                }
-                if (-not (Get-Printer -Name $printer.Name -ErrorAction SilentlyContinue)) {
-                    Add-Printer -Name $printer.Name -DriverName $printer.Driver -PortName $portName -ErrorAction Stop
-                    Write-Log -Message "Impressora $($printer.Name) instalada." -Type Success
-                } else {
-                    Write-Log -Message "Impressora $($printer.Name) já existe." -Type Debug
-                }
-            } catch {
-                Write-Log -Message "Erro ao instalar impressora $($printer.Name): $($_.Exception.Message)" -Type Error
-            }
-        }
-    }
-}
 
 function Invoke-All-NetworkAdvanced {
     [CmdletBinding(SupportsShouldProcess=$true)]
@@ -5754,27 +5925,17 @@ function Grant-HardenOfficeMacros {
 }
 
 function Set-OptimizedPowerPlan {
-    [CmdletBinding(SupportsShouldProcess=$true)]
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    # Plano Alto desempenho (o mesmo das auditorias de rede). Telas não são alteradas.
     param()
-    Write-Log -Message "Configurando o plano de energia para 'Alto Desempenho'..." -Type Info
-    try {
-        $plan = powercfg /list | Select-String "High Performance"
-if ($plan) {
-    $planId = ($plan -split "\s+")[3]
-    powercfg /setactive $planId
-    Write-Log -Message "Plano 'Alto Desempenho' ativado." -Type Success
-} else {
-    Write-Log -Message "Plano 'Alto Desempenho' não encontrado. Usando plano 'Equilibrado'." -Type Warning
-    $balancedPlan = powercfg /list | Select-String "Balanced"
-    if ($balancedPlan) {
-        $balancedId = ($balancedPlan -split "\s+")[3]
-        powercfg /setactive $balancedId
-        Write-Log -Message "Plano 'Equilibrado' ativado." -Type Success
-    }
-}
-
-    } catch {
-        Write-Log -Message "Erro ao configurar plano de energia: $($_.Exception.Message)" -Type Error
+    $altoDesempenho = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+    if ($PSCmdlet.ShouldProcess("Plano de energia", "Alto desempenho")) {
+        try {
+            powercfg /setactive $altoDesempenho
+            if ($LASTEXITCODE -ne 0) { throw "powercfg código $LASTEXITCODE" }
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name HiberbootEnabled -Value 1
+            Write-Log -Message "Plano Alto desempenho ativado." -Type Success
+        } catch { Write-Log -Message "Erro ao configurar plano de energia: $($_.Exception.Message)" -Type Error }
     }
 }
 
@@ -6480,6 +6641,7 @@ Write-Log "Executando: Menu de Instalação de Programas (Opção 1 - Todas as F
 Write-Log "Executando: Menu de Rede e Impressoras (Opção 1 - Todas as Configurações de Rede)..." -Type Success
     # Chamando as funções que estão dentro de Show-NetworkMenu opção 1
     Install-NetworkPrinters
+    Invoke-ContasEscola
     Optimize-NetworkPerformance
     Start-Sleep 2
 
@@ -6491,7 +6653,7 @@ Write-Log "Executando: Menu de Configurações Avançadas (Opção 1 - Todas as 
 
 Write-Log "Executando: Menu de Utilitários do Sistema (Opção 1 - Todas as Tarefas de Otimização)..." -Type Success
     # Chamando as funções que estão dentro de Show-UtilitiesMenu opção 1
-    Remove-SystemBloatware
+    Invoke-BloatwareReview
 
     Remove-OneDrive-AndRestoreFolders
     Invoke-Cleanup
@@ -6835,7 +6997,7 @@ Write-Log "=============================================" -Type Info
         switch ($key) {
             'A' {
 Write-Log "Executando: Todas as Tarefas de Otimização..." -Type Warning
-                Remove-SystemBloatware
+                Invoke-BloatwareReview
 
                 Remove-OneDrive-AndRestoreFolders
                 Invoke-Cleanup
@@ -6868,13 +7030,13 @@ Write-Log "=============================================" -Type Info
                     switch ($subChoice) {
                         'A' {
 Write-Log "Executando: Remover Bloatware (Todos em sequência)..." -Type Warning
-                            Remove-SystemBloatware
+                            Invoke-BloatwareReview
 
                             Remove-OneDrive-AndRestoreFolders
 Write-Log "Remoção de Bloatware Concluída!" -Type Success
                             [Console]::ReadKey($true) | Out-Null
                         }
-                        'B' { Remove-SystemBloatware
+                        'B' { Invoke-BloatwareReview
 ; Show-SuccessMessage }
                         'C' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
                         'x' { return }
@@ -7052,15 +7214,15 @@ function Show-BloatwareMenu {
             'A' { Enable-PrivacyHardening; Show-SuccessMessage }   # NOVO: função órfã, agora acessível
             'B' { Grant-PrivacyAndBloatwarePrevention; Show-SuccessMessage }
             'C' { Disable-UnnecessaryServices; Show-SuccessMessage }
-            'D' { Remove-SystemBloatware; Show-SuccessMessage }
+            'D' { Invoke-BloatwareReview; Show-SuccessMessage }
             'E' { Disable-WindowsRecall; Show-SuccessMessage }
-            'F' { Remove-SystemBloatware; Show-SuccessMessage }
-            'G' { Remove-SystemBloatware; Show-SuccessMessage }
+            'F' { Invoke-BloatwareReview; Show-SuccessMessage }
+            'G' { Invoke-BloatwareReview; Show-SuccessMessage }
             'H' { Grant-HardenOfficeMacros; Show-SuccessMessage }  # NOVO: função órfã, agora acessível
-            'I' { Remove-SystemBloatware; Show-SuccessMessage } # Assumindo que Remove-SystemBloatware é a função para isso
+            'I' { Invoke-BloatwareReview; Show-SuccessMessage } # Assumindo que Invoke-BloatwareReview é a função para isso
             'J' { Restore-BloatwareSafe; Show-SuccessMessage } # Assumindo que esta remove pastas seguras
-            'K' { Remove-SystemBloatware; Show-SuccessMessage }
-            'L' { Remove-SystemBloatware; Show-SuccessMessage }
+            'K' { Invoke-BloatwareReview; Show-SuccessMessage }
+            'L' { Invoke-BloatwareReview; Show-SuccessMessage }
             'Z' { Invoke-Bloatware; Show-SuccessMessage } # Chama o orquestrador de Bloatware
             'X' { return }
             default {
@@ -7113,7 +7275,7 @@ function Show-WindowsFeaturesMenu {
         Write-Host " X) Voltar"
         $key = [string]::Concat($Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character).ToUpper()
         switch ($key) {
-            'A' { Remove-SystemBloatware}
+            'A' { Invoke-BloatwareReview}
             'B' { Disable-WindowsRecall }
             'C' { Set-OptimizedPowerPlan }
             'X' { return }
@@ -7236,7 +7398,7 @@ function Grant-WriteProgress {
 # CORREÇÃO #3 (auditoria): unifica os dois nomes históricos (Safe-WriteProgress e
 # Grant-WriteProgress) numa única implementação. Assim as ~181 chamadas existentes de
 # QUALQUER um dos nomes passam a usar a MESMA lógica, sem precisar renomear cada chamada
-# nem depender do fallback aninhado dentro de Remove-SystemBloatware.
+# nem depender do fallback aninhado dentro de Invoke-BloatwareReview.
 function Safe-WriteProgress {
     param(
         [string]$Activity,
