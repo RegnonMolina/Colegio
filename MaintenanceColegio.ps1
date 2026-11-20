@@ -257,6 +257,9 @@ function Write-Log {
     # Usa 'Gray' como padrão se o tipo não for encontrado
     $consoleColor = if ($defaultColors.ContainsKey($Type)) {
         $defaultColors[$Type]
+    } elseif ($Type -as [System.ConsoleColor]) {
+        # Chamadas legadas passam o nome da cor (Blue, Yellow, Green...) no lugar de -Type
+        [System.ConsoleColor]$Type
     } else {
         'Gray'
     }
@@ -408,7 +411,7 @@ function Invoke-Tweaks {
     try { Grant-ExtraTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ExtraTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-HardenOfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-HardenOfficeMacros: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-PrivacyTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-WindowsUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-WindowsUpdates -Modo Criticas -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-FolderForced -Path "C:\SCript" -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -527,7 +530,7 @@ function Invoke-Colegio {
     try { Grant-PrivacyTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-SystemOptimizations -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-SystemOptimizations: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-UITweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-UITweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-WindowsUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-WindowsUpdates -Modo Criticas -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-FolderForced -Path "C:\SCript" -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -1200,7 +1203,7 @@ function Invoke-CamFix {
     .EXAMPLE
         Invoke-CamFix -Command rename -Path 'D:\Fotos\Viagem' -Recurse
     #>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param(
         [Parameter(Mandatory = $true)]
         [ValidateSet('rename', 'clean', 'emptyfolders', 'dedupe-suffix')]
@@ -1216,8 +1219,10 @@ function Invoke-CamFix {
 
     # --- Helpers locais (escopo só desta função) ---
     function Get-UniqueNameInFolder {
-        param([string]$Directory, [string]$BaseName, [string]$Extension)
+        param([string]$Directory, [string]$BaseName, [string]$Extension, [string]$CurrentName)
         $candidate = $BaseName + $Extension
+        # Idempotência: se o nome desejado já é o do próprio arquivo, mantém
+        if ($CurrentName -and $candidate -ieq $CurrentName) { return $candidate }
         $targetPath = Join-Path $Directory $candidate
         if (-not (Test-Path -LiteralPath $targetPath)) { return $candidate }
         $i = 2
@@ -1270,13 +1275,27 @@ function Invoke-CamFix {
                     }
                     $dt = $null
                     try {
-                        $exif = exiftool -DateTimeOriginal -s -s -s "$($f.FullName)" 2>$null
-                        if ($exif) { $dt = [datetime]::ParseExact($exif, 'yyyy:MM:dd HH:mm:ss', $null) }
-                    } catch { $dt = $null }
+                        # DateTimeOriginal (fotos) e CreateDate (vídeos); pega o primeiro valor não vazio
+                        $exif = exiftool -DateTimeOriginal -CreateDate -s -s -s "$($f.FullName)" 2>$null | Where-Object { $_ } | Select-Object -First 1
+                        if ($exif) {
+                            # Tolera subsegundos (.45), fuso (-03:00 / Z) e rejeita 0000:00:00
+                            $txt = ([string]$exif) -replace '^\s*(\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}).*$', '$1'
+                            $o = [datetime]::MinValue
+                            if ([datetime]::TryParseExact($txt, 'yyyy:MM:dd HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$o)) { $dt = $o }
+                            else { Write-Log "EXIF sem data válida em '$($f.Name)': '$exif'" -Type Warning }
+                        }
+                    } catch {
+                        Write-Log "Falha ao ler EXIF de '$($f.Name)': $($_.Exception.Message)" -Type Warning
+                        $dt = $null
+                    }
                     if (-not $dt) {
-                        $m = [regex]::Match($f.BaseName, '(?<Y>\d{4})-(?<M>\d{2})-(?<D>\d{2})')
-                        if ($m.Success) {
-                            $dt = Get-Date -Year ([int]$m.Groups['Y'].Value) -Month ([int]$m.Groups['M'].Value) -Day ([int]$m.Groups['D'].Value) -Hour 12 -Minute 0 -Second 0
+                        # Data no nome (AAAA-MM-DD) ou no padrão gerado por esta função (_aa-MM-dd_NN); data inválida não aborta
+                        $d = [datetime]::MinValue
+                        $m = [regex]::Match($f.BaseName, '(?<!\d)(?<D>\d{4}-\d{2}-\d{2})(?!\d)')
+                        if ($m.Success -and [datetime]::TryParseExact($m.Groups['D'].Value, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$d)) { $dt = $d.AddHours(12) }
+                        else {
+                            $m2 = [regex]::Match($f.BaseName, '_(?<D>\d{2}-\d{2}-\d{2})_\d{2}$')
+                            if ($m2.Success -and [datetime]::TryParseExact($m2.Groups['D'].Value, 'yy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$d)) { $dt = $d.AddHours(12) }
                         }
                     }
                     if ($dt) {
@@ -1288,7 +1307,7 @@ function Invoke-CamFix {
                         $noDateCounter++
                         $baseFinal = "{0}_{1}" -f $folderName, $noDateCounter.ToString('D2')
                     }
-                    $newName = Get-UniqueNameInFolder -Directory $f.DirectoryName -BaseName $baseFinal -Extension $f.Extension
+                    $newName = Get-UniqueNameInFolder -Directory $f.DirectoryName -BaseName $baseFinal -Extension $f.Extension -CurrentName $f.Name
                     if ($newName -eq $f.Name) { continue }
                     if ($PSCmdlet.ShouldProcess($f.FullName, "renomear para '$newName'")) {
                         if (-not $WhatIf) {
@@ -1345,8 +1364,10 @@ function Invoke-CamFix {
                     if ($i % 50 -eq 0 -or $i -eq $total) {
                         Grant-WriteProgress -Activity $activity -Status "$i/$total - $($d.Name)" -PercentComplete ([math]::Round(($i / [math]::Max(1, $total)) * 100))
                     }
-                    $items = Get-ChildItem -LiteralPath $d.FullName -Force -ErrorAction SilentlyContinue
-                    if ($items.Count -ne 0) { continue }
+                    $errLista = $null
+                    $items = Get-ChildItem -LiteralPath $d.FullName -Force -ErrorAction SilentlyContinue -ErrorVariable errLista
+                    if ($errLista) { Write-Log "Sem acesso a '$($d.FullName)', ignorada." -Type Warning; continue }
+                    if (@($items).Count -ne 0) { continue }
                     if ($PSCmdlet.ShouldProcess($d.FullName, "remover pasta vazia")) {
                         if (-not $WhatIf) {
                             try {
@@ -1365,7 +1386,7 @@ function Invoke-CamFix {
             }
             'dedupe-suffix' {
                 $dupDir = Join-Path $Path '_DUPLICADOS_PADRAO'
-                $files = Get-CamFixFiles -Root $Path -Recurse:$Recurse | Where-Object { $_.FullName -notlike "$dupDir\*" }
+                $files = Get-CamFixFiles -Root $Path -Recurse:$Recurse | Where-Object { -not $_.FullName.StartsWith($dupDir + '\', [StringComparison]::OrdinalIgnoreCase) }
                 $total = $files.Count
                 $i = 0
                 $movidos = 0
@@ -1378,6 +1399,14 @@ function Invoke-CamFix {
                     if (-not $m.Success) { continue }
                     $orig = Join-Path $f.DirectoryName ($m.Groups['base'].Value + $f.Extension)
                     if (-not (Test-Path -LiteralPath $orig)) { continue }
+                    # Só é duplicata se o conteúdo for idêntico ao original (tamanho e hash)
+                    try {
+                        if ((Get-Item -LiteralPath $orig).Length -ne $f.Length) { continue }
+                        if ((Get-FileHash -LiteralPath $orig -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) { continue }
+                    } catch {
+                        Write-Log "Não foi possível comparar '$($f.Name)' com o original: $($_.Exception.Message)" -Type Warning
+                        continue
+                    }
                     if ($PSCmdlet.ShouldProcess($f.FullName, "mover para '$dupDir' (duplicata de '$(Split-Path $orig -Leaf)')")) {
                         if (-not $WhatIf) {
                             try {
@@ -1821,33 +1850,29 @@ function Clear-Prefetch {
 }
 
 function Grant-WindowsUpdates {
-    
+    # Sem prompt (roda desatendido e na GUI). Modo padrão seguro = Listar.
+    # Reinício só acontece com -AutoReboot; sem ele usa -IgnoreReboot.
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-       
-            )
-    Write-Log "Iniciando o gerenciamento de atualizações do Windows." -Type Info
+        [ValidateSet('Todas','Criticas','Listar')][string]$Modo = 'Listar',
+        [switch]$AutoReboot
+    )
+    Write-Log "Iniciando o gerenciamento de atualizações do Windows (modo: $Modo)." -Type Info
     $activity = "Gerenciamento de Atualizações do Windows"
 
-    if ($PSCmdlet.ShouldProcess("atualizações do Windows", "gerenciar")) {
+    if ($PSCmdlet.ShouldProcess("atualizações do Windows", "gerenciar ($Modo)")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Verificando e instalando o módulo PSWindowsUpdate..." -PercentComplete 10
             # 1. Verificar e instalar o módulo PSWindowsUpdate
             if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
                 Write-Log "Módulo PSWindowsUpdate não encontrado. Tentando instalar do PowerShell Gallery..." -Type Warning
-                if (-not $WhatIf) {
-                    try {
-                        Install-Module -Name PSWindowsUpdate -Force -AllowClobber -Scope AllUsers -ErrorAction Stop
-                        Write-Log "Módulo PSWindowsUpdate instalado com sucesso!" -Type Success
-                    } catch {
-                        Write-Log "ERRO: Não foi possível instalar o módulo PSWindowsUpdate: $($_.Exception.Message)" -Type Error
-                        Write-Log "As atualizações não poderão ser gerenciadas automaticamente." -Type Error
-                        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-                        Start-Sleep -Seconds 5
-                        return # Sai da função se a instalação falhar
-                    }
-                } else {
-                    Write-Log "Modo WhatIf: Módulo PSWindowsUpdate seria instalado." -Type Debug
+                try {
+                    Install-Module -Name PSWindowsUpdate -Force -AllowClobber -Scope AllUsers -ErrorAction Stop
+                    Write-Log "Módulo PSWindowsUpdate instalado com sucesso!" -Type Success
+                } catch {
+                    Write-Log "ERRO: Não foi possível instalar o módulo PSWindowsUpdate: $($_.Exception.Message)" -Type Error
+                    Write-Log "As atualizações não poderão ser gerenciadas automaticamente." -Type Error
+                    return # Sai da função se a instalação falhar
                 }
             } else {
                 Write-Log "Módulo PSWindowsUpdate já está instalado." -Type Info
@@ -1856,55 +1881,31 @@ function Grant-WindowsUpdates {
             # Importar o módulo (garantir que está carregado)
             Import-Module PSWindowsUpdate -ErrorAction SilentlyContinue
 
-            Grant-WriteProgress -Activity $activity -Status "Aguardando escolha de opção de atualização..." -PercentComplete 50
-            Write-Log "Opções de Atualização:" -Type Info
-            Write-Log "1) Buscar e Instalar TODAS as atualizações (incluindo opcionais/drivers)" -Type Info
-            Write-Log "2) Buscar e Instalar apenas atualizações CRÍTICAS e de SEGURANÇA" -Type Info
-            Write-Log "3) Apenas buscar atualizações (não instalar)" -Type Info
-            Write-Log "0) Voltar ao Menu Principal" -Type Warning
-            $updateChoice = Read-Host "Escolha uma opção de atualização"
+            # Reinício só quando pedido explicitamente
+            $reboot = if ($AutoReboot) { @{ AutoReboot = $true } } else { @{ IgnoreReboot = $true } }
 
-            switch ($updateChoice) {
-                "1" {
+            switch ($Modo) {
+                'Todas' {
                     Write-Log "Buscando e instalando TODAS as atualizações..." -Type Info
-                    Grant-WriteProgress -Activity $activity -Status "Instalando todas as atualizações (pode demorar e reiniciar!)..." -PercentComplete 75
-                    if (-not $WhatIf) {
-                        Get-WindowsUpdate -Install -AcceptAll -AutoReboot | Out-Null
-                        Write-Log "Processo de atualização completo (todas as atualizações)." -Type Success
-                    } else {
-                        Write-Log "Modo WhatIf: Seriam buscadas e instaladas TODAS as atualizações, com reinício automático." -Type Debug
-                    }
+                    Grant-WriteProgress -Activity $activity -Status "Instalando todas as atualizações (pode demorar)..." -PercentComplete 75
+                    Get-WindowsUpdate -Install -AcceptAll @reboot | Out-Null
+                    Write-Log "Processo de atualização completo (todas as atualizações)." -Type Success
                 }
-                "2" {
+                'Criticas' {
                     Write-Log "Buscando e instalando atualizações CRÍTICAS e de SEGURANÇA..." -Type Info
-                    Grant-WriteProgress -Activity $activity -Status "Instalando atualizações críticas e de segurança (pode demorar e reiniciar!)..." -PercentComplete 75
-                    if (-not $WhatIf) {
-                        Get-WindowsUpdate -Install -AcceptAll -CriticalUpdate -SecurityUpdate -AutoReboot | Out-Null
-                        Write-Log "Processo de atualização completo (críticas/segurança)." -Type Success
-                    } else {
-                        Write-Log "Modo WhatIf: Seriam buscadas e instaladas atualizações CRÍTICAS e de SEGURANÇA, com reinício automático." -Type Debug
-                    }
+                    Grant-WriteProgress -Activity $activity -Status "Instalando atualizações críticas e de segurança (pode demorar)..." -PercentComplete 75
+                    Get-WindowsUpdate -Install -AcceptAll -CriticalUpdate -SecurityUpdate @reboot | Out-Null
+                    Write-Log "Processo de atualização completo (críticas/segurança)." -Type Success
                 }
-                "3" {
+                'Listar' {
                     Write-Log "Buscando atualizações disponíveis (não será instalado nada)..." -Type Info
                     Grant-WriteProgress -Activity $activity -Status "Buscando atualizações disponíveis..." -PercentComplete 75
-                    if (-not $WhatIf) {
-                        Get-WindowsUpdate | Format-Table -AutoSize
-                        Write-Log "Busca de atualizações concluída. Verifique a lista acima." -Type Success
-                    } else {
-                        Write-Log "Modo WhatIf: Seriam buscadas e listadas as atualizações disponíveis." -Type Debug
-                    }
-                    # O pause é necessário para o usuário ver a tabela de atualizações
-                    Read-Host "Pressione ENTER para continuar..."
+                    $lista = Get-WindowsUpdate | Out-String
+                    Write-Log "Atualizações disponíveis:`r`n$lista" -Type Info
                 }
-                "0" {
-                    Write-Log "Retornando ao menu principal." -Type Info
-                    return
-                }
-                default {
-                    Write-Log "Opção inválida. Por favor, escolha uma opção válida." -Type Error
-                    Start-Sleep -Seconds 2
-                }
+            }
+            if (-not $AutoReboot -and $Modo -ne 'Listar') {
+                Write-Log "Se houver reinício pendente, reinicie fora do horário de aula." -Type Info
             }
             Write-Log "Processo de gerenciamento de atualizações concluído." -Type Success
 
@@ -1913,7 +1914,6 @@ function Grant-WindowsUpdates {
             Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
         } finally {
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-            Start-Sleep -Seconds 2
         }
     }
 }
@@ -2619,7 +2619,9 @@ function Get-ScriptSupremoAppsList {
     [CmdletBinding()]
     param()
 
-    $appsJson = Join-Path $PSScriptRoot "Apps.json"
+    # $PSScriptRoot é vazio em irm | iex; cai para o diretório atual
+    $base = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+    $appsJson = Join-Path $base "Apps.json"
     $apps = $null
     if (Test-Path $appsJson) {
         try {
@@ -2792,7 +2794,7 @@ function Install-Applications {
                 $percentComplete = (($installedCount / $totalApps) * 100)
                 $statusMessage = "Instalando $($app.Name)..."
 
-                Grant-WriteProgress -Activity $activity -Status $statusMessage "App: $($app.Name) (ID: $($app.Id))" -PercentComplete $percentComplete
+                Grant-WriteProgress -Activity $activity -Status "$statusMessage App: $($app.Name) (ID: $($app.Id))" -PercentComplete $percentComplete
 
                 try {
                     Write-Log "Tentando instalar $($app.Name) (ID: $($app.Id))..." -Type Info
@@ -5862,7 +5864,10 @@ function Enable-WindowsUpdateFast {
 function Enable-RestartAppsAfterReboot {
     Write-Log "Ativando restauração de apps após reinicialização..." -Type Warning
     try {
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RestartApps" /v RestartApps /t REG_DWORD /d 1 /f | Out-Null
+        # Chave correta (Winlogon do usuário atual), valor RestartApps = 1
+        $chaveWl = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon'
+        if (-not (Test-Path -LiteralPath $chaveWl)) { New-Item -Path $chaveWl -Force | Out-Null }
+        Set-ItemProperty -LiteralPath $chaveWl -Name 'RestartApps' -Value 1 -Type DWord -ErrorAction Stop
         Write-Log "Restauração de apps ativada." -Type Success
     } catch {
         Write-Log "Erro ao ativar restauração de apps: $_" -Type Error
@@ -5873,7 +5878,14 @@ function Enable-OtherMicrosoftUpdates {
     Write-Log "Ativando updates para outros produtos Microsoft..." -Type Warning
     try {
         reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update" /v EnableFeaturedSoftware /t REG_DWORD /d 1 /f | Out-Null
-        Write-Log "Updates para outros produtos Microsoft ativados." -Type Success
+        # Registra o serviço Microsoft Update por COM (flags 7 = registro pendente, fora do WU e online)
+        $sm = New-Object -ComObject Microsoft.Update.ServiceManager
+        $res = $sm.AddService2('7971f918-a847-4430-9279-4a52d1efe18d', 7, '')
+        # ResultCode 2 = Succeeded, 3 = SucceededWithErrors
+        if ($res.ResultCode -ne 2 -and $res.ResultCode -ne 3) {
+            throw ("AddService2 retornou ResultCode {0}." -f $res.ResultCode)
+        }
+        Write-Log "Updates para outros produtos Microsoft ativados (serviço Microsoft Update registrado)." -Type Success
     } catch {
         Write-Log "Erro ao ativar updates para outros produtos Microsoft: $_" -Type Error
     }
@@ -6637,7 +6649,8 @@ try {
     # 10) Executar Windows Update (se solicitado)
     if ($RunWindowsUpdate) {
         Write-Log -Message "Iniciando gerenciamento de atualizações do Windows..." -Type Info
-        Grant-WindowsUpdates @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
+        $gwuParams = @{}; if ($WhatIf) { $gwuParams.WhatIf = $true }
+        Grant-WindowsUpdates -Modo Criticas @gwuParams
     }
 
     # 11) Aplicar plano de energia otimizado (se solicitado)
@@ -7435,14 +7448,17 @@ function Start-ScriptSupremo {
 # -------------------------------------------------------------------------
 
 function Grant-WriteProgress {
+    [CmdletBinding()]
     param(
         [string]$Activity,
         [string]$Status,
-        [int]$PercentComplete
+        [int]$PercentComplete,
+        # Tolera argumentos posicionais extras de chamadores antigos (ignorados)
+        [Parameter(ValueFromRemainingArguments = $true)]$Resto
     )
-    if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('WhatIf')) {
-        # Não exibe Write-Progress em modo WhatIf para não poluir a saída de debug
-    } else {
+    # Não depende do $PSCmdlet do chamador: usa o $WhatIfPreference herdado.
+    # Em modo WhatIf não exibe Write-Progress para não poluir a saída de debug.
+    if (-not $WhatIfPreference) {
         Write-Progress -Activity $Activity -Status $Status -PercentComplete $PercentComplete
     }
 }
