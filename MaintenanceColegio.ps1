@@ -392,10 +392,9 @@ function Invoke-Tweaks {
     try { Enable-ClipboardHistory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClipboardHistory: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-DarkTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-DarkTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-OtherMicrosoftUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-OtherMicrosoftUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-PowerOptions -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PowerOptions: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-PrivacyHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PrivacyHardening: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-RestartAppsAfterReboot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-RestartAppsAfterReboot: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # (era Enable-SMBv1, que sem o switch desativava; agora Enable-SMBv1 habilita de fato)
     try { Enable-Sudo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-Sudo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-TaskbarEndTask -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarEndTask: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-TaskbarSeconds -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarSeconds: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -510,10 +509,9 @@ function Invoke-Colegio {
     try { Enable-ClipboardHistory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClipboardHistory: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-DarkTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-DarkTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-OtherMicrosoftUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-OtherMicrosoftUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-PowerOptions -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PowerOptions: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-PrivacyHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PrivacyHardening: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-RestartAppsAfterReboot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-RestartAppsAfterReboot: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # (era Enable-SMBv1, que sem o switch desativava; agora Enable-SMBv1 habilita de fato)
     try { Enable-Sudo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-Sudo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-TaskbarEndTask -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarEndTask: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Enable-TaskbarSeconds -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarSeconds: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -5251,6 +5249,19 @@ function Set-SystemTweaks {
 
     $allGrantTweaks = @{}
 
+    # União segura de dicionários de registro: o mesmo caminho pode aparecer em mais de um
+    # conjunto (ex.: Explorer, DiagTrack\Settings); "+=" de hashtables lançaria
+    # "Item has already been added". Aqui os valores do último conjunto prevalecem.
+    function Merge-RegTweaks {
+        param([hashtable]$Destino, [hashtable]$Origem)
+        foreach ($caminho in @($Origem.Keys)) {
+            if (-not $Destino.ContainsKey($caminho)) { $Destino[$caminho] = @{} }
+            foreach ($nome in @($Origem[$caminho].Keys)) {
+                $Destino[$caminho][$nome] = $Origem[$caminho][$nome]
+            }
+        }
+    }
+
     if ($ApplyPrivacyTweaks) {
         Write-Log "Preparando para aplicar tweaks de privacidade..." -Type Info
         # Adicione aqui o conteúdo do dicionário $registryChanges de Grant-PrivacyTweaks
@@ -5286,7 +5297,7 @@ function Set-SystemTweaks {
             "HKLM:\SOFTWARE\Classes\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
             "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" = @{"System.IsPinnedToNameSpaceTree" = 0};
         }
-        $allGrantTweaks += $privacyChanges
+        Merge-RegTweaks -Destino $allGrantTweaks -Origem $privacyChanges
     }
 
     if ($ApplyControlPanelTweaks) {
@@ -5299,15 +5310,17 @@ function Set-SystemTweaks {
             "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{Start_JumpListsItems = 0; IconsOnly = 1; ScanNetDrives = 0; HideFileExt = 0; ShowSuperHidden = 1; DisableShake = 1; DontShowNewInstall = 1; LaunchTo = 0; AutoArrange = 0};
             "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{HubMode = 1; ShowRecent = 0; ShowFrequent = 0; Link = 0};
             "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Ribbon" = @{QatExclude = 1};
-            "HKCU:\Control Panel\Desktop" = @{WindowArrangementActive = 0; MouseWheelRouting = 0; UserPreferencesMask = 0x90120380};
+            "HKCU:\Control Panel\Desktop" = @{WindowArrangementActive = 0; MouseWheelRouting = 0; UserPreferencesMask = [byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)}; # REG_BINARY (antes era DWORD e corrompia o tipo)
             "HKCU:\Control Panel\Desktop\WindowMetrics" = @{MinAnimate = 0};
         }
-        $allGrantTweaks += $cpTweaks
+        Merge-RegTweaks -Destino $allGrantTweaks -Origem $cpTweaks
     }
 
     if ($ApplyExtraTweaks) {
         Write-Log "Preparando para aplicar tweaks extras de otimização e segurança..." -Type Info
         # Adicione aqui o conteúdo do dicionário $registryChanges de Grant-ExtraTweaks
+        # Fora desta lista: WbioSrvc (Windows Hello), NlaSvc (detecção de rede), AeLookupSvc (chave
+        # inexistente) e o descritor de segurança (SD) do TaskCache, que era inválido.
         $extraTweaks = @{
             "HKLM:\SOFTWARE\Policies\Microsoft\Edge" = @{TelemetryEnabled = 0};
             "HKCU:\SOFTWARE\Microsoft\Office\Common\ClientTelemetry" = @{EnableTelemetry = 0};
@@ -5320,29 +5333,23 @@ function Set-SystemTweaks {
             "HKCU:\System\GameConfigStore" = @{GameDVR_Enabled = 0};
             "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" = @{AllowGameDVR = 0};
             "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack\Settings" = @{AllowDiagnosticDataToFlow = 0};
-            "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" = @{01 = 0};
-            "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" = @{HiberbootEnabled = 0};
+            "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" = @{"01" = 0};
+            "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" = @{HiberbootEnabled = 1}; # Inicialização rápida LIGADA em todo o script (decisão do Regnon)
             "HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl" = @{AutoReboot = 0};
             "HKLM:\SYSTEM\CurrentControlSet\Services\Fax" = @{Start = 4};
             "HKLM:\SYSTEM\CurrentControlSet\Services\RasAuto" = @{Start = 4};
             "HKLM:\SYSTEM\CurrentControlSet\Services\RemoteAccess" = @{Start = 4};
             "HKLM:\SYSTEM\CurrentControlSet\Services\DPS" = @{Start = 4};
             "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" = @{LocalAccountTokenFilterPolicy = 1};
-            "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" = @{}; # CUIDADO: Limpa tudo!
             "HKLM:\SYSTEM\CurrentControlSet\Services\WSearch" = @{Start = 4};
             "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting" = @{Disabled = 1};
             "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" = @{NtfsDisableLastAccessUpdate = 1};
             "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{"Start_ShowControlPanel" = 0; "Start_ShowDownloads" = 0};
-            "HKLM:\SYSTEM\CurrentControlSet\Services\WbioSrvc" = @{Start = 4};
-            "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator" = @{SD = [byte[]](0x01,0x00,0x04,0x80,0x7C,0x00,0x00,0x00,0x8C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x02,0x00,0x1C,0x00,0x01,0x00,0x00,0x00,0x0F,0x00,0x04,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00);};
-            "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\Maintenance" = @{SD = [byte[]](0x01,0x00,0x04,0x80,0x7C,0x00,0x00,0x00,0x8C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x02,0x00,0x1C,0x00,0x01,0x00,0x00,0x00,0x0F,0x00,0x04,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00);};
-            "HKLM:\SYSTEM\CurrentControlSet\Services\NlaSvc" = @{Start = 4};
-            "HKLM:\SYSTEM\CurrentControlSet\Services\AeLookupSvc" = @{Start = 4};
             "HKLM:\SYSTEM\CurrentControlSet\Services\MapsBroker" = @{Start = 4};
             "HKLM:\SYSTEM\CurrentControlSet\Services\DiagTrack" = @{Start = 4};
             "HKLM:\SYSTEM\CurrentControlSet\Services\dmwappushservice" = @{Start = 4};
         }
-        $allGrantTweaks += $extraTweaks
+        Merge-RegTweaks -Destino $allGrantTweaks -Origem $extraTweaks
     }
 
     # Só continue se algum tweak foi selecionado para ser aplicado
@@ -5360,17 +5367,18 @@ function Set-SystemTweaks {
             foreach ($path in $allGrantTweaks.Keys) {
                 $currentChange++
                 $percentComplete = ($currentChange / $totalChanges) * 100
-                Grant-WriteProgress -Activity $activity -Status "Processando caminho: $path" -PercentComplete $percentComplete "Caminho: $path"
+                Grant-WriteProgress -Activity $activity -Status "Processando caminho: $path" -PercentComplete $percentComplete
 
                 if (-not (Test-Path $path -ErrorAction SilentlyContinue)) {
+                    # Nunca cria chave de serviço inexistente (ficaria uma chave fantasma só com Start)
+                    if ($path -like "*\CurrentControlSet\Services\*") {
+                        Write-Log "Serviço inexistente nesta máquina, ignorado: $path" -Type Debug
+                        continue
+                    }
                     Write-Log "Verificando/Criando caminho de registro: $path" -Type Debug
                     try {
-                        if (-not $WhatIf) {
-                            New-Item -Path $path -Force -ErrorAction Stop | Out-Null
-                            Write-Log "Caminho de registro criado: $path" -Type Info
-                        } else {
-                            Write-Log "Modo WhatIf: Caminho de registro '$path' seria criado." -Type Debug
-                        }
+                        New-Item -Path $path -Force -ErrorAction Stop | Out-Null
+                        Write-Log "Caminho de registro criado: $path" -Type Info
                     } catch {
                         Write-Log "ERRO ao criar caminho de registro '$path': $($_.Exception.Message)" -Type Error
                         continue # Pula para o próximo caminho se a criação falhar
@@ -5379,13 +5387,14 @@ function Set-SystemTweaks {
 
                 foreach ($name in $allGrantTweaks.$path.Keys) {
                     $value = $allGrantTweaks.$path.$name
-                    Write-Log "Configurando: $path - $name = $value" -Type Debug
+                    Write-Log "Configurando: $path - $name = $(if ($value -is [byte[]]) { ($value | ForEach-Object { $_.ToString('X2') }) -join ' ' } else { $value })" -Type Debug
 
                     try {
-                        if (-not $WhatIf) {
-                            Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction Stop | Out-Null
+                        # Binário preserva o tipo REG_BINARY (sem -Type viraria DWORD)
+                        if ($value -is [byte[]]) {
+                            Set-ItemProperty -Path $path -Name $name -Value $value -Type Binary -Force -ErrorAction Stop | Out-Null
                         } else {
-                            Write-Log "Modo WhatIf: Propriedade '$name' seria definida para '$value' em '$path'." -Type Debug
+                            Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction Stop | Out-Null
                         }
                     } catch {
                         Write-Log "ERRO ao configurar propriedade '$name' em '$path': $($_.Exception.Message)" -Type Error
@@ -5568,20 +5577,32 @@ function Disable-ActionCenter-Notifications {
 function Set-VisualPerformance {
     [CmdletBinding(SupportsShouldProcess=$true)]
     param(
-       
-            )
+        # Caminho opcional de um papel de parede; se omitido, o papel de parede não é alterado.
+        [string]$Wallpaper
+    )
     Write-Log "Iniciando ajuste visual para melhor performance..." -Type Info
     $activity = "Ajuste de Performance Visual"
 
     if ($PSCmdlet.ShouldProcess("ajustes visuais para performance", "aplicar")) {
         try {
-            Grant-WriteProgress -Activity $activity -Status "Definindo VisualFXSetting para performance..." -PercentComplete 50
-            if (-not $WhatIf) { reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f | Out-Null }
-            else { Write-Log "Modo WhatIf: VisualFXSetting seria definido para 2 (performance)." -Type Debug }
+            Grant-WriteProgress -Activity $activity -Status "Definindo VisualFXSetting para performance..." -PercentComplete 30
+            reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "reg.exe falhou ao gravar VisualFXSetting (código $LASTEXITCODE)" }
 
-            Grant-WriteProgress -Activity $activity -Status "Ajustando UserPreferencesMask..." -PercentComplete 80
-            if (-not $WhatIf) { reg.exe add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f | Out-Null }
-            else { Write-Log "Modo WhatIf: UserPreferencesMask seria ajustado." -Type Debug }
+            Grant-WriteProgress -Activity $activity -Status "Ajustando UserPreferencesMask..." -PercentComplete 60
+            reg.exe add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "reg.exe falhou ao gravar UserPreferencesMask (código $LASTEXITCODE)" }
+
+            # Papel de parede só quando o caminho for informado e existir
+            if ($Wallpaper) {
+                if (Test-Path -LiteralPath $Wallpaper) {
+                    Grant-WriteProgress -Activity $activity -Status "Aplicando papel de parede..." -PercentComplete 85
+                    Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name Wallpaper -Value $Wallpaper -ErrorAction Stop
+                    rundll32.exe user32.dll,UpdatePerUserSystemParameters
+                } else {
+                    Write-Log "Papel de parede não encontrado, mantido o atual: $Wallpaper" -Type Warning
+                }
+            }
 
             Write-Log "Visual ajustado para performance com sucesso." -Type Success
             Write-Log "Pode ser necessário reiniciar o Explorer ou o sistema para ver todas as alterações visuais." -Type Info
@@ -5592,9 +5613,6 @@ function Set-VisualPerformance {
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
         }
     }
-	$wallpaperPath = "G:\Drives compartilhados\MundoCOC\Wallpaper\wallpaper.jpg"
-	Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop\' -Name Wallpaper -Value $wallpaperPath
-	RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
 }
 
 function Grant-SystemOptimizations {
@@ -5612,34 +5630,30 @@ function Grant-SystemOptimizations {
             Grant-WriteProgress -Activity $activity -Status "Otimizando inicialização do sistema..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Verificando otimização de inicialização (Boot Optimization)..." -Type Info
             try {
-                if (-not $WhatIf) {
+                $bootKey = "HKLM:\SOFTWARE\Microsoft\Dfrg\BootOptimizeFunction"
+                if (Test-Path -LiteralPath $bootKey) {
                     # Habilita otimização de inicialização (se desabilitado)
-                    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Dfrg\BootOptimizeFunction" -Name "Enable" -Value "Y" -Force -ErrorAction SilentlyContinue
+                    Set-ItemProperty -Path $bootKey -Name "Enable" -Value "Y" -Force -ErrorAction Stop
                     Write-Log "Otimização de inicialização configurada para 'Y'." -Type Success
                 } else {
-                    Write-Log "Modo WhatIf: Otimização de inicialização seria configurada." -Type Debug
+                    Write-Log "Chave BootOptimizeFunction não existe nesta máquina; nada alterado." -Type Warning
                 }
             } catch {
                 Write-Log "Falha ao otimizar inicialização: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
             }
 
-            # Desabilitar Indexação de Conteúdo para unidades não-sistema (opcional, para desempenho)
+            # Último acesso e nomes 8.3 (NTFS). Estas chaves são GLOBAIS: valem para todos os volumes,
+            # inclusive o do sistema, e são gravadas uma única vez. (Não mexem na Indexação do Windows Search.)
             $currentStep++
-            Grant-WriteProgress -Activity $activity -Status "Desabilitando Indexação de Conteúdo para unidades não-sistema (se aplicável)..." -PercentComplete (($currentStep / $totalSteps) * 100)
-            Write-Log "Desabilitando Indexação de Conteúdo para unidades não-sistema..." -Type Info
+            Grant-WriteProgress -Activity $activity -Status "Desativando último acesso e nomes 8.3 (NTFS)..." -PercentComplete (($currentStep / $totalSteps) * 100)
+            Write-Log "Desativando atualização de último acesso e nomes 8.3 (valores globais, valem para todos os volumes)..." -Type Info
             try {
-                if (-not $WhatIf) {
-                    Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -ne $env:SystemDrive.Substring(0,1) } | ForEach-Object {
-                        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "NtfsDisable8dot3NameCreation" -Value 1 -Force -ErrorAction SilentlyContinue | Out-Null
-                        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "NtfsDisableLastAccessUpdate" -Value 1 -Force -ErrorAction SilentlyContinue | Out-Null
-                        Write-Log "Indexação para unidade $($_.DriveLetter): desabilitada (last access e 8dot3)." -Type Debug
-                    }
-                } else {
-                    Write-Log "Modo WhatIf: Indexação para unidades não-sistema seria desabilitada." -Type Debug
-                }
-                Write-Log "Indexação de conteúdo ajustada." -Type Success
+                $fsKey = "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem"
+                Set-ItemProperty -Path $fsKey -Name "NtfsDisable8dot3NameCreation" -Value 1 -Type DWord -Force -ErrorAction Stop
+                Set-ItemProperty -Path $fsKey -Name "NtfsDisableLastAccessUpdate" -Value 1 -Type DWord -Force -ErrorAction Stop
+                Write-Log "Último acesso e nomes 8.3 desativados (efeito após reiniciar)." -Type Success
             } catch {
-                Write-Log "Falha ao desabilitar indexação de conteúdo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
+                Write-Log "Falha ao desativar último acesso/8.3: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
             }
 
             # Desativar despejos de memória para desempenho (não recomendado para diagnóstico)
@@ -5647,15 +5661,12 @@ function Grant-SystemOptimizations {
             Grant-WriteProgress -Activity $activity -Status "Desativando despejos de memória (pode impactar diagnósticos)..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Desativando despejos de memória..." -Type Info
             try {
-                if (-not $WhatIf) {
-                    # Configura CrashDump para 0 (nenhum despejo)
-                    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl" -Name "CrashDumpEnabled" -Value 0 -Force -ErrorAction SilentlyContinue
-                    # Configura AutoReboot para 0 (não reiniciar automaticamente após BSOD)
-                    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl" -Name "AutoReboot" -Value 0 -Force -ErrorAction SilentlyContinue
-                    Write-Log "Despejos de memória desativados." -Type Success
-                } else {
-                    Write-Log "Modo WhatIf: Despejos de memória seriam desativados." -Type Debug
-                }
+                Write-Log "ATENÇÃO: sem despejo de memória (CrashDump) não haverá dados para diagnosticar travas e telas azuis." -Type Warning
+                # Configura CrashDump para 0 (nenhum despejo)
+                Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl" -Name "CrashDumpEnabled" -Value 0 -Type DWord -Force -ErrorAction Stop
+                # Configura AutoReboot para 0 (não reiniciar automaticamente após BSOD)
+                Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl" -Name "AutoReboot" -Value 0 -Type DWord -Force -ErrorAction Stop
+                Write-Log "Despejos de memória desativados." -Type Success
             } catch {
                 Write-Log "Falha ao desativar despejos de memória: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
             }
@@ -5979,45 +5990,57 @@ function Set-PerformanceTheme {
     .DESCRIPTION
         Esta função otimiza a experiência visual do Windows para desempenho máximo
         desativando animações, transparências e outros efeitos gráficos que podem
-        consumir recursos.
+        consumir recursos. O Explorer NÃO é reiniciado por padrão (rotinas desatendidas
+        não devem derrubar a área de trabalho): use -ReiniciarExplorer ou saia e entre
+        novamente na sessão.
     #>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param([switch]$ReiniciarExplorer)
+
     Write-Log "Aplicando configurações de desempenho no tema do Windows..." -Type Info
+    if (-not $PSCmdlet.ShouldProcess("tema de desempenho do Windows", "aplicar")) { return }
     try {
         # Define o ajuste de efeitos visuais para 'Ajustar para melhor desempenho'
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord -Force -ErrorAction Stop
 
         # Controla várias animações e efeitos visuais
         # O valor '9012038010000000' em binário (hex 90 12 03 80 10 00 00 00) desativa a maioria das animações.
         # Equivalente a desmarcar todas as opções em "Ajustar para melhor desempenho" nas Opções de Desempenho.
-        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -Type Binary -Force -ErrorAction Stop
 
         # Desativa a prevalência de cor na barra de título (DWM - Desktop Window Manager)
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\DWM" -Name "ColorPrevalence" -Value 0 -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\DWM" -Name "ColorPrevalence" -Value 0 -Type DWord -Force -ErrorAction Stop
         # Desativa o Aero Peek
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\DWM" -Name "EnableAeroPeek" -Value 0 -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\DWM" -Name "EnableAeroPeek" -Value 0 -Type DWord -Force -ErrorAction Stop
         # Desativa o desfoque atrás das janelas (Blur Behind)
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\DWM" -Name "EnableBlurBehind" -Value 0 -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\DWM" -Name "EnableBlurBehind" -Value 0 -Type DWord -Force -ErrorAction Stop
         # Desativa a transparência geral (DWM) - pode ser redundante com a configuração em Grant-UITweaks
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\DWM" -Name "EnableTransparency" -Value 0 -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\DWM" -Name "EnableTransparency" -Value 0 -Type DWord -Force -ErrorAction Stop
 
+        # Valores REG_SZ do Desktop continuam como texto (sem -Type viravam DWORD)
         # Desativa "Mostrar conteúdo da janela ao arrastar"
-        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "DragFullWindows" -Value 0 -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "DragFullWindows" -Value "0" -Type String -Force -ErrorAction Stop
         # Reduz o atraso do menu (torna menus mais rápidos)
-        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0 -Force -ErrorAction Stop
-        
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value "0" -Type String -Force -ErrorAction Stop
+
         # Configura o suavizamento de fonte (ClearType)
-        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothing" -Value 2 -Force -ErrorAction Stop
-        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingType" -Value 1 -Force -ErrorAction Stop
-        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingGamma" -Value 0 -Force -ErrorAction Stop
-        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingOrientation" -Value 0 -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothing" -Value "2" -Type String -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingType" -Value 1 -Type DWord -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingGamma" -Value 0 -Type DWord -Force -ErrorAction Stop
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "FontSmoothingOrientation" -Value 0 -Type DWord -Force -ErrorAction Stop
 
         Write-Log "Configurações de desempenho aplicadas ao tema do Windows." -Type Success
     }
     catch {
         Write-Log "Erro ao aplicar tema de desempenho: $($_.Exception.Message)" -Type Error
+        return
     }
-    # Reinicia o Explorer para aplicar algumas mudanças de tema imediatamente
-    Restart-Explorer
+    # O Explorer só reinicia quando pedido explicitamente (e sob ShouldProcess/-Confirm)
+    if ($ReiniciarExplorer) {
+        if ($PSCmdlet.ShouldProcess("Explorer", "reiniciar")) { Restart-Explorer }
+    } else {
+        Write-Log "Para ver todas as mudanças, saia e entre novamente na sessão (ou use -ReiniciarExplorer)." -Type Info
+    }
 }
 
 #region → FUNÇÕES DE OTIMIZAÇÃO E DESEMPENHO
@@ -6090,57 +6113,48 @@ function Enable-WindowsHardening {
 }
 
 function Disable-UnnecessaryServices {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param()
     Write-Log "Desativando serviços desnecessários..." -Type Warning
+    # Lista sem repetições, em ordem alfabética. Ficam de FORA por risco em máquinas escolares:
+    # WbioSrvc (biometria/Windows Hello), SharedAccess (hotspot/ICS), TrkWks (atalhos de rede),
+    # lfsvc (localização) e PrintNotify (notificações/extensões de impressora).
     $services = @(
+        'diagnosticshub.standardcollector.service', # Diagnostics Hub Standard Collector
         'DiagTrack',            # Telemetria
-        'dmwappushservice',     # Telemetria
+        'dmwappushservice',     # Telemetria (WAP Push)
+        'Fax',                  # Fax
+        'MapsBroker',           # Mapas baixados
+        'MessagingService',     # Mensagens
+        'NetTcpPortSharing',    # Compartilhamento de porta Net.Tcp
+        'OneSyncSvc',           # Sincronização
+        'PhoneSvc',             # Telefone
+        'PimIndexMaintenanceSvc', # Contatos/Calendário
+        'RemoteAccess',         # Roteamento e Acesso Remoto
+        'RemoteRegistry',       # Registro Remoto
+        'RetailDemo',           # Modo Demo
+        'SEMgrSvc',             # Pagamentos NFC
+        'WalletService',        # Carteira
+        'WerSvc',               # Relatório de Erros
         'WMPNetworkSvc',        # Compartilhamento Windows Media Player
         'XblAuthManager',       # Xbox Live Auth
         'XblGameSave',          # Xbox Live Game Save
-        'XboxNetApiSvc',        # Xbox Live Networking
-        'MapsBroker',           # Mapas
-        'Fax',                  # Fax
-        'PrintNotify',          # Notificações de Impressora
-        'RemoteRegistry',       # Registro Remoto
-        'RetailDemo',           # Modo Demo
-        'SharedAccess',         # Compartilhamento de Internet
-        'WerSvc',               # Relatório de Erros
-        'PhoneSvc',             # Telefone
-        'MessagingService',     # Mensagens
-        'WalletService',        # Carteira
-        'OneSyncSvc',           # Sincronização
-        'PimIndexMaintenanceSvc', # Contatos/Calendário
-        'SEMgrSvc',             # Pagamentos NFC
-        'WbioSrvc',             # Biometria
-        "diagnosticshub.standardcollector.service", # Microsoft (R) Diagnostics Hub Standard Collector Service
-        "DiagTrack",                                # Diagnostics Tracking Service
-        "dmwappushservice",                         # WAP Push Message Routing Service (see known issues)
-        "lfsvc",                                    # Geolocation Service
-        "MapsBroker",                               # Downloaded Maps Manager
-        "NetTcpPortSharing",                        # Net.Tcp Port Sharing Service
-        "RemoteAccess",                             # Routing and Remote Access
-        "RemoteRegistry",                           # Remote Registry
-        "SharedAccess",                             # Internet Connection Sharing (ICS)
-        "TrkWks",                                   # Distributed Link Tracking Client
-        "WbioSrvc",                                 # Windows Biometric Service (required for Fingerprint reader / facial detection)
-        #"WlanSvc",                                 # WLAN AutoConfig (Disabling this can cause issues with wifi connectivity)
-        "WMPNetworkSvc",                            # Windows Media Player Network Sharing Service
-        #"wscsvc",                                  # Windows Security Center Service
-        #"WSearch",                                 # Windows Search
-        "XblAuthManager",                           # Xbox Live Auth Manager
-        "XblGameSave",                              # Xbox Live Game Save Service
-        "XboxNetApiSvc"                             # Xbox Live Networking Service
-        # Services which cannot be disabled
-        #"WdNisSvc"
+        'XboxNetApiSvc'         # Xbox Live Networking
     )
     foreach ($svc in $services) {
+        $servico = Get-Service -Name $svc -ErrorAction SilentlyContinue
+        if (-not $servico) {
+            Write-Log "Serviço ${svc} não existe nesta máquina, ignorado." -Type Debug
+            continue
+        }
+        if (-not $PSCmdlet.ShouldProcess($svc, 'desativar serviço')) { continue }
         try {
-            Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
-            Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+            Set-Service -Name $svc -StartupType Disabled -ErrorAction Stop
+            if ($servico.Status -ne 'Stopped') { Stop-Service -Name $svc -Force -ErrorAction Stop }
             Write-Log "Serviço ${svc} desativado." -Type Success
-        } 
+        }
         catch {
-            Write-Log "Erro ao desativar serviço ${svc}: $_" -Type Error
+            Write-Log "Falha ao desativar serviço ${svc}: $($_.Exception.Message)" -Type Warning
         }
     }
     Write-Log "Desativação de serviços concluída." -Type Success
@@ -6179,45 +6193,6 @@ function Update-WindowsAndDrivers {
 #endregion
 
 #region → FUNÇÕES TWEAKS
-
-function Enable-PowerOptions {
-    param (
-        [hashtable]$config
-    )
-    
-    $minhasConfiguracoesDeEnergia = @{
-    TempoTelaAC = 15                 # Minutos
-    TempoTelaBateria = 5             # Minutos
-    TempoHibernarAC = 0              # Minutos (0 para nunca)
-    TempoHibernarBateria = 30        # Minutos
-
-    BotaoEnergiaAC = "Shutdown"      # Nothing, Sleep, Hibernate, Shutdown
-    BotaoSuspensaoAC = "Sleep"       # Nothing, Sleep, Hibernate, Shutdown
-    ComportamentoTampaAC = "Nothing" # Nothing, Sleep, Hibernate, Shutdown
-
-    BotaoEnergiaBateria = "Shutdown"
-    BotaoSuspensaoBateria = "Sleep"
-    ComportamentoTampaBateria = "Sleep"
-
-    EconomiaEnergiaAtivada = $true
-    NivelAtivacaoEconomia = 20       # Porcentagem (0-100)
-    ReduzirBrilho = $true
-}
-
-	Enable-PowerOptions -config $minhasConfiguracoesDeEnergiaURRENT
-    
-	Write-Log "Configurações aplicadas com sucesso!" -Type Success
-	Write-Log "`nResumo das configurações:" -Type Info
-	Write-Log " - Tela (AC/DC): $($config.TempoTelaAC)min / $($config.TempoTelaBateria)min"
-	$hibernacaoAC = if ($config.TempoHibernarAC -eq 0) { 'Nunca' } else { "$($config.TempoHibernarAC)min" }
-	Write-Log " - Hibernação (AC/DC): $hibernacaoAC / $($config.TempoHibernarBateria)min"
-	Write-Log " - Tampa (AC/DC): $($config.ComportamentoTampaAC) / $($config.ComportamentoTampaBateria)"
-	Write-Log " - Botão Energia (AC/DC): $($config.BotaoEnergiaAC) / $($config.BotaoEnergiaBateria)"
-	Write-Log "   - Nível ativação: $($config.NivelAtivacaoEconomia)%"
-	Write-Host (" - Economia de energia: " + (if ($config.EconomiaEnergiaAtivada) {'Ativada'} else {'Desativada'}))
-	Write-Host ("   - Reduzir brilho: " + (if ($config.ReduzirBrilho) {'Sim'} else {'Não'}))
-
-}
 
 function Enable-DarkTheme {
     Write-Log "Ativando tema escuro..." -Type Warning
@@ -6380,9 +6355,20 @@ function Set-OptimizedPowerPlan {
     $altoDesempenho = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
     if ($PSCmdlet.ShouldProcess("Plano de energia", "Alto desempenho")) {
         try {
-            powercfg /setactive $altoDesempenho
-            if ($LASTEXITCODE -ne 0) { throw "powercfg código $LASTEXITCODE" }
-            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name HiberbootEnabled -Value 1
+            powercfg /setactive $altoDesempenho 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                # Plano oculto/ausente nesta máquina (comum em notebooks de fabricante): cria uma cópia a
+                # partir do GUID embutido do Windows e ativa a cópia.
+                Write-Log "Plano Alto desempenho indisponível; criando a partir do GUID embutido (duplicatescheme)..." -Type Info
+                $saida = powercfg /duplicatescheme $altoDesempenho 2>&1 | Out-String
+                $codigoDup = $LASTEXITCODE
+                $achado = [regex]::Match($saida, '[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}')
+                if ($codigoDup -ne 0 -or -not $achado.Success) { throw "não foi possível criar o plano Alto desempenho (powercfg código $codigoDup)" }
+                powercfg /setactive $achado.Value | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "powercfg /setactive código $LASTEXITCODE" }
+            }
+            # Inicialização rápida LIGADA (decisão do Regnon; vale também em Set-SystemTweaks)
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name HiberbootEnabled -Value 1 -Type DWord -ErrorAction Stop
             Write-Log -Message "Plano Alto desempenho ativado." -Type Success
         } catch { Write-Log -Message "Erro ao configurar plano de energia: $($_.Exception.Message)" -Type Error }
     }
@@ -6698,69 +6684,61 @@ function Grant-ActionCenter-Notifications {
 }
 
 function Enable-SMBv1 {
-    [CmdletBinding(SupportsShouldProcess = $true)]
+    # Habilita o SMBv1 DE FATO (antes, sem o switch, a função desativava). Alto risco: só para redes antigas.
+    # O switch -EnableSMBv1 continua aceito por compatibilidade e é redundante.
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
     param([switch]$EnableSMBv1)
-    Write-Log -Message "Configurando protocolo SMB..." -Type Info
-    if ($EnableSMBv1) {
-        Write-Log -Message "ATENÇÃO: Ativar SMBv1 pode expor vulnerabilidades. Use apenas se necessário." -Type Warning
-        if ($PSCmdlet.ShouldProcess("SMBv1", "ativar protocolo")) {
-            try {
-                $dismCheck = dism /online /get-featureinfo /featurename:SMB1Protocol | Select-String "State : Disabled"
-                if ($dismCheck) {
-                    Enable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart -ErrorAction Stop
-                    Write-Log -Message "SMBv1 ativado com sucesso." -Type Success
-                } else {
-                    Write-Log -Message "SMBv1 já está ativado ou não disponível." -Type Warning
-                }
-            } catch {
-                Write-Log -Message "Erro ao ativar SMBv1: $(Update-SystemErrorMessage $_.Exception.Message). Considere SMBv2/3." -Type Error
+    Write-Log -Message "Habilitando protocolo SMBv1..." -Type Info
+    Write-Log -Message "ATENÇÃO: Ativar SMBv1 expõe vulnerabilidades conhecidas (ex.: WannaCry). Use apenas se necessário." -Type Warning
+    if ($PSCmdlet.ShouldProcess("SMBv1", "ativar protocolo")) {
+        try {
+            # Checagem independente de idioma (o dism em pt-BR devolve "Estado : Desabilitado")
+            $feature = Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -ErrorAction Stop
+            if ($feature.State -ne 'Enabled') {
+                Enable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart -ErrorAction Stop | Out-Null
+                Write-Log -Message "Recurso SMB1Protocol habilitado." -Type Success
+            } else {
+                Write-Log -Message "Recurso SMB1Protocol já estava habilitado." -Type Info
             }
-        }
-    } else {
-        if ($PSCmdlet.ShouldProcess("SMBv1", "desativar protocolo")) {
-            try {
-                Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Name "SMB1" -Value 0 -Type DWord -ErrorAction Stop
-                Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" -Name "Start" -Value 4 -Type DWord -ErrorAction Stop # Desabilita o driver
-                Write-Log -Message "SMBv1 desativado com sucesso." -Type Success
-            } catch {
-                Write-Log -Message "Erro ao desativar SMBv1: $(Update-SystemErrorMessage $_.Exception.Message). Verifique se o serviço SMBv1 está em execução." -Type Error
+            if (Get-Command Set-SmbServerConfiguration -ErrorAction SilentlyContinue) {
+                Set-SmbServerConfiguration -EnableSMB1Protocol $true -Force -Confirm:$false -ErrorAction Stop
             }
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Name "SMB1" -Value 1 -Type DWord -ErrorAction Stop
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" -Name "Start" -Value 3 -Type DWord -ErrorAction Stop # Driver cliente em demanda (padrão)
+            Write-Log -Message "SMBv1 habilitado. Reinicie o computador para concluir." -Type Success
+        } catch {
+            Write-Log -Message "Erro ao habilitar SMBv1: $(Update-SystemErrorMessage $_.Exception.Message). Considere SMBv2/3." -Type Error
         }
     }
 }
 
 function Disable-SMBv1 {
-    Write-Log "Tentando desativar o SMBv1..." -Type Warning
-Write-Log "Desativando o SMBv1..." -Type Warning
-
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param()
+    Write-Log "Desativando o SMBv1..." -Type Warning
+    if (-not $PSCmdlet.ShouldProcess("SMBv1", "desativar protocolo")) { return }
     try {
-        # Desabilitar o componente SMBv1 via PowerShell (equivalente a Remove-WindowsFeature)
-        # Verifica se o recurso SMB1-Protocol existe antes de tentar removê-lo
-        if (Get-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -ErrorAction SilentlyContinue) {
+        # Recurso opcional: checagem por Get-WindowsOptionalFeature (independente de idioma)
+        $feature = Get-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -ErrorAction SilentlyContinue
+        if ($feature -and $feature.State -ne 'Disabled') {
             Write-Log "Desabilitando o recurso SMB1Protocol..." -Type Info
             Disable-WindowsOptionalFeature -Online -FeatureName "SMB1Protocol" -NoRestart -ErrorAction Stop | Out-Null
         } else {
-            Write-Log "Recurso SMB1Protocol não encontrado ou já desabilitado." -Type Warning
+            Write-Log "Recurso SMB1Protocol não encontrado ou já desabilitado." -Type Info
         }
 
-        # Desativar o driver do serviço SMBv1
-        Write-Log "Configurando o serviço MRxSmb10 para iniciar desativado (4)..." -Type Info
-        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" -Name "Start" -Value 4 -Force -ErrorAction Stop | Out-Null
+        # Servidor SMB: desliga só o protocolo SMB1 (o serviço LanmanServer e o compartilhamento seguem de pé)
+        if (Get-Command Set-SmbServerConfiguration -ErrorAction SilentlyContinue) {
+            Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force -Confirm:$false -ErrorAction Stop
+        }
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Name "SMB1" -Value 0 -Type DWord -Force -ErrorAction Stop
 
-        # Desativar o LanmanServer para não usar SMB1
-        Write-Log "Configurando o serviço LanmanServer para não usar SMB1..." -Type Info
-        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Name "SMB1" -Value 0 -Force -ErrorAction Stop | Out-Null
+        # Driver cliente SMBv1: desativado na inicialização (driver de kernel, vale após reiniciar)
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" -Name "Start" -Value 4 -Type DWord -Force -ErrorAction Stop
 
-        # Parar os serviços se estiverem rodando
-        Write-Log "Parando serviços relacionados ao SMBv1 se estiverem rodando..." -Type Info
-        Get-Service -Name "LanmanServer" -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq 'Running'} | Stop-Service -Force -ErrorAction SilentlyContinue | Out-Null
-        Get-Service -Name "MRxSmb10" -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq 'Running'} | Stop-Service -Force -ErrorAction SilentlyContinue | Out-Null
-
-        Write-Log "SMBv1 desativado com sucesso. Reinicialização pode ser necessária para que todas as alterações tenham efeito." -Type Success
-Write-Log "SMBv1 desativado. Reinicialização recomendada." -Type Success
+        Write-Log "SMBv1 desativado. Reinicialização recomendada; o compartilhamento de arquivos e impressoras não foi interrompido." -Type Success
     } catch {
-        Write-Log "Erro ao desativar o SMBv1: $_" -Type Error
-Write-Log "Erro ao desativar o SMBv1. Verifique o log." -Type Error
+        Write-Log "Erro ao desativar o SMBv1: $($_.Exception.Message)" -Type Error
     }
 }
 
@@ -6829,10 +6807,10 @@ function Restore-ControlPanelTweaks {
     Write-Log "Restaurando configurações de Painel de Controle/Explorer para o padrão..." -Type Warning
     $cpDefaults = @{
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" = @{NoControlPanel = 0; NoViewContextMenu = 0; NoDesktop = 0; NoFind = 0};
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{Start_JumpListsItems = 10; IconsOnly = 0; ScanNetDrives = 1; HideFileExt = 1; ShowSuperHidden = 0; DisableShake = 0; DontShowNewInstall = 0; LaunchTo = 1; AutoArrange = 1};
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" = @{Start_JumpListsItems = 10; IconsOnly = 0; ScanNetDrives = 1; HideFileExt = 1; ShowSuperHidden = 0; DisableShake = 0; DontShowNewInstall = 0; LaunchTo = $null; AutoArrange = 1}; # LaunchTo = $null: remove o valor (volta ao padrão do Windows)
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" = @{HubMode = 0; ShowRecent = 1; ShowFrequent = 1; Link = 1};
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Ribbon" = @{QatExclude = 0};
-        "HKCU:\Control Panel\Desktop" = @{WindowArrangementActive = 1; MouseWheelRouting = 1; UserPreferencesMask = 0x9E3E0380};
+        "HKCU:\Control Panel\Desktop" = @{WindowArrangementActive = 1; MouseWheelRouting = 1; UserPreferencesMask = [byte[]](0x9E,0x1E,0x07,0x80,0x12,0x00,0x00,0x00)}; # REG_BINARY padrão do Windows
         "HKCU:\Control Panel\Desktop\WindowMetrics" = @{MinAnimate = 1};
     }
     if ($PSCmdlet.ShouldProcess("Painel de Controle/Explorer", "restaurar para o padrão")) {
@@ -6842,7 +6820,12 @@ function Restore-ControlPanelTweaks {
                 catch { Write-Log "ERRO ao criar caminho '$p': $($_.Exception.Message)" -Type Error; continue }
             }
             foreach ($n in $cpDefaults.$p.Keys) {
-                try { Set-ItemProperty -Path $p -Name $n -Value $cpDefaults.$p.$n -Force -ErrorAction Stop }
+                $v = $cpDefaults.$p.$n
+                try {
+                    if ($null -eq $v) { Remove-ItemProperty -Path $p -Name $n -ErrorAction SilentlyContinue }   # valor padrão = ausente
+                    elseif ($v -is [byte[]]) { Set-ItemProperty -Path $p -Name $n -Value $v -Type Binary -Force -ErrorAction Stop }
+                    else { Set-ItemProperty -Path $p -Name $n -Value $v -Force -ErrorAction Stop }
+                }
                 catch { Write-Log "ERRO ao restaurar '$n' em '$p': $($_.Exception.Message)" -Type Error }
             }
         }
@@ -6869,7 +6852,7 @@ function Restore-SystemDefaults {
             ShowSuperHidden = 0; # Ocultar arquivos de sistema (padrão)
             DisableShake = 0; # Habilitar 'shake to minimize'
             DontShowNewInstall = 0; # Habilitar notificações de novos programas instalados
-            LaunchTo = 1; # Abre Quick Access por padrão
+            LaunchTo = $null; # $null remove o valor (padrão do Windows)
             AutoArrange = 1; # Ativar o auto-organizar ícones
             Hidden = 0; # Ocultar arquivos e pastas ocultos (valor padrão 0 ou 1 dependendo da versão/config) - Cuidado: 1 aqui mostra ocultos! Mantenho 1 para visibilidade se o "Grant" desabilitou
             
@@ -6879,7 +6862,7 @@ function Restore-SystemDefaults {
         "HKCU:\Control Panel\Desktop" = @{
             WindowArrangementActive = 1; # Habilitar o snap para janelas
             MouseWheelRouting = 1; # Habilitar a rolagem de janelas inativas
-            UserPreferencesMask = 0x9E3E0380; # Valor padrão para UserPreferencesMask (reverte FadeEffect)
+            UserPreferencesMask = [byte[]](0x9E,0x1E,0x07,0x80,0x12,0x00,0x00,0x00); # REG_BINARY padrão (reverte FadeEffect)
             DragFullWindows = "0"; # Padrão do Windows (contorno ao arrastar) - CUIDADO: Seu Restore original tinha "2" (conteúdo), o padrão é "0" ou "1". Ajustei para "0" (contorno).
             FontSmoothing = "2"; # ClearType
         };
@@ -6907,8 +6890,7 @@ function Restore-SystemDefaults {
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" = @{GlobalUserBackgroundAccessEnable = 1}; # Habilita globalmente
         "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" = @{DisableBackgroundAppAccess = 0}; # Política para todos os apps
 
-        "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" = @{SMB1 = 1}; # Padrão pode variar, mas para reabilitar, geralmente 1 ou remover a chave
-        "HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10" = @{Start = 3}; # Padrão (automático)
+        # SMBv1 NÃO é reativado aqui (política do script; o padrão atual do Windows também é desativado). Use Enable-SMBv1 se realmente precisar.
 
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" = @{EnableLUA = 1; ConsentPromptBehaviorAdmin = 5}; # Habilita UAC (Padrão 5)
         "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings" = @{NOC_Global_Enabled = 1}; # Habilita Notificações
@@ -6940,7 +6922,7 @@ function Restore-SystemDefaults {
         "HKCU:\System\GameConfigStore" = @{GameDVR_Enabled = 1}; # Habilita Game DVR
         "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" = @{AllowGameDVR = 1}; # Habilita Game DVR
 
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" = @{01 = 1}; # Habilita Limpeza Automática do Disco (Storage Sense)
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" = @{"01" = 1}; # Habilita Limpeza Automática do Disco (Storage Sense)
 
         "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" = @{HiberbootEnabled = 1}; # Habilita Fast Startup
         "HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl" = @{AutoReboot = 1}; # Habilita reinicialização automática em caso de BSOD
@@ -6957,23 +6939,10 @@ function Restore-SystemDefaults {
 
         "HKLM:\SYSTEM\CurrentControlSet\Services\WbioSrvc" = @{Start = 3}; # Habilita serviço Biometric (Manual ou Automatico)
 
-        # Desabilitar tarefas agendadas de telemetria e manutenção agressiva - RESTAURAR VALORES PADRÃO (segurança descritora padrão)
-        # Atenção: Estes são os SDDL padrão que geralmente reabilitam a tarefa.
-        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator" = @{
-            SD = [byte[]](0x01,0x00,0x04,0x80,0x7C,0x00,0x00,0x00,0x8C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x02,0x00,0x1C,0x00,0x01,0x00,0x00,0x00,0x0F,0x00,0x04,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00); # Este é o valor padrão que o seu GRANT já estava usando. Se a intenção é reverter, precisamos do valor ORIGINAL.
-            # No entanto, se o objetivo do Grant era "desabilitar" usando este SD, então este é o valor de "desabilitado".
-            # Para reabilitar, frequentemente você precisaria DELETAR a chave 'SD' ou REPOR a permissão TOTAL.
-            # A remoção é mais segura para reverter uma política de desabilitação por SD.
-            # Vou colocar um marcador aqui para ação de DELETE, se necessário.
-        };
-        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\Maintenance" = @{
-            SD = [byte[]](0x01,0x00,0x04,0x80,0x7C,0x00,0x00,0x00,0x8C,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x02,0x00,0x1C,0x00,0x01,0x00,0x00,0x00,0x0F,0x00,0x04,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00); # Mesmo caso acima
-        };
-        # Marcar para possível deleção de SD, se for o caso de reabilitação.
-        # Por exemplo: Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator" -Name "SD" -ErrorAction SilentlyContinue
+        # TaskCache (UpdateOrchestrator/Maintenance): o script não grava mais o descritor de segurança (SD)
+        # dessas tarefas e este restore NÃO mexe em permissões do TaskCache (chaves protegidas).
 
         "HKLM:\SYSTEM\CurrentControlSet\Services\NlaSvc" = @{Start = 2}; # Habilita Conectividade de Rede (Automático)
-        "HKLM:\SYSTEM\CurrentControlSet\Services\AeLookupSvc" = @{Start = 2}; # Habilita Experiência de Aplicativos (Automático)
         "HKLM:\SYSTEM\CurrentControlSet\Services\MapsBroker" = @{Start = 3}; # Habilita Download de Mapas (Manual)
         "HKLM:\SYSTEM\CurrentControlSet\Services\DiagTrack" = @{Start = 2}; # Habilita Serviços de Usuário Conectado e Telemetria (Automático)
         "HKLM:\SYSTEM\CurrentControlSet\Services\dmwappushservice" = @{Start = 2}; # Habilita Serviço de Coleta de Telemetria de Compatibilidade (Automático)
@@ -6989,7 +6958,7 @@ function Restore-SystemDefaults {
                 $currentChange++
                 $percentComplete = ($currentChange / $totalChanges) * 100
                 # Usar Grant-WriteProgress se disponível
-                Grant-WriteProgress -Activity $activity -Status "Processando caminho: $path" -PercentComplete $percentComplete "Caminho: $path"
+                Grant-WriteProgress -Activity $activity -Status "Processando caminho: $path" -PercentComplete $percentComplete
 
                 # Não precisamos criar a chave aqui, pois estamos restaurando valores em chaves que deveriam existir.
                 # Se uma chave foi DELETADA por um tweak, o restore não a recriaria automaticamente,
@@ -7002,12 +6971,11 @@ function Restore-SystemDefaults {
 
                     try {
                         if (-not $WhatIf) {
-                            # Especialmente para os descritores de segurança (SD)
-                            if ($name -eq "SD" -and ($path -like "*UpdateOrchestrator*" -or $path -like "*Maintenance*")) {
-                                # Para reverter o SD de tarefas agendadas, a melhor prática é *remover* o valor SD
-                                # para que o Windows possa reabilitar a tarefa com seu SD padrão
-                                Write-Log "Tentando remover o valor SD para reabilitar a tarefa agendada em: $path" -Type Info
-                                Remove-ItemProperty -Path $path -Name $name -ErrorAction Stop -Force | Out-Null
+                            if ($null -eq $value) {
+                                # $null = valor padrão é ausente: remove (ex.: LaunchTo)
+                                Remove-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue
+                            } elseif ($value -is [byte[]]) {
+                                Set-ItemProperty -Path $path -Name $name -Value $value -Type Binary -Force -ErrorAction Stop | Out-Null
                             } else {
                                 Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction Stop | Out-Null
                             }
@@ -7055,19 +7023,24 @@ try {
     # 3) Rodar remoção de bloatware
     if ($RunBloatwareRemoval -or $RunAllCleanup) {
         Write-Log -Message "Iniciando remoção de bloatware..." -Type Info 
-        Invoke-Bloatware @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} })) 
+        # Invoke-Bloatware não aceita -WhatIf: em simulação a etapa não é executada
+        $p = @{}
+        if ($WhatIf) { Write-Log -Message "Simulação: Invoke-Bloatware não suporta -WhatIf, etapa não executada." -Type Warning } else { Invoke-Bloatware @p }
     }
 
     # 4) Rodar ajustes de privacidade
     if ($RunPrivacyTweaks -or $RunAllCleanup) {
         Write-Log -Message "Aplicando tweaks de privacidade..." -Type Info 
-        Grant-PrivacyTweaks @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} })) 
+        # Grant-PrivacyTweaks não aceita -WhatIf: em simulação a etapa não é executada
+        $p = @{}
+        if ($WhatIf) { Write-Log -Message "Simulação: Grant-PrivacyTweaks não suporta -WhatIf, etapa não executada." -Type Warning } else { Grant-PrivacyTweaks @p }
     }
 
     # 5) Rodar otimização de rede
     if ($RunNetworkOptimization -or $RunAllCleanup) {
         Write-Log -Message "Aplicando otimizações de rede..." -Type Info
-        Optimize-NetworkPerformance @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
+        $p = @{}; if ($WhatIf) { $p.WhatIf = $true }
+        Optimize-NetworkPerformance @p
     }
 
     # 6) Instalar aplicativos (se solicitado) - Assumindo que Install-Applications existe em outro trecho
@@ -7079,7 +7052,8 @@ try {
     # 7) Rodar diagnósticos (se solicitado)
     if ($RunDiagnostics) {
         Write-Log -Message "Executando diagnósticos do sistema..." -Type Info
-        Invoke-All-DiagnosticsAdvanced @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
+        $p = @{}; if ($WhatIf) { $p.WhatIf = $true }
+        Invoke-All-DiagnosticsAdvanced @p
     }
 
     # 8) Remover Copilot (se solicitado)
@@ -7092,20 +7066,23 @@ try {
     # 9) Desativar Recall (se solicitado)
     if ($DisableRecall) {
         Write-Log -Message "Desativando Windows Recall..." -Type Info
-        Disable-WindowsRecall @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
+        $p = @{}; if ($WhatIf) { $p.WhatIf = $true }
+        Disable-WindowsRecall @p
     }
 
     # 10) Executar Windows Update (se solicitado)
     if ($RunWindowsUpdate) {
         Write-Log -Message "Iniciando gerenciamento de atualizações do Windows..." -Type Info
-        $gwuParams = @{}; if ($WhatIf) { $gwuParams.WhatIf = $true }
-        Grant-WindowsUpdates -Modo Criticas @gwuParams
+        # Assinatura nova: [-Modo Todas|Criticas|Listar] [-AutoReboot]; aqui só as críticas, sem reinício automático
+        $p = @{ Modo = 'Criticas' }; if ($WhatIf) { $p.WhatIf = $true }
+        Grant-WindowsUpdates @p
     }
 
     # 11) Aplicar plano de energia otimizado (se solicitado)
     if ($ApplyOptimizedPowerPlan) {
         Write-Log -Message "Aplicando plano de energia otimizado..." -Type Info
-        Set-OptimizedPowerPlan @($(if ($WhatIf) { @{WhatIf=$true} } else { @{} }))
+        $p = @{}; if ($WhatIf) { $p.WhatIf = $true }
+        Set-OptimizedPowerPlan @p
     }
 
     Write-Log -Message "Script concluído com sucesso." -Type Success
@@ -7260,7 +7237,7 @@ function Show-AdvancedSettingsMenu {
         Write-Host " D) Habilitar Fim de Tarefa na Barra de Tarefas"
         Write-Host " E) Habilitar Histórico da Área de Transferência"
         Write-Host " F) Habilitar Menu de Contexto Clássico"
-        Write-Host " G) Habilitar Opções de Energia Avançadas"
+        Write-Host " G) Aplicar Plano de Energia Alto Desempenho"
         Write-Host " H) Habilitar Reforço de Segurança do Windows"
         Write-Host " I) Habilitar Segundos na Barra de Tarefas"
         Write-Host " J) Habilitar SMBv1 (se necessário para redes antigas)"
@@ -7282,7 +7259,7 @@ function Show-AdvancedSettingsMenu {
             'D' { Enable-TaskbarEndTask; Show-SuccessMessage }
             'E' { Enable-ClipboardHistory; Show-SuccessMessage }
             'F' { Enable-ClassicContextMenu; Show-SuccessMessage }
-            'G' { Enable-PowerOptions; Show-SuccessMessage }
+            'G' { Set-OptimizedPowerPlan; Show-SuccessMessage }
             'H' { Enable-WindowsHardening; Show-SuccessMessage }
             'I' { Enable-TaskbarSeconds; Show-SuccessMessage }
             'J' { Enable-SMBv1; Show-SuccessMessage }
