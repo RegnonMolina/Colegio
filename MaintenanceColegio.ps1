@@ -5788,11 +5788,236 @@ function Set-SystemTweaks {
 # dentro de Set-SystemTweaks, via seus switches -Apply*Tweaks. -Confirm:$false pra
 # não travar as rotinas com o prompt do ConfirmImpact='High' de Set-SystemTweaks.
 # ---------------------------------------------------------------------------
+function Set-PrivacyBaseline {
+    <#
+    .SYNOPSIS
+    Linha de base ÚNICA de privacidade (consolida Grant-PrivacyAndBloatwarePrevention, Enable-PrivacyHardening e Grant-PrivacyTweaks).
+    .DESCRIPTION
+    Aplica a união deduplicada dos ajustes de registro das três funções antigas, em blocos:
+    Telemetria, Diagnóstico e feedback, Coleta de entrada, Publicidade e sugestões, Localização,
+    Cortana e pesquisa, Apps em segundo plano, Câmera e microfone, Compartilhamento e Wi-Fi Sense,
+    SMBv1 e UAC, Prevenção de reinstalação de bloatware, Notícias e interesses, OneDrive e Game Bar.
+    Não mexe em SmartScreen, Defender, Windows Update nem serviços de rede.
+    IMPORTANTE: chaves HKCU valem SÓ para a conta que está executando o script (não alcançam
+    outros perfis nem o perfil padrão de novos usuários). Chaves HKLM valem para a máquina toda.
+    Requer administrador para as chaves HKLM; sem isso essas contam como falha.
+
+    DECISÕES SOBRE SOBREPOSIÇÕES E CONFLITOS (mapeamento das três funções):
+    - AllowTelemetry=0 (HKLM\...\Policies\DataCollection), AdvertisingInfo\Enabled=0 e
+      InputPersonalization\RestrictImplicitTextCollection=1 apareciam em duas funções com o MESMO valor:
+      aplicados uma vez só, via reg.exe (como a Enable-PrivacyHardening fazia).
+    - ContentDeliveryManager (SubscribedContent-338387/338388) estava na Grant-PrivacyAndBloatwarePrevention
+      (condicionada à config) e na Grant-PrivacyTweaks (sem condição), mesmo valor 0: aplicado uma vez.
+    - HKCU\...\Store\AutoDownload=0 (Tweaks) e HKLM\...\Policies\WindowsStore\AutoDownload=2 (Prevenção)
+      são chaves DIFERENTES, ambas mantidas; a política de HKLM é a que de fato prevalece no Windows.
+    - UAC: o conjunto de Tweaks fixava EnableLUA=1 e ConsentPromptBehaviorAdmin=5 (UAC ligado, padrão
+      seguro). Mantido assim: esta função nunca reduz o UAC (Disable-UAC é função separada e explícita).
+    - Itens que SÓ existiam na Grant-PrivacyAndBloatwarePrevention continuam respeitando os
+      interruptores de $ScriptConfig.PrivacyTweaks (DisableWifiSense, DisableCortana,
+      DisableFeedbackRequests, DisableAutoUpdatesStoreApps). Os demais eram incondicionais e seguem assim.
+    - Em chaves de serviço (CurrentControlSet\Services\*) inexistentes na máquina nada é criado
+      (comportamento herdado de Set-SystemTweaks); isso não conta como falha.
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param()
+
+    Write-Log "Aplicando a linha de base de privacidade consolidada..." -Type Info
+    $activity = "Linha de base de privacidade"
+
+    # Interruptores opcionais da config global (ausente ou falso = item opcional não é aplicado)
+    $cfg = $null
+    if ($ScriptConfig -and $ScriptConfig.PrivacyTweaks) { $cfg = $ScriptConfig.PrivacyTweaks }
+
+    # Fábrica de itens: P=caminho, N=nome, V=valor, T=tipo, M=método (ps = Set-ItemProperty, reg = reg.exe), F=interruptor da config
+    $r = { param($p, $n, $v, $t = 'DWord', $m = 'ps', $f = '') @{ P = $p; N = $n; V = $v; T = $t; M = $m; F = $f } }
+
+    # Caminhos repetidos
+    $dcPol  = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'
+    $dcCv   = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection'
+    $inp  = 'HKCU:\SOFTWARE\Microsoft\InputPersonalization'
+    $cdmU   = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+    $srchU  = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search'
+    $capU   = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore'
+    $bgU    = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications'
+    $shareU = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Workloads\SharedExperience'
+    $shareM = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Workloads\SharedExperience'
+    $clsid  = '{018D5C66-4533-4307-9B53-224DE2ED1FE6}'
+
+    $blocos = @(
+        @{ Nome = 'Telemetria'; Itens = @(
+            (& $r $dcPol 'AllowTelemetry' 0 'DWord' 'reg'),
+            (& $r $dcPol 'MaxTelemetryAllowed' 0),
+            (& $r $dcCv 'AllowTelemetry' 0),
+            (& $r $dcCv 'CommercialDataOptIn' 0),
+            (& $r $dcCv 'MaxTelemetryAllowed' 0),
+            (& $r $dcCv 'UploadUserActivities' 0)
+        ) },
+        @{ Nome = 'Diagnóstico e feedback'; Itens = @(
+            (& $r $dcPol 'DoNotShowFeedbackNotifications' 1),
+            (& $r $dcCv 'DoNotShowFeedbackNotifications' 1),
+            (& $r 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Privacy' 'TailoredExperiencesWithDiagnosticDataEnabled' 0),
+            (& $r 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack\Settings' 'AllowDiagnosticDataToFlow' 0),
+            (& $r 'HKCU:\SOFTWARE\Microsoft\Siuf\Rules' 'Period' 0 'DWord' 'ps' 'DisableFeedbackRequests')
+        ) },
+        @{ Nome = 'Coleta de entrada (digitação, escrita à mão e contatos)'; Itens = @(
+            (& $r $inp 'RestrictImplicitTextCollection' 1 'DWord' 'reg'),
+            (& $r $inp 'RestrictImplicitInkCollection' 1 'DWord' 'reg'),
+            (& $r $inp 'RestrictInkingAndTypingPersonalization' 1),
+            (& $r "$inp\TrainedDataStore" 'HarvestContacts' 0 'DWord' 'reg'),
+            (& $r 'HKCU:\SOFTWARE\Microsoft\Messaging' 'IMEPersonalization' 0)
+        ) },
+        @{ Nome = 'Publicidade e sugestões'; Itens = @(
+            (& $r 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo' 'Enabled' 0 'DWord' 'reg'),
+            (& $r $cdmU 'SubscribedContent-338387Enabled' 0),
+            (& $r $cdmU 'SubscribedContent-338388Enabled' 0),
+            (& $r $cdmU 'SubscribedContent-338389Enabled' 0),
+            (& $r $cdmU 'SubscribedContent-338393Enabled' 0),
+            (& $r $cdmU 'SubscribedContent-353693Enabled' 0),
+            (& $r $cdmU 'ContentDeliveryAllowed' 0),
+            (& $r 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager' 'ContentDeliveryAllowed' 0)
+        ) },
+        @{ Nome = 'Localização'; Itens = @(
+            (& $r 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\LocationAndSensors' 'LocationDisabled' 1),
+            (& $r "$capU\location" 'Value' 'Deny' 'String'),
+            (& $r "$capU\location" 'LastUsedTimeStop' 0)
+        ) },
+        @{ Nome = 'Cortana e pesquisa'; Itens = @(
+            (& $r $srchU 'CortanaConsent' 0),
+            (& $r $srchU 'AllowSearchToUseLocation' 0),
+            (& $r $srchU 'BingSearchEnabled' 0),
+            (& $r $srchU 'CortanaEnabled' 0),
+            (& $r $srchU 'ImmersiveSearch' 0),
+            (& $r 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings' 'Is-CortanaConsent' 0),
+            (& $r 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' 'AllowCortana' 0 'DWord' 'ps' 'DisableCortana')
+        ) },
+        @{ Nome = 'Apps em segundo plano'; Itens = @(
+            (& $r $bgU 'GlobalUserBackgroundAccessEnable' 0),
+            (& $r 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy' 'DisableBackgroundAppAccess' 1)
+        ) },
+        @{ Nome = 'Câmera e microfone'; Itens = @(
+            (& $r "$capU\microphone" 'Value' 'Deny' 'String'),
+            (& $r "$capU\microphone" 'LastUsedTimeStop' 0),
+            (& $r "$capU\webcam" 'Value' 'Deny' 'String'),
+            (& $r "$capU\webcam" 'LastUsedTimeStop' 0)
+        ) },
+        @{ Nome = 'Compartilhamento entre dispositivos e Wi-Fi Sense'; Itens = @(
+            (& $r $shareU 'EnableSharedExperience' 0),
+            (& $r $shareM 'EnableSharedExperience' 0),
+            (& $r 'HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features' 'AutoConnectOpenHotspots' 0 'DWord' 'ps' 'DisableWifiSense'),
+            (& $r 'HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features' 'AutoConnectSuggestedOpenHotspots' 0 'DWord' 'ps' 'DisableWifiSense')
+        ) },
+        @{ Nome = 'SMBv1 e UAC (UAC permanece ligado)'; Itens = @(
+            (& $r 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters' 'SMB1' 0),
+            (& $r 'HKLM:\SYSTEM\CurrentControlSet\Services\MRxSmb10' 'Start' 4),
+            (& $r 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'EnableLUA' 1),
+            (& $r 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'ConsentPromptBehaviorAdmin' 5)
+        ) },
+        @{ Nome = 'Prevenção de reinstalação de bloatware (apps patrocinados e Loja)'; Itens = @(
+            (& $r $cdmU 'OemPreInstalledAppsEnabled' 0),
+            (& $r $cdmU 'PreInstalledAppsEnabled' 0),
+            (& $r $cdmU 'SilentInstalledAppsEnabled' 0),
+            (& $r $cdmU 'SoftLandingEnabled' 0),
+            (& $r 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Store' 'AutoDownload' 0),
+            (& $r 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' 'AutoDownload' 2 'DWord' 'ps' 'DisableAutoUpdatesStoreApps')
+        ) },
+        @{ Nome = 'Notícias e interesses'; Itens = @(
+            (& $r 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds' 'ShellFeedsTaskbarViewMode' 2)
+        ) },
+        @{ Nome = 'OneDrive'; Itens = @(
+            (& $r 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' 'DisableFileSyncNGSC' 1),
+            (& $r 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' 'DisablePersonalDrive' 1),
+            (& $r 'HKCU:\SOFTWARE\Microsoft\OneDrive\Accounts\Business' 'DisablePersonalDrive' 1),
+            (& $r "HKLM:\SOFTWARE\Classes\CLSID\$clsid" 'System.IsPinnedToNameSpaceTree' 0),
+            (& $r "HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\$clsid" 'System.IsPinnedToNameSpaceTree' 0)
+        ) },
+        @{ Nome = 'Game Bar'; Itens = @(
+            (& $r 'HKCU:\SOFTWARE\Microsoft\GameBar' 'AllowGameBar' 0),
+            (& $r 'HKCU:\SOFTWARE\Microsoft\GameBar' 'UseNexusForGameBar' 0),
+            (& $r 'HKCU:\SOFTWARE\Microsoft\GameBar' 'ShowStartupPanel' 0)
+        ) }
+    )
+
+    # Contadores compartilhados com o aplicador
+    $estado = @{ Aplicados = 0; Falhas = 0; Ignorados = 0; Simulados = 0 }
+
+    # Aplica UM item; nunca lança exceção (conta a falha e segue para o próximo)
+    $aplicar = {
+        param($it)
+        $rotulo = "$($it.P) : $($it.N) = $($it.V)"
+        try {
+            if ($it.F -and -not ($cfg -and $cfg.($it.F))) {
+                $estado.Ignorados++
+                Write-Log "Desligado na configuração ($($it.F)), ignorado: $rotulo" -Type Debug
+                return
+            }
+            if (Test-ModoSimulacao) {
+                $estado.Simulados++
+                Write-Log "Modo WhatIf: seria aplicado: $rotulo" -Type Debug
+                return
+            }
+            if ($it.M -eq 'reg') {
+                # reg.exe usa HKLM\... (sem os dois-pontos) e exige checagem do código de saída
+                $chave = $it.P -replace '^(HK[A-Z_]+):\\', '$1\'
+                $tipoReg = if ($it.T -eq 'String') { 'REG_SZ' } else { 'REG_DWORD' }
+                $saida = & reg.exe add $chave /v $it.N /t $tipoReg /d ([string]$it.V) /f 2>&1
+                if ($LASTEXITCODE -ne 0) { throw "reg.exe retornou código $LASTEXITCODE ($saida)" }
+            } else {
+                if (-not (Test-Path -Path $it.P -ErrorAction SilentlyContinue)) {
+                    # Nunca cria chave de serviço inexistente (ficaria uma chave fantasma só com Start)
+                    if ($it.P -like '*\CurrentControlSet\Services\*') {
+                        $estado.Ignorados++
+                        Write-Log "Serviço inexistente nesta máquina, ignorado: $($it.P)" -Type Debug
+                        return
+                    }
+                    New-Item -Path $it.P -Force -ErrorAction Stop | Out-Null
+                }
+                Set-ItemProperty -Path $it.P -Name $it.N -Value $it.V -Type $it.T -Force -ErrorAction Stop | Out-Null
+            }
+            $estado.Aplicados++
+        } catch {
+            $estado.Falhas++
+            Write-Log "FALHA ao aplicar '$rotulo': $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
+        }
+    }
+
+    if (-not $PSCmdlet.ShouldProcess("linha de base de privacidade (telemetria, publicidade, localização, Cortana, bloatware)", "aplicar")) { return }
+
+    try {
+        $vistos = @{}      # deduplicação: a primeira ocorrência de caminho+nome vence
+        $total = $blocos.Count
+        $n = 0
+        foreach ($bloco in $blocos) {
+            $n++
+            Grant-WriteProgress -Activity $activity -Status "$($bloco.Nome)..." -PercentComplete (($n / $total) * 100)
+            Write-Log "Privacidade: $($bloco.Nome)" -Type Info
+            foreach ($item in $bloco.Itens) {
+                $id = ("$($item.P)|$($item.N)").ToLowerInvariant()
+                if ($vistos.ContainsKey($id)) { Write-Log "Duplicado ignorado: $id" -Type Debug; continue }
+                $vistos[$id] = $true
+                & $aplicar $item
+            }
+        }
+
+        if ($estado.Falhas -gt 0) {
+            Write-Log "Linha de base de privacidade concluída com $($estado.Falhas) falha(s); aplicados: $($estado.Aplicados), ignorados: $($estado.Ignorados)." -Type Warning
+        } elseif (Test-ModoSimulacao) {
+            Write-Log "Simulação da linha de base de privacidade concluída: $($estado.Simulados) ajuste(s) seriam aplicados, nada foi alterado." -Type Info
+        } else {
+            Write-Log "Linha de base de privacidade aplicada com sucesso ($($estado.Aplicados) ajustes, $($estado.Ignorados) ignorados). Chaves HKCU valem só para a conta atual." -Type Success
+        }
+    } catch {
+        Write-Log "ERRO GERAL na linha de base de privacidade: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+    } finally {
+        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    }
+}
+
+# Obsoleta: use Set-PrivacyBaseline. Mantida só por compatibilidade (menus, Invoke-Tweaks, GUI).
 function Grant-PrivacyTweaks {
     [CmdletBinding()]
     param()
-    Write-Log "Aplicando Tweaks de Privacidade (via Set-SystemTweaks)..." -Type Info
-    Set-SystemTweaks -ApplyPrivacyTweaks -Confirm:$false
+    # obsoleta: use Set-PrivacyBaseline
+    Set-PrivacyBaseline
 }
 
 function Grant-ControlPanelTweaks {
@@ -5810,41 +6035,10 @@ function Grant-ExtraTweaks {
 }
 
 function Enable-PrivacyHardening {
+    # obsoleta: use Set-PrivacyBaseline (mantida só por compatibilidade)
     [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-       
-            )
-    Write-Log "Iniciando aplicação de privacidade agressiva..." -Type Info
-    $activity = "Aplicando Endurecimento de Privacidade"
-
-    if ($PSCmdlet.ShouldProcess("ajustes de privacidade agressiva", "aplicar")) {
-        try {
-            Grant-WriteProgress -Activity $activity -Status "Configurando telemetria..." -PercentComplete 20
-            if (-not (Test-ModoSimulacao)) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null }
-            else { Write-Log "Modo WhatIf: Telemetria seria desativada via reg.exe." -Type Debug }
-
-            Grant-WriteProgress -Activity $activity -Status "Configurando ID de publicidade..." -PercentComplete 40
-            if (-not (Test-ModoSimulacao)) { reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f | Out-Null }
-            else { Write-Log "Modo WhatIf: ID de publicidade seria desativada." -Type Debug }
-
-            Grant-WriteProgress -Activity $activity -Status "Restringindo personalização de entrada..." -PercentComplete 60
-            if (-not (Test-ModoSimulacao)) {
-                reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /t REG_DWORD /d 1 /f | Out-Null
-                reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /t REG_DWORD /d 1 /f | Out-Null
-            } else { Write-Log "Modo WhatIf: Restrições de personalização de entrada seriam aplicadas." -Type Debug }
-
-            Grant-WriteProgress -Activity $activity -Status "Desativando coleta de contatos..." -PercentComplete 80
-            if (-not (Test-ModoSimulacao)) { reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /t REG_DWORD /d 0 /f | Out-Null }
-            else { Write-Log "Modo WhatIf: Coleta de contatos seria desativada." -Type Debug }
-
-            Write-Log "Privacidade agressiva aplicada com sucesso." -Type Success
-        } catch {
-            Write-Log "ERRO ao aplicar privacidade agressiva: $($_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-        } finally {
-            Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-        }
-    }
+    param()
+    Set-PrivacyBaseline
 }
 
 function Disable-Cortana-AndSearch {
@@ -6052,134 +6246,10 @@ function Grant-SystemOptimizations {
 }
 
 function Grant-PrivacyAndBloatwarePrevention {
-    <#
-    .SYNOPSIS
-    Aplica ajustes de privacidade e previne bloatware baseando-se nas configurações globais.
-    .DESCRIPTION
-    Esta função modifica diversas configurações do sistema e do registro para melhorar a privacidade do usuário e evitar a instalação ou execução de componentes indesejados (bloatware),
-    controlados pela hashtable global $ScriptConfig.PrivacyTweaks.
-    #>
+    # obsoleta: use Set-PrivacyBaseline (mantida só por compatibilidade; lia $ScriptConfig.PrivacyTweaks, hoje tratado dentro de Set-PrivacyBaseline)
     [CmdletBinding(SupportsShouldProcess = $true)]
-    param()  # usa a config global $ScriptConfig (antes um param [hashtable]$ScriptConfig sombreava o global e zerava a função quando chamada sem argumento)
-
-    Write-Log "Aplicando ajustes de privacidade e prevenindo bloatware..." -Type Info
-    $activity = "Ajustes de Privacidade e Bloatware"
-    $totalSteps = 10 # Ajuste o número de etapas conforme as tweaks ativadas
-    $currentStep = 0
-
-    if ($PSCmdlet.ShouldProcess("ajustes de privacidade e bloatware", "aplicar")) {
-        try {
-            # Desabilitar Wi-Fi Sense (se configurado)
-            if ($ScriptConfig.PrivacyTweaks.DisableWifiSense) {
-                $currentStep++
-                Grant-WriteProgress -Activity $activity -Status "Desativando Wi-Fi Sense..." -PercentComplete (($currentStep / $totalSteps) * 100)
-                Write-Log "Desativando Wi-Fi Sense..." -Type Info
-                try {
-                    if (-not (Test-ModoSimulacao)) {
-                        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features" -Name "AutoConnectOpenHotspots" -Value 0 -Force -ErrorAction Stop
-                        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features" -Name "AutoConnectSuggestedOpenHotspots" -Value 0 -Force -ErrorAction Stop
-                        Write-Log "Wi-Fi Sense desativado." -Type Success
-                    } else {
-                        Write-Log "Modo WhatIf: Wi-Fi Sense seria desativado." -Type Debug
-                    }
-                } catch {
-                    Write-Log "Falha ao desativar Wi-Fi Sense: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
-                }
-            }
-
-            # Desabilitar ID de Publicidade (se configurado)
-            if ($ScriptConfig.PrivacyTweaks.DisableAdvertisingID) {
-                $currentStep++
-                Grant-WriteProgress -Activity $activity -Status "Desativando ID de publicidade..." -PercentComplete (($currentStep / $totalSteps) * 100)
-                Write-Log "Desativando ID de publicidade..." -Type Info
-                try {
-                    if (-not (Test-ModoSimulacao)) {
-                        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0 -Force -ErrorAction Stop
-                        Write-Log "ID de publicidade desativado." -Type Success
-                    } else {
-                        Write-Log "Modo WhatIf: ID de publicidade seria desativado." -Type Debug
-                    }
-                } catch {
-                    Write-Log "Falha ao desativar ID de publicidade: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
-                }
-            }
-
-            if ($ScriptConfig.PrivacyTweaks.DisableCortana) {
-                $currentStep++
-                Grant-WriteProgress -Activity $activity -Status "Desativando Cortana..." -PercentComplete (($currentStep / $totalSteps) * 100)
-                Write-Log "Desativando Cortana..." -Type Info
-                try {
-                    if (-not (Test-ModoSimulacao)) {
-                        Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "AllowCortana" -Value 0 -Force -ErrorAction Stop
-                        Write-Log "Cortana desativada." -Type Success
-                    } else {
-                        Write-Log "Modo WhatIf: Cortana seria desativada." -Type Debug
-                    }
-                } catch {
-                    Write-Log "Falha ao desativar Cortana: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
-                }
-            }
-
-            if ($ScriptConfig.PrivacyTweaks.DisableFeedbackRequests) {
-                $currentStep++
-                Grant-WriteProgress -Activity $activity -Status "Desativando solicitações de feedback..." -PercentComplete (($currentStep / $totalSteps) * 100)
-                Write-Log "Desativando solicitações de feedback..." -Type Info
-                try {
-                    if (-not (Test-ModoSimulacao)) {
-                        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Siuf\Rules" -Name "Period" -Value 0 -Force -ErrorAction Stop
-                        Write-Log "Solicitações de feedback desativadas." -Type Success
-                    } else {
-                        Write-Log "Modo WhatIf: Solicitações de feedback seriam desativadas." -Type Debug
-                    }
-                } catch {
-                    Write-Log "Falha ao desativar solicitações de feedback: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
-                }
-            }
-
-            if ($ScriptConfig.PrivacyTweaks.DisableSuggestedContent) {
-                $currentStep++
-                Grant-WriteProgress -Activity $activity -Status "Desativando conteúdo sugerido..." -PercentComplete (($currentStep / $totalSteps) * 100)
-                Write-Log "Desativando conteúdo sugerido..." -Type Info
-                try {
-                    if (-not (Test-ModoSimulacao)) {
-                        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-338387Enabled" -Value 0 -Force -ErrorAction Stop
-                        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-338388Enabled" -Value 0 -Force -ErrorAction Stop
-                        Write-Log "Conteúdo sugerido desativado." -Type Success
-                    } else {
-                        Write-Log "Modo WhatIf: Conteúdo sugerido seria desativado." -Type Debug
-                    }
-                } catch {
-                    Write-Log "Falha ao desativar conteúdo sugerido: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
-                }
-            }
-
-            if ($ScriptConfig.PrivacyTweaks.DisableAutoUpdatesStoreApps) {
-                $currentStep++
-                Grant-WriteProgress -Activity $activity -Status "Desativando atualizações automáticas de apps da Loja..." -PercentComplete (($currentStep / $totalSteps) * 100)
-                Write-Log "Desativando atualizações automáticas de aplicativos da Microsoft Store..." -Type Info
-                try {
-                    if (-not (Test-ModoSimulacao)) {
-                        Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore" -Name "AutoDownload" -Value 2 -Force -ErrorAction Stop # 2 = Desativar
-                        Write-Log "Atualizações automáticas da Loja desativadas." -Type Success
-                    } else {
-                        Write-Log "Modo WhatIf: Atualizações automáticas da Loja seriam desativadas." -Type Debug
-                    }
-                } catch {
-                    Write-Log "Falha ao desativar atualizações automáticas da Loja: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
-                }
-            }
-
-            # Outras configurações de privacidade/bloatware
-            # ... (adicione aqui mais lógica para outras configurações da $ScriptConfig.PrivacyTweaks)
-
-            Write-Log "Ajustes de privacidade e prevenção de bloatware concluídos." -Type Success
-        } catch {
-            Write-Log "ERRO GERAL durante a aplicação de ajustes de privacidade e bloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
-        } finally {
-            Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
-        }
-    }
+    param()
+    Set-PrivacyBaseline
 }
 
 function Grant-GPORegistrySettings {

@@ -26,6 +26,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
 ### Adicionado (MaintenanceColegio.ps1)
 - `Invoke-CleanupReview` (-Itens, -SomenteRelatorio): lista as áreas de limpeza com tamanho (TEMP, Windows\Temp, Prefetch, cache do Windows Update, WER, spooler, Windows.old) e limpa só as marcadas, respeitando -WhatIf.
+- `Set-PrivacyBaseline`: função única que consolida `Grant-PrivacyAndBloatwarePrevention`, `Enable-PrivacyHardening` e `Grant-PrivacyTweaks` (união deduplicada dos ajustes de registro, com -WhatIf, contagem de falhas e checagem de `reg.exe`). As três antigas viraram wrappers obsoletos que só a chamam; na GUI a nova entrada é "Privacidade consolidada".
 
 ## [2.4.1] - 2026-08-17
 
