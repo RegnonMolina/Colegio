@@ -4422,6 +4422,125 @@ function Invoke-BloatwareReview {
     Write-Log -Message "Remoção concluída para os itens marcados." -Type Success
 }
 
+function Invoke-UninstallReview {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    # Varredura de desinstalações: lista TUDO o que está instalado na máquina, com os checkboxes VAZIOS:
+    #  - apps da Microsoft Store (Appx) de todas as contas, inclusive os que vêm com o notebook;
+    #  - programas Win32 da máquina (HKLM) e do usuário atual (HKCU).
+    # Remove em modo silencioso só o que for marcado. Componentes do Windows, runtimes, drivers e atualizações não aparecem.
+    # Modo sem tela: -SomenteRelatorio só lista; -Itens remove os nomes informados sem abrir a janela.
+    # Sessão não interativa sem -Itens também só gera o relatório (nunca trava esperando janela).
+    param(
+        [string[]]$Itens,
+        [switch]$SomenteRelatorio
+    )
+    Write-Log -Message "Varredura de desinstalações: lendo o que está instalado..." -Type Info
+
+    # Apps do próprio Windows e componentes que não devem ser oferecidos para remoção
+    $nucleoAppx = '^(Microsoft\.Windows\.(?!DevHome)|MicrosoftWindows\.|Windows\.|Microsoft\.Store|Microsoft\.WindowsStore|Microsoft\.Desktop|Microsoft\.UI|Microsoft\.VCLibs|Microsoft\.NET|Microsoft\.SecHealthUI|Microsoft\.AAD|Microsoft\.Win32|Microsoft\.Services\.Store|Microsoft\.Xaml|Microsoft\.AsyncText|Microsoft\.Accounts|Microsoft\.Credential|Microsoft\.Bio|Microsoft\.ECApp|Microsoft\.LockApp|Microsoft\.CloudExperience|Microsoft\.Authentication|Microsoft\.Winget|Microsoft\.WindowsAppRuntime|Microsoft\.WindowsTerminal|Microsoft\.WindowsCalculator|Microsoft\.WindowsNotepad|Microsoft\.WindowsCamera|Microsoft\.Paint|Microsoft\.ScreenSketch|Microsoft\.MicrosoftEdge|NVIDIA|Realtek|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-)'
+    # Programas Win32 nunca listados: redistribuíveis, runtimes, SDKs, drivers e atualizações
+    $ignorarWin32 = 'Redistributable|Visual C\+\+|\.NET|Windows SDK|WebView2|Microsoft Edge|Driver|Update for|Security Update|Hotfix|NVIDIA|Realtek'
+    # Marca de fabricante (apenas rótulo; nada vem marcado)
+    $fabricante = 'Lenovo|Dell|HP Inc|Hewlett|ASUS|Acer|McAfee|Dropbox|Dolby|Motorola|Smart Connect|Waves|Nahimic|WebAdvisor'
+
+    $lista = @()
+    $vistos = @{}
+    # Sem administrador, -AllUsers dá "Acesso negado": nesse caso lista só os apps da conta atual e avisa
+    try { $todosApps = @(Get-AppxPackage -AllUsers -ErrorAction Stop) }
+    catch {
+        Write-Log -Message "Sem permissão para listar apps de todas as contas; listando só a conta atual (rode como administrador)." -Type Warning
+        $todosApps = @(Get-AppxPackage -ErrorAction SilentlyContinue)
+    }
+    foreach ($pac in ($todosApps | Where-Object { -not $_.IsFramework -and -not $_.NonRemovable -and $_.SignatureKind -ne 'System' })) {
+        if ($pac.Name -match $nucleoAppx -or $vistos.ContainsKey($pac.Name)) { continue }
+        $vistos[$pac.Name] = $true
+        $tag = if ($pac.Name -match $fabricante -or $pac.Publisher -match $fabricante) { 'Fabricante' } else { 'App da Store' }
+        $lista += [pscustomobject]@{
+            Ordem = "$tag|$($pac.Name)"; Marca = $tag
+            Texto = "[$tag] $($pac.Name)"
+            Detalhe = "$($pac.Name) $($pac.Version)"
+            Valor = [pscustomobject]@{ Tipo = 'Appx'; Nome = $pac.Name; Completo = $pac.PackageFullName }
+            Marcado = $false
+        }
+    }
+    $fontes = @(
+        @{ Chave = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*';              Escopo = 'Máquina' }
+        @{ Chave = 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'; Escopo = 'Máquina' }
+        @{ Chave = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*';              Escopo = 'Usuário atual' }
+    )
+    foreach ($f in $fontes) {
+        $programas = Get-ItemProperty $f.Chave -ErrorAction SilentlyContinue | Where-Object {
+            $_.DisplayName -and ($_.UninstallString -or $_.QuietUninstallString) -and
+            $_.SystemComponent -ne 1 -and -not $_.ParentKeyName -and $_.DisplayName -notmatch $ignorarWin32
+        }
+        foreach ($p in $programas) {
+            $chaveVista = "win32|$($f.Escopo)|$($p.DisplayName)"
+            if ($vistos.ContainsKey($chaveVista)) { continue }
+            $vistos[$chaveVista] = $true
+            $tag = if ($f.Escopo -eq 'Usuário atual') { 'Usuário' } elseif ($p.DisplayName -match $fabricante -or $p.Publisher -match $fabricante) { 'Fabricante' } else { 'Programa' }
+            $lista += [pscustomobject]@{
+                Ordem = "$tag|$($p.DisplayName)"; Marca = $tag
+                Texto = "[$tag] $($p.DisplayName) $($p.DisplayVersion)".Trim()
+                Detalhe = "$($p.DisplayName) $($p.DisplayVersion) | $($p.Publisher) | $($f.Escopo)"
+                Valor = [pscustomobject]@{
+                    Tipo = 'Win32'; Nome = $p.DisplayName; Desinstalar = [string]$p.UninstallString; Quieta = [string]$p.QuietUninstallString
+                }
+                Marcado = $false
+            }
+        }
+    }
+    if ($lista.Count -eq 0) { Write-Log -Message "Nenhum aplicativo encontrado." -Type Info; return }
+    $lista = @($lista | Sort-Object Ordem)
+
+    # Relatório em texto (arquivo), antes da escolha
+    $pastaRel = 'C:\ScriptsLogs'
+    New-Item -ItemType Directory -Force -Path $pastaRel | Out-Null
+    $rel = Join-Path $pastaRel ('Desinstalacoes_' + $env:COMPUTERNAME + '_' + (Get-Date -Format 'yyyyMMdd-HHmm') + '.txt')
+    $lista | ForEach-Object { $_.Detalhe } | Set-Content -LiteralPath $rel -Encoding UTF8
+    Write-Log -Message ("{0} itens encontrados. Relatório salvo em {1}" -f $lista.Count, $rel) -Type Info
+
+    if ($SomenteRelatorio) { Write-Log -Message "Modo somente relatório: nada foi removido." -Type Info; return }
+    if ($Itens) {
+        $escolhidos = @($lista | Where-Object { $Itens -contains $_.Valor.Nome })
+    }
+    elseif (-not [Environment]::UserInteractive) {
+        Write-Log -Message "Sessão sem tela e sem -Itens: somente relatório, nada foi removido." -Type Warning
+        return
+    }
+    else {
+        $escolhidos = Show-CheckboxPicker -Titulo 'Desinstalações (marque o que deseja remover em modo silencioso)' -Itens $lista
+    }
+    if (-not $escolhidos) { Write-Log -Message "Nada escolhido ou janela cancelada." -Type Info; return }
+
+    foreach ($e in $escolhidos) {
+        $v = $e.Valor
+        if (-not $PSCmdlet.ShouldProcess($v.Nome, 'desinstalar')) { continue }
+        try {
+            if ($v.Tipo -eq 'Appx') {
+                Get-AppxPackage -AllUsers -Name $v.Nome | Remove-AppxPackage -AllUsers -ErrorAction Stop
+                Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq $v.Nome } | ForEach-Object {
+                    Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue | Out-Null
+                }
+                Write-Log -Message "App removido: $($v.Nome)" -Type Success
+            }
+            else {
+                # Prefere a QuietUninstallString; senão usa a UninstallString com os argumentos reais.
+                if ($v.Quieta) { $cmd = Get-BloatwareUninstallCommand -Texto $v.Quieta -Silenciosa }
+                else { $cmd = Get-BloatwareUninstallCommand -Texto $v.Desinstalar }
+                if (-not $cmd.Tipo) { Write-Log -Message "Programa '$($v.Nome)' pulado: $($cmd.Motivo)." -Type Warning; continue }
+                if ($cmd.Tipo -eq 'Exe' -and -not (Test-Path -LiteralPath $cmd.Exe)) { Write-Log -Message "Programa '$($v.Nome)' pulado: executável não encontrado ($($cmd.Exe))." -Type Warning; continue }
+                $proc = Start-Process -FilePath $cmd.Exe -ArgumentList $cmd.Args -PassThru -WindowStyle Hidden
+                if (-not $proc.WaitForExit(900000)) { Write-Log -Message "Programa '$($v.Nome)': desinstalador não terminou em 15 minutos; seguindo." -Type Warning; continue }
+                $ok = ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 3010)
+                $tipoLog = if ($ok) { 'Success' } else { 'Warning' }
+                Write-Log -Message "Programa '$($v.Nome)': código de saída $($proc.ExitCode)." -Type $tipoLog
+            }
+        }
+        catch { Write-Log -Message "ERRO ao remover '$($v.Nome)': $($_.Exception.Message)" -Type Error }
+    }
+    Write-Log -Message "Desinstalações concluídas para os itens marcados." -Type Success
+}
+
 function Invoke-CleanupReview {
     [CmdletBinding(SupportsShouldProcess = $true)]
     # Varredura de limpeza: lista as áreas que costumam ocupar espaço (temporários, cache do Windows Update,
