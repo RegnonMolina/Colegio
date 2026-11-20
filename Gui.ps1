@@ -1682,7 +1682,14 @@ function Invoke-MaintenanceGuiWindow {
                 'choice'   { $v = '' + $pc.Ctrl.SelectedItem; if ($v) { $splat[$nome] = $v } }
                 'paths'    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
                 'files'    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
-                'password' { $v = $pc.Ctrl.Password; if ($v) { if ($nome -like "Senha*") { $splat[$nome] = (ConvertTo-SecureString -String $v -AsPlainText -Force) } else { $splat[$nome] = $v }; $senhas += $nome } }
+                'password' {
+                    # Senhas das contas vão como SecureString direto do PasswordBox (sem passar por texto em claro)
+                    if ($nome -like 'Senha*') {
+                        $sp = $pc.Ctrl.SecurePassword
+                        if ($sp -and $sp.Length -gt 0) { $splat[$nome] = $sp; $senhas += $nome }
+                    }
+                    else { $v = $pc.Ctrl.Password; if ($v) { $splat[$nome] = $v; $senhas += $nome } }
+                }
                 default    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = $v } }
             }
         }
