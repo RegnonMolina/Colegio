@@ -335,20 +335,14 @@ function Invoke-Cleanup {
     Write-Log "Iniciando o orquestrador de Limpeza e Manutenção Completa..." -Type Info
 
     # Chame cada função dentro de seu próprio try/catch
-    try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-PrintSpooler -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-PrintSpooler: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-TemporaryFiles -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-TemporaryFiles: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    # Clear-DeepSystemCleanup, Clear-Prefetch, Clear-PrintSpooler, Clear-TemporaryFiles, Clear-WUCache,
+    # Clear-WinSxS, Remove-WindowsOld e New-ChkDsk já rodam dentro de Grant-Cleanup (sem repetir aqui).
     try { Clear-EmptyFilesAndFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-EmptyFilesAndFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-WUCache -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WUCache: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-WinSxS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WinSxS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-Cleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-Cleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Backup-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Backup-Registry: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Invoke-DISM-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-DISM-Scan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Invoke-SFC-Scan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Invoke-SFC-Scan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { New-ChkDsk -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-ChkDsk: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
 
     Write-Log "Todas as rotinas de limpeza e manutenção foram concluídas pelo orquestrador." -Type Success
 
@@ -408,18 +402,18 @@ function Invoke-Tweaks {
     try { Grant-ExtraTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ExtraTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-HardenOfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-HardenOfficeMacros: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-PrivacyTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-WindowsUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-WindowsUpdates -Modo Criticas -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-FolderForced -Path "C:\SCript" -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-NetworkPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-NetworkPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-Volumes -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-Volumes: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-SystemOptimizations -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-SystemOptimizations: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Rename-Notebook -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Rename-Notebook: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    # Rename-Notebook não é chamado aqui: exige -NovoNome (use o menu manual).
     try { Set-OptimizedPowerPlan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-OptimizedPowerPlan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Set-VisualPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-VisualPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-AutoLoginMenu -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-AutoLoginMenu: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    # Show-AutoLoginMenu não é chamado aqui (interativo, grava senha no registro): fica só no menu manual.
 
     Write-Log "Todas as rotinas de tweaks foram concluídas pelo orquestrador." -Type Success
 
@@ -460,6 +454,8 @@ function Invoke-AppsAndTools {
 }
 
 function Invoke-Undo {
+    # Restauração do registro só ocorre se um caminho de backup for informado (sem Read-Host).
+    param([string]$BkpPath)
     Write-Log "Iniciando o orquestrador de Restauração..." -Type Info
 
     try { Grant-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ActionCenter-Notifications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -468,11 +464,19 @@ function Invoke-Undo {
     try { Restore-DefaultUAC -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-DefaultUAC: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Restore-OfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-OfficeMacros: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Restore-OneDrive -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-OneDrive: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Restore-Registry -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-Registry: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Restore-Registry-FromBackup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-Registry-FromBackup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    if ($BkpPath -and (Test-Path -LiteralPath $BkpPath)) {
+        try {
+            Restore-Registry -BkpPath $BkpPath -ErrorAction Stop
+            Write-Log "Restauração do registro executada a partir de: $BkpPath" -Type Info
+        } catch { Write-Log "ERRO: Falha em Restore-Registry: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    } elseif ($BkpPath) {
+        Write-Log "AVISO: Caminho de backup do registro não encontrado ('$BkpPath'). Restauração do registro NÃO executada." -Type Warning
+    } else {
+        Write-Log "Restauração do registro ignorada: nenhum caminho de backup informado (-BkpPath)." -Type Info
+    }
     try { Restore-VisualPerformanceDefault -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Restore-VisualPerformanceDefault: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
 
-    Write-Log "Todas as rotinas de restauração foram concluídas pelo orquestrador." -Type Success
+    Write-Log "Orquestrador de restauração finalizado (consulte as linhas acima para o que foi desfeito ou ignorado)." -Type Success
 
     Show-SuccessMessage
 }
@@ -489,18 +493,12 @@ function Invoke-Colegio {
     # chaves na rotina. A chamada alfabética original (Backup-Registry) continua mais abaixo.
     try { Backup-Registry -ErrorAction Stop } catch { Write-Log "AVISO: Não foi possível fazer backup do registro no início da rotina: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning }
 
-	try { Clear-DeepSystemCleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DeepSystemCleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
 	try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Add-WiFiNetwork -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Add-WiFiNetwork: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     # Backup-Registry duplicado removido aqui (#6): já é chamado no início da rotina (linha do checkpoint/backup).
-    try { Clear-ARP -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-ARP: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-DNS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-DNS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    # Clear-DeepSystemCleanup duplicado removido aqui (#6): já é chamado logo acima nesta mesma rotina.
-    try { Clear-Prefetch -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-Prefetch: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-TemporaryFiles -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-TemporaryFiles: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    # Clear-ARP, Clear-DNS, Clear-DeepSystemCleanup, Clear-Prefetch, Clear-TemporaryFiles, Clear-WUCache,
+    # Clear-WinSxS, Optimize-Volumes e Remove-WindowsOld rodam dentro de Grant-Cleanup (sem repetir aqui).
     try { Clear-EmptyFilesAndFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-EmptyFilesAndFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-WUCache -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WUCache: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Clear-WinSxS -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-WinSxS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-ActionCenter-Notifications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-IPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-IPv6: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -527,15 +525,13 @@ function Invoke-Colegio {
     try { Grant-PrivacyTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-SystemOptimizations -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-SystemOptimizations: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Grant-UITweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-UITweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-WindowsUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Grant-WindowsUpdates -Modo Criticas -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-FolderForced -Path "C:\SCript" -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Optimize-NetworkPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-NetworkPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Optimize-Volumes -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-Volumes: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-WindowsOld -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-WindowsOld: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # Duplicado, verificar
     try { Set-DnsGoogleCloudflare -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-DnsGoogleCloudflare: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Set-OptimizedPowerPlan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-OptimizedPowerPlan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
     try { Set-VisualPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-VisualPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
@@ -562,17 +558,26 @@ function Clear-TemporaryFiles {
     if ($PSCmdlet.ShouldProcess("arquivos temporários", "limpar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Verificando configuração do cleanmgr e executando..." -PercentComplete (($currentStep / $totalSteps) * 100)
-            Write-Log "Verificando configuração do cleanmgr /sageset:1 e executando /sagerun:1 (pode levar vários minutos ou mais, por favor aguarde)..." -Type Warning # Aviso mais proeminente
+            Write-Log "Configurando o perfil do cleanmgr e executando /sagerun:1 (pode levar vários minutos, por favor aguarde)..." -Type Warning # Aviso mais proeminente
             if (-not $WhatIf) {
                 # Verifica se o perfil 1 existe, senão configura
                 $cleanMgrReg = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
-                if (-not (Test-Path "$cleanMgrReg\Temporary Files\LastActiveSetup")) {
-                    Write-Log "Configurando cleanmgr /sageset:1..." -Type Info # Mudado para Info
-                    Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sageset:1" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue
+                # Sem diálogo: o /sageset abriria a janela de configuração e travaria oculto.
+                # Em vez disso, marca StateFlags0001 nas categorias seguras (só se o perfil 1 ainda não existir).
+                $jaConfigurado = Get-ChildItem $cleanMgrReg -ErrorAction SilentlyContinue | Where-Object {
+                    $null -ne (Get-ItemProperty -LiteralPath $_.PSPath -Name 'StateFlags0001' -ErrorAction SilentlyContinue).StateFlags0001 }
+                if (-not $jaConfigurado) {
+                    Write-Log "Configurando perfil 1 do cleanmgr (StateFlags0001) por registro..." -Type Info
+                    foreach ($nome in 'Temporary Files','Thumbnail Cache','Recycle Bin','Downloaded Program Files') {
+                        if (Test-Path "$cleanMgrReg\$nome") { Set-ItemProperty -Path "$cleanMgrReg\$nome" -Name 'StateFlags0001' -Value 2 -Type DWord -ErrorAction SilentlyContinue }
+                    }
                 }
-                Write-Log "Executando cleanmgr /sagerun:1. Isso pode demorar bastante dependendo do sistema..." -Type Info # Mensagem adicional
-                $process = Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -WindowStyle Hidden -Wait -PassThru # Adicionado -PassThru para verificar ExitCode
-                if ($process.ExitCode -ne 0) {
+                Write-Log "Executando cleanmgr /sagerun:1 (tempo limite de 30 minutos)..." -Type Info
+                $process = Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -WindowStyle Hidden -PassThru
+                if (-not $process.WaitForExit(1800000)) {
+                    try { $process.Kill() } catch { }
+                    Write-Log "AVISO: cleanmgr excedeu 30 minutos e foi encerrado." -Type Warning
+                } elseif ($process.ExitCode -ne 0) {
                     Write-Log "AVISO: cleanmgr /sagerun:1 pode ter terminado com erros (código de saída: $($process.ExitCode))." -Type Warning
                 }
             } else {
@@ -1474,7 +1479,7 @@ function Optimize-Volumes {
     )
     Write-Log "Iniciando otimização de volumes (desfragmentação/retrim)..." -Type Info
     $activity = "Otimização de Volumes"
-    $volumes = Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter }
+    $volumes = @(Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter })
     $totalVolumes = $volumes.Count
     $volumeCount = 0
 
@@ -1485,21 +1490,35 @@ function Optimize-Volumes {
                 $percentComplete = ($volumeCount / $totalVolumes) * 100
                 $statusMessage = "Otimizando volume $($vol.DriveLetter):\"
 
-                Grant-WriteProgress -Activity $activity -Status $statusMessage "Volume: $($vol.DriveLetter):\" -PercentComplete $percentComplete
-                Write-Log "Otimizando volume $($vol.DriveLetter):\" -Type Info
+                # try por volume: um erro em um volume não derruba os demais
+                try {
+                    Grant-WriteProgress -Activity $activity -Status $statusMessage -PercentComplete $percentComplete
+                    Write-Log "Otimizando volume $($vol.DriveLetter):\" -Type Info
 
-                if (-not $WhatIf) {
-                    if ($vol.FileSystem -eq "NTFS") {
-                        Write-Log "Desfragmentando volume NTFS: $($vol.DriveLetter):\" -Type Debug
-                        Optimize-Volume -DriveLetter $vol.DriveLetter -Defrag -Verbose:$false -ErrorAction Stop
-                    } elseif ($vol.FileSystem -eq "FAT32" -or $vol.FileSystem -eq "exFAT") {
-                        Write-Log "Volume $($vol.DriveLetter): é ${$vol.FileSystem}. Desfragmentação/ReTrim não aplicável via Optimize-Volume. Pulando." -Type Warning
-                    } else { # Assume SSDs ou outros sistemas de arquivo que se beneficiam de ReTrim
-                        Write-Log "Executando ReTrim em volume: $($vol.DriveLetter):\" -Type Debug
-                        Optimize-Volume -DriveLetter $vol.DriveLetter -ReTrim -Verbose:$false -ErrorAction Stop
+                    if (-not $WhatIf) {
+                        # Tipo de mídia (SSD/HDD) do disco físico do volume
+                        $midia = $null
+                        try {
+                            $disco = Get-Partition -DriveLetter $vol.DriveLetter -ErrorAction Stop | Get-Disk -ErrorAction Stop | Get-PhysicalDisk -ErrorAction Stop
+                            $midia = "$($disco.MediaType)"
+                        } catch { $midia = $null }
+
+                        if ($vol.FileSystem -eq "FAT32" -or $vol.FileSystem -eq "exFAT") {
+                            Write-Log "Volume $($vol.DriveLetter): é $($vol.FileSystem). Desfragmentação/ReTrim não aplicável via Optimize-Volume. Pulando." -Type Warning
+                        } elseif ($midia -eq 'SSD') {
+                            Write-Log "Executando ReTrim em SSD: $($vol.DriveLetter):\" -Type Debug
+                            Optimize-Volume -DriveLetter $vol.DriveLetter -ReTrim -Verbose:$false -ErrorAction Stop
+                        } elseif ($midia -eq 'HDD' -and $vol.FileSystem -eq "NTFS") {
+                            Write-Log "Desfragmentando HDD NTFS: $($vol.DriveLetter):\" -Type Debug
+                            Optimize-Volume -DriveLetter $vol.DriveLetter -Defrag -Verbose:$false -ErrorAction Stop
+                        } else {
+                            Write-Log "Volume $($vol.DriveLetter): tipo de mídia '$midia' não identificado com segurança. Pulando para não desfragmentar SSD." -Type Warning
+                        }
+                    } else {
+                        Write-Log "Modo WhatIf: Volume $($vol.DriveLetter): seria otimizado (ReTrim em SSD, Defrag em HDD)." -Type Debug
                     }
-                } else {
-                    Write-Log "Modo WhatIf: Volume $($vol.DriveLetter): seria otimizado (Defrag para NTFS, ReTrim para outros)." -Type Debug
+                } catch {
+                    Write-Log "ERRO ao otimizar o volume $($vol.DriveLetter): $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
                 }
             }
             Write-Log "Otimização de volumes concluída." -Type Success
@@ -1515,7 +1534,7 @@ function Optimize-Volumes {
 }
 
 function Clear-WinSxS {
-    [CmdletBinding(SupportsShouldProcess = $true)]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
     param(
     )
     Write-Log "Iniciando limpeza de WinSxS (Limpeza de Componentes com ResetBase)..." -Type Info
@@ -1550,32 +1569,33 @@ function New-ChkDsk {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
     )
-    Write-Log "Agendando chkdsk /f /r no próximo reinício para o disco do sistema ($env:SystemDrive)..." -Type Info
+    Write-Log "Agendando verificação de disco no próximo reinício para o disco do sistema ($env:SystemDrive)..." -Type Info
     $activity = "Agendamento de ChkDsk"
     if ($PSCmdlet.ShouldProcess("chkdsk no próximo reinício", "agendar")) {
         try {
-            Grant-WriteProgress -Activity $activity -Status "Executando chkdsk para agendamento..." -PercentComplete 50
-            Write-Log "Executando chkdsk $env:SystemDrive /f /r /x..." -Type Info
-            # /x força desmontagem do volume
+            Grant-WriteProgress -Activity $activity -Status "Agendando verificação de disco..." -PercentComplete 50
             if (-not $WhatIf) {
-                # Chkdsk pode pedir confirmação. O /x ajuda a evitar se possível.
-                # Capturamos a saída e erros para evitar prompts interativos
-                $chkdskOutput = & chkdsk $env:SystemDrive /f /r /x 2>&1
-                if ($LASTEXITCODE -ne 0) {
-                    # Chkdsk retorna 0 para sucesso, 1 para reinício necessário
-                    # Outros códigos indicam erro
-                    if ($LASTEXITCODE -eq 1) {
-                        Write-Log "chkdsk agendado com sucesso (reinício necessário)." -Type Success
-                    } else {
-                        throw "Comando chkdsk falhou com código de saída $LASTEXITCODE. Saída: $chkdskOutput"
-                    }
+                $drv = $env:SystemDrive
+                # Método 1: marca o volume como "sujo"; o autochk roda a verificação no próximo boot.
+                $saida = & fsutil.exe dirty set $drv 2>&1 | Out-String
+                $codigo = $LASTEXITCODE
+                if ($codigo -ne 0) {
+                    # Método 2: chkdsk com 'Y' respondendo o prompt de agendamento
+                    Write-Log "fsutil dirty set falhou (código $codigo). Tentando chkdsk com confirmação automática..." -Type Warning
+                    $saida = 'Y' | & chkdsk.exe $drv /f 2>&1 | Out-String
+                }
+                # Confere o resultado real: fsutil dirty query informa se o volume está marcado
+                $consulta = & fsutil.exe dirty query $drv 2>&1 | Out-String
+                if ($consulta -match '(?i)(is dirty|est[aá] sujo)' -and $consulta -notmatch '(?i)(NOT Dirty|n[aã]o est[aá] sujo)') {
+                    Write-Log "Verificação de disco ($drv) agendada para o próximo reinício (confirmada por fsutil dirty query)." -Type Success
+                } elseif ($saida -match '(?i)(next time the system restarts|pr[oó]xima reinicializa|scheduled)') {
+                    Write-Log "Verificação de disco ($drv) agendada para o próximo reinício (confirmada pela saída do chkdsk)." -Type Success
                 } else {
-                    Write-Log "chkdsk não necessitou agendamento (disco limpo)." -Type Success
+                    Write-Log "AVISO: não foi possível confirmar o agendamento do chkdsk em $drv. Saída: $saida" -Type Warning
                 }
             } else {
-                Write-Log "Modo WhatIf: chkdsk $env:SystemDrive /f /r /x seria agendado." -Type Debug
+                Write-Log "Modo WhatIf: a verificação de disco de $env:SystemDrive seria agendada para o próximo reinício." -Type Debug
             }
-            Write-Log "chkdsk agendado (confirme no prompt, se solicitado, após o reinício)." -Type Success
         } catch {
             Write-Log "ERRO ao agendar chkdsk: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
             Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
@@ -1599,11 +1619,16 @@ function Remove-WindowsOld {
                 Grant-WriteProgress -Activity $activity -Status "Removendo pasta Windows.old (pode demorar)..." -PercentComplete 50
                 Write-Log "Removendo '$env:SystemDrive\Windows.old'..." -Type Info
                 if (-not $WhatIf) {
-                    Remove-Item "$env:SystemDrive\Windows.old" -Force -Recurse -ErrorAction SilentlyContinue
+                    # Remoção parcial é possível (ACL do TrustedInstaller, arquivos em uso): erros ficam visíveis e o resultado é conferido.
+                    Remove-Item "$env:SystemDrive\Windows.old" -Force -Recurse -ErrorAction Continue
+                    if (Test-Path "$env:SystemDrive\Windows.old") {
+                        Write-Log "AVISO: Windows.old NÃO foi removido por completo (ACL do TrustedInstaller ou arquivos em uso). Use a Limpeza de Disco ou takeown/icacls." -Type Warning
+                    } else {
+                        Write-Log "Windows.old removido." -Type Success
+                    }
                 } else {
                     Write-Log "Modo WhatIf: Pasta '$env:SystemDrive\Windows.old' seria removida." -Type Debug
                 }
-                Write-Log "Windows.old removido." -Type Success
             } else {
                 Write-Log "Pasta Windows.old não encontrada. Nenhuma ação necessária." -Type Info
             }
@@ -1719,8 +1744,7 @@ function Clear-PrintSpooler {
                     }
                 }
                 if (-not $serviceStopped) {
-                    Write-Log "ERRO: Não foi possível parar o serviço 'Spooler' após múltiplas tentativas. A limpeza pode falhar." -Type Error
-                    # Poderia lançar um erro ou retornar para evitar a próxima etapa
+                    throw "Não foi possível parar o serviço 'Spooler' após múltiplas tentativas; limpeza abortada (arquivos não removidos)."
                 }
             } else {
                 Write-Log "Modo WhatIf: Serviço 'Spooler' seria parado." -Type Debug
@@ -1745,22 +1769,23 @@ function Clear-PrintSpooler {
             Write-Log "Remoção de arquivos da fila de impressão tentada. Alguns podem ter permanecido se estavam bloqueados." -Type Info
             $currentStep++
 
-            Grant-WriteProgress -Activity $activity -Status "Iniciando serviço 'Spooler'..." -PercentComplete (($currentStep / $totalSteps) * 100)
-            Write-Log "Iniciando serviço 'Spooler'..." -Type Info
-            if (-not $WhatIf) {
-                Start-Service -Name Spooler -ErrorAction SilentlyContinue
-                if ((Get-Service -Name Spooler).Status -ne 'Running') {
-                    Write-Log "AVISO: O serviço 'Spooler' pode não ter iniciado corretamente." -Type Warning
-                }
-            } else {
-                Write-Log "Modo WhatIf: Serviço 'Spooler' seria iniciado." -Type Debug
-            }
             Write-Log "Spooler de impressão limpo com sucesso." -Type Success
 
         } catch {
             Write-Log "ERRO ao limpar spooler de impressão: $($_.Exception.Message)" -Type Error
             Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
         } finally {
+            # Sempre religa o Spooler (mesmo após erro), exceto em simulação
+            if (-not $WhatIf) {
+                Grant-WriteProgress -Activity $activity -Status "Iniciando serviço 'Spooler'..." -PercentComplete 90
+                Write-Log "Iniciando serviço 'Spooler'..." -Type Info
+                Start-Service -Name Spooler -ErrorAction SilentlyContinue
+                if ((Get-Service -Name Spooler -ErrorAction SilentlyContinue).Status -ne 'Running') {
+                    Write-Log "AVISO: O serviço 'Spooler' pode não ter iniciado corretamente." -Type Warning
+                }
+            } else {
+                Write-Log "Modo WhatIf: Serviço 'Spooler' seria iniciado." -Type Debug
+            }
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
         }
     }
@@ -1930,52 +1955,52 @@ function Grant-Cleanup {
 
     if ($PSCmdlet.ShouldProcess("rotinas de limpeza agrupadas", "executar")) {
         try {
-            # Chamada das funções menores (passando WhatIf para elas)
+            # Chamada das funções menores (propagando $WhatIfPreference, para o -WhatIf do chamador valer)
             # Acompanhe o progresso geral
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Limpeza de cache ARP..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-ARP -WhatIf:$WhatIf
+            Clear-ARP -WhatIf:$WhatIfPreference
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Limpeza de cache DNS..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-DNS -WhatIf:$WhatIf
+            Clear-DNS -WhatIf:$WhatIfPreference
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Limpeza de Prefetch..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-Prefetch -WhatIf:$WhatIf
+            Clear-Prefetch -WhatIf:$WhatIfPreference
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Limpeza do spooler de impressão..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-PrintSpooler -WhatIf:$WhatIf
+            Clear-PrintSpooler -WhatIf:$WhatIfPreference
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Limpeza de arquivos temporários..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-TemporaryFiles -WhatIf:$WhatIf
+            Clear-TemporaryFiles -WhatIf:$WhatIfPreference
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Limpeza do cache do Windows Update..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-WUCache -WhatIf:$WhatIf
+            Clear-WUCache -WhatIf:$WhatIfPreference
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Limpeza do WinSxS..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-WinSxS -WhatIf:$WhatIf
+            Clear-WinSxS -WhatIf:$WhatIfPreference -Confirm:$false
 
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Limpeza profunda do sistema (logs, etc.)..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Clear-DeepSystemCleanup -WhatIf:$WhatIf
+            Clear-DeepSystemCleanup -WhatIf:$WhatIfPreference
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Verificando/removendo Windows.old..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Remove-WindowsOld -WhatIf:$WhatIf
+            Remove-WindowsOld -WhatIf:$WhatIfPreference
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Agendando ChkDsk para o próximo reboot..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            New-ChkDsk -WhatIf:$WhatIf
+            New-ChkDsk -WhatIf:$WhatIfPreference
             
             $completedFunctions++
             Grant-WriteProgress -Activity $activity -Status "Otimizando volumes do disco..." -PercentComplete (($completedFunctions / $totalFunctions) * 100)
-            Optimize-Volumes -WhatIf:$WhatIf
+            Optimize-Volumes -WhatIf:$WhatIfPreference
 
             Write-Log "Todas as rotinas de limpeza e otimização foram concluídas." -Type Success
         } catch {
