@@ -2967,38 +2967,29 @@ function Invoke-ScreenshotToolFix {
 
 function Update-PowerShell {
     [CmdletBinding(SupportsShouldProcess=$true)]
-    param(
-       
-            )
+    param()
     Write-Log "Iniciando instalação/atualização do PowerShell..." -Type Info
     $activity = "Atualização do PowerShell"
 
-    if ($PSCmdlet.ShouldProcess("PowerShell", "instalar/atualizar")) {
+    if ($PSCmdlet.ShouldProcess("PowerShell", "instalar/atualizar via winget")) {
         try {
-            Grant-WriteProgress -Activity $activity -Status "Definindo política de execução..." -PercentComplete 30
-            Write-Log "Definindo política de execução para 'Unrestricted' no escopo CurrentUser para permitir scripts." -Type Info
-            if (-not $WhatIf) {
-                Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Force -ErrorAction Stop
-            } else {
-                Write-Log "Modo WhatIf: Política de execução seria definida para 'Unrestricted'." -Type Debug
+            if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+                Write-Log "winget não encontrado. Instale o App Installer (Microsoft Store) e tente novamente." -Type Error
+                return
             }
-
-            Grant-WriteProgress -Activity $activity -Status "Baixando e executando script de instalação..." -PercentComplete 60
-            Write-Log "Baixando e executando script oficial de instalação/atualização do PowerShell." -Type Info
-            if (-not $WhatIf) {
-                # O script baixado pode necessitar de conexão com a internet
-                # A execução de iex pode ser perigosa; certifique-se da fonte (aka.ms)
-                iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI"
-                Write-Log "Script de instalação/atualização do PowerShell executado. Por favor, verifique a saída para detalhes." -Type Success
+            Grant-WriteProgress -Activity $activity -Status "Instalando via winget..." -PercentComplete 50
+            & winget install --id Microsoft.PowerShell --exact --source winget --silent --accept-package-agreements --accept-source-agreements
+            $codigo = $LASTEXITCODE
+            if ($codigo -eq 0) {
+                Write-Log "PowerShell instalado/atualizado com sucesso (verifique a versão após a conclusão)." -Type Success
+            } elseif ($codigo -eq -1978335189) {
+                # 0x8A15002B: nenhuma atualização aplicável / já instalado
+                Write-Log "PowerShell já está instalado e atualizado." -Type Success
             } else {
-                Write-Log "Modo WhatIf: Script de instalação/atualização do PowerShell seria baixado e executado." -Type Debug
+                Write-Log "winget terminou com código $codigo. PowerShell NÃO foi instalado/atualizado." -Type Error
             }
-
-            Write-Log "PowerShell instalado/atualizado com sucesso (verifique a versão após a conclusão)." -Type Success
-
         } catch {
             Write-Log "ERRO durante a instalação/atualização do PowerShell: $($_.Exception.Message)" -Type Error
-            Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
         } finally {
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
         }
@@ -5414,8 +5405,8 @@ function Grant-GPORegistrySettings {
     Write-Log -Message "Iniciando aplicação de configurações de GPO via Registro..." -Type Info
     $registrySettings = @(
         @{Path="HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching"; Key="SearchOrderConfig"; Value=0; Type="DWord"},
-        @{Path="HKCU:\SOFTWARE\Policies\Microsoft\Edge"; Key="HideFirstRunExperience"; Value=1; Type="DWord"},
-        @{Path="HKLM:\SOFTWARE\Policies\Google\Chrome"; Key="ExtensionInstallBlocklist"; Value="*"; Type="String"}
+        @{Path="HKCU:\SOFTWARE\Policies\Microsoft\Edge"; Key="HideFirstRunExperience"; Value=1; Type="DWord"}
+        # ExtensionInstallBlocklist removida de propósito: bloquearia as extensões do colégio.
     )
     foreach ($reg in $registrySettings) {
         if ($PSCmdlet.ShouldProcess($reg.Path, "criar/configurar chave de registro")) {
@@ -5999,6 +5990,23 @@ function Remove-OneDrive-AndRestoreFolders {
     param()
     Write-Log "Removendo OneDrive e restaurando pastas padrão..." -Type Warning
     if (-not $PSCmdlet.ShouldProcess("OneDrive (todos os perfis)", "remover")) { return }
+    # Segurança: se Desktop, Documentos ou Imagens apontam para o OneDrive, abortar
+    # (remover o OneDrive deixaria o usuário sem acesso às pastas redirecionadas).
+    try {
+        $usf = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders" -ErrorAction Stop
+        $redirecionadas = @()
+        foreach ($nome in @('Desktop','Personal','My Pictures')) {
+            $v = $usf.$nome
+            if ($v -and ([Environment]::ExpandEnvironmentVariables([string]$v) -match 'OneDrive')) { $redirecionadas += "$nome=$v" }
+        }
+        if ($redirecionadas.Count -gt 0) {
+            Write-Log "Remoção do OneDrive ABORTADA: pastas do usuário apontam para o OneDrive ($($redirecionadas -join '; ')). Mova-as de volta antes." -Type Error
+            return
+        }
+    } catch {
+        Write-Log "Não foi possível verificar as pastas redirecionadas ao OneDrive ($($_.Exception.Message)). Remoção abortada por segurança." -Type Error
+        return
+    }
     try {
         taskkill.exe /F /IM "OneDrive.exe"
     } 
@@ -6018,7 +6026,7 @@ Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:localappdata\Mic
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:programdata\Microsoft OneDrive"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:systemdrive\OneDriveTemp"
 # check if directory is empty before removing:
-If ((Get-ChildItem "$env:userprofile\OneDrive" -Recurse | Measure-Object).Count -eq 0) {
+If ((Test-Path "$env:userprofile\OneDrive") -and ((Get-ChildItem "$env:userprofile\OneDrive" -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0)) {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:userprofile\OneDrive"
 }
 
@@ -6084,20 +6092,49 @@ function Backup-Registry {
 }
 
 function Restore-Registry {
-    # CORREÇÃO (GUI): $BkpPath opcional -- sem ele, mantém o Read-Host interativo de
-    # sempre (menu de texto). Com ele, pula o prompt (necessário p/ rodar em background,
-    # onde Read-Host trava por não ter console pra digitar).
+    # $BkpPath opcional: sem ele, mantém o Read-Host interativo (menu de texto). Com ele,
+    # não há prompt (necessário para rodar a partir da GUI, sem console).
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
     param([string]$BkpPath)
     if (-not $BkpPath) {
 Write-Log "Digite o caminho da pasta onde está o backup do registro:" -Type Info
         $BkpPath = Read-Host "Exemplo: C:\Users\SeuUsuario\Desktop\reg_backup_20250704_140000"
     }
-    try {
-        reg.exe restore HKLM\SOFTWARE "$BkpPath\HKLM_SOFTWARE.reg" | Out-Null
-        reg.exe restore HKLM\SYSTEM "$BkpPath\HKLM_SYSTEM.reg" | Out-Null
-        reg.exe restore HKCU "$BkpPath\HKCU.reg" | Out-Null
-        Write-Log "Registro restaurado a partir de $BkpPath." -Type Success
-    } catch { Write-Log "Erro ao restaurar o registro: $_" -Type Error }
+    if ([string]::IsNullOrWhiteSpace($BkpPath) -or -not (Test-Path -LiteralPath $BkpPath -PathType Container)) {
+        Write-Log "Pasta de backup não encontrada: '$BkpPath'. Nada foi restaurado." -Type Error
+        return
+    }
+    $itens = @(
+        @{ Chave = 'HKLM\SOFTWARE'; Arq = 'HKLM_SOFTWARE.reg' },
+        @{ Chave = 'HKLM\SYSTEM';   Arq = 'HKLM_SYSTEM.reg' },
+        @{ Chave = 'HKCU';          Arq = 'HKCU.reg' }
+    )
+    # Valida todos os arquivos antes de restaurar qualquer chave
+    foreach ($i in $itens) {
+        if (-not (Test-Path -LiteralPath (Join-Path $BkpPath $i.Arq) -PathType Leaf)) {
+            Write-Log "Arquivo de backup ausente: $(Join-Path $BkpPath $i.Arq). Nada foi restaurado." -Type Error
+            return
+        }
+    }
+    if (-not $PSCmdlet.ShouldProcess("Registro ($BkpPath)", "restaurar HKLM\SOFTWARE, HKLM\SYSTEM e HKCU")) { return }
+    $falhas = 0
+    foreach ($i in $itens) {
+        $arq = Join-Path $BkpPath $i.Arq
+        try {
+            & reg.exe restore $i.Chave $arq 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                $falhas++
+                Write-Log "Falha ao restaurar $($i.Chave) (código $LASTEXITCODE)." -Type Error
+            } else {
+                Write-Log "$($i.Chave) restaurado." -Type Success
+            }
+        } catch {
+            $falhas++
+            Write-Log "Erro ao restaurar $($i.Chave): $_" -Type Error
+        }
+    }
+    if ($falhas -eq 0) { Write-Log "Registro restaurado a partir de $BkpPath." -Type Success }
+    else { Write-Log "Restauração concluída com $falhas falha(s). Verifique o log." -Type Error }
 }
 
 function Invoke-WindowsActivator {
@@ -6131,38 +6168,40 @@ Write-Log "=======================" -Type Info
 Write-Log "ATUALIZANDO SCRIPT..." -Type Info
 Write-Log "=======================" -Type Info
 
+    $hostNuvem = 'script.colegiomundodosaber.com.br'
+    $urlNuvem  = "https://$hostNuvem"
     try {
-        Write-Log "Verificando conexão com servidor..." -Type Warning
-        if (-not (Test-Connection -ComputerName "script.colegiomundodosaber.com.br" -Count 1 -Quiet)) {
-            Write-Log "❌ Sem conexão. Atualização abortada." -Type Error
+        # Teste TCP 443 (ICMP costuma ser bloqueado e não prova que o HTTPS responde)
+        Write-Log "Verificando conexão com servidor (TCP 443)..." -Type Warning
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        try {
+            $iar = $tcp.BeginConnect($hostNuvem, 443, $null, $null)
+            $ok = $iar.AsyncWaitHandle.WaitOne(5000, $false) -and $tcp.Connected
+        } finally { $tcp.Close() }
+        if (-not $ok) {
+            Write-Log "Sem conexão com $hostNuvem na porta 443. Atualização abortada." -Type Error
             return
         }
 
-        Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." -Type Warning
-        irm script.colegiomundodosaber.com.br | iex
-        Write-Log "✅ Script atualizado com sucesso!" -Type Success
-        Show-SuccessMessage
-    } catch {
-        Write-Log "❌ Falha ao atualizar script: $_" -Type Error
-        Show-SuccessMessage
-    }
-}
+        # TLS 1.2 explícito (necessário no Windows PowerShell 5.1)
+        try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
 
-function Show-AutoLoginMenu {
-Write-Log "=== Configurar Autologin ===" -Type Info
-    $username = Read-Host "Digite o usuário para autologin (ex: Administrator ou SeuUsuario)"
-    $password = Read-Host "Digite a senha para autologin (não aparecerá na tela)" -AsSecureString
-    $passwordPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))
-    $domain = $env:USERDOMAIN
-    reg export "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "$env:TEMP\backup_winlogon_autologin.reg" /y | Out-Null
-    try {
-        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "AutoAdminLogon" -Value "1"
-        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultUserName" -Value $username
-        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultDomainName" -Value $domain
-        Set-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" "DefaultPassword" -Value $passwordPlain
-        Write-Log "Autologin configurado para o usuário $username." -Type Success
-    } catch { Write-Log "Erro ao configurar autologin: $_" -Type Error }
-    Show-SuccessMessage
+        Write-Log "Baixando script atualizado do Colégio Mundo do Saber..." -Type Warning
+        $conteudo = Invoke-RestMethod -Uri $urlNuvem -UseBasicParsing -ErrorAction Stop
+        $conteudo = [string]$conteudo
+
+        # Validação: conteúdo não vazio e sintaxe PowerShell válida antes de executar
+        if ([string]::IsNullOrWhiteSpace($conteudo)) { throw "Download vazio." }
+        $erros = $null; $tokens = $null
+        [void][System.Management.Automation.Language.Parser]::ParseInput($conteudo, [ref]$tokens, [ref]$erros)
+        if ($erros -and $erros.Count -gt 0) { throw "O script baixado não passou na validação de sintaxe ($($erros.Count) erro(s))." }
+
+        Invoke-Expression $conteudo
+        Write-Log "Script atualizado com sucesso!" -Type Success
+    } catch {
+        # Sem mensagem de sucesso em caso de falha
+        Write-Log "Falha ao atualizar script: $($_.Exception.Message)" -Type Error
+    }
 }
 
 #endregion
@@ -6195,18 +6234,11 @@ function Restore-DefaultIPv6 {
 }
 
 function Restore-Registry-FromBackup {
-    # CORREÇÃO (GUI): mesmo padrão de Restore-Registry -- $BkpPath opcional.
+    # Mantido por compatibilidade (Invoke-Undo/menu): delega para Restore-Registry.
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
     param([string]$BkpPath)
-    if (-not $BkpPath) {
-Write-Log "Digite o caminho do backup do registro para restaurar (pasta):" -Type Info
-        $BkpPath = Read-Host
-    }
-    try {
-        reg.exe restore HKLM\SOFTWARE "$BkpPath\HKLM_SOFTWARE.reg" | Out-Null
-        reg.exe restore HKLM\SYSTEM "$BkpPath\HKLM_SYSTEM.reg" | Out-Null
-        reg.exe restore HKCU "$BkpPath\HKCU.reg" | Out-Null
-        Write-Log "Registro restaurado a partir de $BkpPath." -Type Success
-    } catch { Write-Log "Erro ao restaurar o registro: $_" -Type Error }
+    if ($BkpPath) { Restore-Registry -BkpPath $BkpPath -WhatIf:$WhatIfPreference }
+    else { Restore-Registry -WhatIf:$WhatIfPreference }
 }
 
 function Undo-PrivacyHardening {
@@ -6803,7 +6835,6 @@ function Show-AdvancedSettingsMenu {
         Write-Host " I) Habilitar Segundos na Barra de Tarefas"
         Write-Host " J) Habilitar SMBv1 (se necessário para redes antigas)"
         Write-Host " K) Habilitar Sudo (se disponível e desejado)"
-        Write-Host " L) Mostrar Menu de Login Automático"
         Write-Host " M) Otimizações Gerais de Sistema"
         Write-Host " N) Otimizar Desempenho do Explorer"
         Write-Host " O) Otimizar Volumes (Desfragmentar/ReTrim)"
@@ -6826,7 +6857,6 @@ function Show-AdvancedSettingsMenu {
             'I' { Enable-TaskbarSeconds; Show-SuccessMessage }
             'J' { Enable-SMBv1; Show-SuccessMessage }
             'K' { Enable-Sudo; Show-SuccessMessage }
-            'L' { Show-AutoLoginMenu } # Esta função já tem sua própria UI
             'M' { Grant-SystemOptimizations; Show-SuccessMessage }
             'N' { Optimize-ExplorerPerformance; Show-SuccessMessage }
             'O' { Optimize-Volumes; Show-SuccessMessage }
