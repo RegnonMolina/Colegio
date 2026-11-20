@@ -176,6 +176,18 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 # Ajustada a função Write-Log para usar cores
 # region → FUNÇÕES DE LOGGING
 
+function Get-CmsPastaTecnologia {
+    # Pasta compartilhada de Tecnologia (drivers e apps portáteis). Troque com a variável de ambiente CMS_TECNOLOGIA.
+    if ($env:CMS_TECNOLOGIA) { return $env:CMS_TECNOLOGIA }
+    return 'G:\Drives compartilhados\Tecnologia'
+}
+
+function Test-ModoSimulacao {
+    # Verdadeiro se o -WhatIf foi pedido de qualquer forma: no comando da função (herdado em $WhatIfPreference),
+    # no parâmetro do script ($script:WhatIf) ou pela GUI ($global:WhatIf).
+    return [bool]($WhatIfPreference -or $script:WhatIf -or $global:WhatIf)
+}
+
 function Write-Log {
     param (
         [string]$Message,
@@ -560,7 +572,7 @@ function Clear-TemporaryFiles {
         try {
             Grant-WriteProgress -Activity $activity -Status "Verificando configuração do cleanmgr e executando..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Configurando o perfil do cleanmgr e executando /sagerun:1 (pode levar vários minutos, por favor aguarde)..." -Type Warning # Aviso mais proeminente
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # Verifica se o perfil 1 existe, senão configura
                 $cleanMgrReg = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
                 # Sem diálogo: o /sageset abriria a janela de configuração e travaria oculto.
@@ -595,7 +607,7 @@ function Clear-TemporaryFiles {
             foreach ($path in $tempPaths) {
                 if (Test-Path $path) {
                     Write-Log "Removendo itens em $path" -Type Debug
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         # Iterar e remover individualmente para lidar melhor com arquivos em uso
                         Get-ChildItem -Path $path -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
                             try {
@@ -942,7 +954,7 @@ function Remove-DuplicateFiles {
             New-Item -ItemType Directory -Path $relatoriosDir -Force -ErrorAction SilentlyContinue | Out-Null
 
             # backup automatico ANTES de mover/deletar -- rede de seguranca extra
-            if (-not $SemBackup -and -not $WhatIf) {
+            if (-not $SemBackup -and -not (Test-ModoSimulacao)) {
                 $backupDir = Join-Path $relatoriosDir '_BACKUP'
                 New-Item -ItemType Directory -Path $backupDir -Force -ErrorAction SilentlyContinue | Out-Null
                 Write-Log "Criando backup de segurança em '$backupDir'..." -Type Info
@@ -965,7 +977,7 @@ function Remove-DuplicateFiles {
             $falhas = 0
             foreach ($p in $plano) {
                 try {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         if ($Deletar) {
                             Remove-Item -LiteralPath $p.Duplicata.FullName -Force -ErrorAction Stop
                         } else {
@@ -984,7 +996,7 @@ function Remove-DuplicateFiles {
             }
 
             # relatorio CSV + resumo TXT (so quando executou de verdade)
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 try {
                     $plano | Select-Object Hash, @{N = 'Manter'; E = { $_.Manter.FullName } }, @{N = 'Duplicata'; E = { $_.Duplicata.FullName } }, @{N = 'TamanhoBytes'; E = { $_.Duplicata.Length } } |
                         Export-Csv -NoTypeInformation -Encoding UTF8 -LiteralPath (Join-Path $relatoriosDir "duplicados_$ts.csv")
@@ -1095,7 +1107,7 @@ function Convert-IvmsCctvVideos {
     try {
         if (-not (Test-Path -LiteralPath $DestFolder)) {
             if ($PSCmdlet.ShouldProcess($DestFolder, "criar pasta de destino")) {
-                if (-not $WhatIf) { New-Item -ItemType Directory -Path $DestFolder -Force -ErrorAction Stop | Out-Null }
+                if (-not (Test-ModoSimulacao)) { New-Item -ItemType Directory -Path $DestFolder -Force -ErrorAction Stop | Out-Null }
             }
         }
 
@@ -1111,7 +1123,7 @@ function Convert-IvmsCctvVideos {
             $destino = if ($SobrescreverExistente) { Join-Path $DestFolder $nomeArquivo } else { Get-SafeVideoDestination -TargetDir $DestFolder -FileName $nomeArquivo }
 
             if ($PSCmdlet.ShouldProcess($origem, "converter para '$destino'")) {
-                if (-not $WhatIf) {
+                if (-not (Test-ModoSimulacao)) {
                     # NOVO: log de "iniciando" ANTES de chamar o ffmpeg -- na GUI o andamento
                     # é mostrado via tail do arquivo de log (Write-Progress não aparece lá),
                     # entao sem essa linha a tela ficava muda durante a conversao de cada
@@ -1313,7 +1325,7 @@ function Invoke-CamFix {
                     $newName = Get-UniqueNameInFolder -Directory $f.DirectoryName -BaseName $baseFinal -Extension $f.Extension -CurrentName $f.Name
                     if ($newName -eq $f.Name) { continue }
                     if ($PSCmdlet.ShouldProcess($f.FullName, "renomear para '$newName'")) {
-                        if (-not $WhatIf) {
+                        if (-not (Test-ModoSimulacao)) {
                             try {
                                 Rename-Item -LiteralPath $f.FullName -NewName $newName -ErrorAction Stop
                                 $renomeados++
@@ -1342,7 +1354,7 @@ function Invoke-CamFix {
                     $newName = $newBase + $f.Extension.ToLower()
                     if ($newName -eq $f.Name) { continue }
                     if ($PSCmdlet.ShouldProcess($f.FullName, "renomear para '$newName'")) {
-                        if (-not $WhatIf) {
+                        if (-not (Test-ModoSimulacao)) {
                             try {
                                 Rename-Item -LiteralPath $f.FullName -NewName $newName -ErrorAction Stop
                                 $renomeados++
@@ -1372,7 +1384,7 @@ function Invoke-CamFix {
                     if ($errLista) { Write-Log "Sem acesso a '$($d.FullName)', ignorada." -Type Warning; continue }
                     if (@($items).Count -ne 0) { continue }
                     if ($PSCmdlet.ShouldProcess($d.FullName, "remover pasta vazia")) {
-                        if (-not $WhatIf) {
+                        if (-not (Test-ModoSimulacao)) {
                             try {
                                 Remove-Item -LiteralPath $d.FullName -Force -ErrorAction Stop
                                 $removidas++
@@ -1411,7 +1423,7 @@ function Invoke-CamFix {
                         continue
                     }
                     if ($PSCmdlet.ShouldProcess($f.FullName, "mover para '$dupDir' (duplicata de '$(Split-Path $orig -Leaf)')")) {
-                        if (-not $WhatIf) {
+                        if (-not (Test-ModoSimulacao)) {
                             try {
                                 if (-not (Test-Path -LiteralPath $dupDir)) { New-Item -ItemType Directory -Path $dupDir -Force -ErrorAction Stop | Out-Null }
                                 $target = Join-Path $dupDir $f.Name
@@ -1456,7 +1468,7 @@ function Clear-WUCache {
         try {
             Grant-WriteProgress -Activity $activity -Status "Parando serviço 'wuauserv'..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Parando serviço 'wuauserv'..." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # CORREÇÃO #9 (auditoria): -ErrorAction Stop para que uma falha real
                 # ao parar o serviço seja capturada pelo catch (antes era silenciosa).
                 Stop-Service wuauserv -Force -ErrorAction Stop
@@ -1467,7 +1479,7 @@ function Clear-WUCache {
 
             Grant-WriteProgress -Activity $activity -Status "Removendo conteúdo de 'SoftwareDistribution\Download'..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Removendo conteúdo de '$env:SystemRoot\SoftwareDistribution\Download\'..." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # CORREÇÃO #9: -ErrorAction Stop — se a pasta estiver bloqueada, o erro
                 # é registrado em vez de deixar o WU num estado inconsistente sem aviso.
                 Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction Stop
@@ -1478,7 +1490,7 @@ function Clear-WUCache {
 
             Grant-WriteProgress -Activity $activity -Status "Iniciando serviço 'wuauserv'..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Iniciando serviço 'wuauserv'..." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 Start-Service wuauserv -ErrorAction SilentlyContinue
             } else {
                 Write-Log "Modo WhatIf: Serviço 'wuauserv' seria iniciado." -Type Debug
@@ -1491,7 +1503,7 @@ function Clear-WUCache {
         } finally {
             # CORREÇÃO #9: garantir que o serviço wuauserv seja SEMPRE religado, mesmo que
             # a remoção acima tenha falhado (evita deixar o Windows Update parado/quebrado).
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 try { if ((Get-Service wuauserv -ErrorAction SilentlyContinue).Status -ne 'Running') { Start-Service wuauserv -ErrorAction SilentlyContinue } } catch {}
             }
             Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
@@ -1522,7 +1534,7 @@ function Optimize-Volumes {
                     Grant-WriteProgress -Activity $activity -Status $statusMessage -PercentComplete $percentComplete
                     Write-Log "Otimizando volume $($vol.DriveLetter):\" -Type Info
 
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         # Tipo de mídia (SSD/HDD) do disco físico do volume
                         $midia = $null
                         try {
@@ -1570,7 +1582,7 @@ function Clear-WinSxS {
         try {
             Grant-WriteProgress -Activity $activity -Status "Executando DISM para limpeza de componentes (pode demorar)..." -PercentComplete 25
             Write-Log "Executando Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase (isso pode levar bastante tempo!)..." -Type Warning
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # O comando DISM não fornece feedback de progresso nativo fácil para Grant-WriteProgress
                 # mas o Out-Null evita que sua saída polua o console.
                 $process = Start-Process -FilePath "Dism.exe" -ArgumentList "/online /Cleanup-Image /StartComponentCleanup /ResetBase" -WindowStyle Hidden -Wait -PassThru
@@ -1601,7 +1613,7 @@ function New-ChkDsk {
     if ($PSCmdlet.ShouldProcess("chkdsk no próximo reinício", "agendar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Agendando verificação de disco..." -PercentComplete 50
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 $drv = $env:SystemDrive
                 # Método 1: marca o volume como "sujo"; o autochk roda a verificação no próximo boot.
                 $saida = & fsutil.exe dirty set $drv 2>&1 | Out-String
@@ -1645,7 +1657,7 @@ function Remove-WindowsOld {
             if (Test-Path "$env:SystemDrive\Windows.old") {
                 Grant-WriteProgress -Activity $activity -Status "Removendo pasta Windows.old (pode demorar)..." -PercentComplete 50
                 Write-Log "Removendo '$env:SystemDrive\Windows.old'..." -Type Info
-                if (-not $WhatIf) {
+                if (-not (Test-ModoSimulacao)) {
                     # Remoção parcial é possível (ACL do TrustedInstaller, arquivos em uso): erros ficam visíveis e o resultado é conferido.
                     Remove-Item "$env:SystemDrive\Windows.old" -Force -Recurse -ErrorAction Continue
                     if (Test-Path "$env:SystemDrive\Windows.old") {
@@ -1699,7 +1711,7 @@ function Clear-DeepSystemCleanup {
             foreach ($path in $logPaths) {
                 if (Test-Path $path) {
                     Write-Log "Tentando remover itens em $path" -Type Debug
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         # Iterar e remover individualmente
                         Get-ChildItem -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
                             try {
@@ -1717,7 +1729,7 @@ function Clear-DeepSystemCleanup {
 
             Grant-WriteProgress -Activity $activity -Status "Executando limpeza de disco (cleanmgr) para arquivos de sistema (pode demorar MUITO!)..." -PercentComplete (($currentStep / $totalSteps) * 100) # Aviso mais forte
             Write-Log "Executando cleanmgr /sagerun:1 (para limpeza de disco de sistema). ATENÇÃO: Essa etapa pode levar DEZENAS DE MINUTOS ou mais, dependendo do estado do sistema. Por favor, aguarde." -Type Warning # Mensagem mais detalhada
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 $process = Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -WindowStyle Hidden -Wait -PassThru
                 if ($process.ExitCode -ne 0) {
                     Write-Log "AVISO: cleanmgr /sagerun:1 pode ter terminado com erros (código de saída: $($process.ExitCode))." -Type Warning
@@ -1752,7 +1764,7 @@ function Clear-PrintSpooler {
             Grant-WriteProgress -Activity $activity -Status "Parando serviço 'Spooler' (aguardando até 30s)..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Tentando parar serviço 'Spooler'..." -Type Info
 
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # Tenta parar o serviço, com retries
                 $serviceStopped = $false
                 for ($i = 0; $i -lt 6; $i++) { # Tenta 6 vezes, com 5s de espera = 30s
@@ -1780,7 +1792,7 @@ function Clear-PrintSpooler {
 
             Grant-WriteProgress -Activity $activity -Status "Removendo arquivos da fila de impressão..." -PercentComplete (($currentStep / $totalSteps) * 100)
             Write-Log "Removendo arquivos da fila de impressão em '$env:SystemRoot\System32\spool\PRINTERS\'..." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # Tenta remover arquivos individualmente para maior resiliência
                 Get-ChildItem -Path "$env:SystemRoot\System32\spool\PRINTERS\*" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
                     try {
@@ -1803,7 +1815,7 @@ function Clear-PrintSpooler {
             Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
         } finally {
             # Sempre religa o Spooler (mesmo após erro), exceto em simulação
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 Grant-WriteProgress -Activity $activity -Status "Iniciando serviço 'Spooler'..." -PercentComplete 90
                 Write-Log "Iniciando serviço 'Spooler'..." -Type Info
                 Start-Service -Name Spooler -ErrorAction SilentlyContinue
@@ -1838,7 +1850,7 @@ function Clear-Prefetch {
                 Grant-WriteProgress -Activity $activity -Status "Removendo arquivos Prefetch (excluindo Layout.ini)..." -PercentComplete 50
                 Write-Log "Removendo arquivos em '$prefetchPath\' (exceto Layout.ini) - isso pode demorar um pouco em sistemas com muitos arquivos..." -Type Info
 
-                if (-not $WhatIf) {
+                if (-not (Test-ModoSimulacao)) {
                     Get-ChildItem -Path "$prefetchPath\*" -File -Exclude "Layout.ini" -ErrorAction SilentlyContinue | ForEach-Object {
                         try {
                             Remove-Item $_.FullName -Force -ErrorAction Stop
@@ -2025,7 +2037,7 @@ function Enable-ClassicContextMenu {
     if ($PSCmdlet.ShouldProcess("menu de contexto clássico", "habilitar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Aplicando ajuste de registro..." -PercentComplete 50
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 $result = reg.exe add "HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" /f /ve 2>&1
                 if ($LASTEXITCODE -ne 0) {
                     throw "Comando reg.exe falhou: $result"
@@ -2064,7 +2076,7 @@ function Disable-WindowsRecall {
             Grant-WriteProgress -Activity $activity -Status "Aplicando ajustes de registro para desabilitar o Recall..." -PercentComplete 50
             Write-Log "Aplicando ajustes de registro para desabilitar o Recall..." -Type Info
 
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # Desabilitar Recall (Windows 11 24H2+)
                 $regPathRecall = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\Recall"
                 if (-not (Test-Path $regPathRecall)) { New-Item -Path $regPathRecall -Force -ErrorAction SilentlyContinue | Out-Null }
@@ -2207,12 +2219,6 @@ function Remove-SystemBloatware {
     $overallStep = 1
     $totalOverallSteps = 5 # Contabilizando as grandes seções: Processos, OneDrive, AppX, Específicos/Copilot/Recall, Tarefas, Pins
 
-    # Função auxiliar para o progresso (assumindo que Safe-WriteProgress está disponível)
-    # Se você ainda usa Grant-WriteProgress, renomeie-o aqui.
-    if (-not (Get-Command Safe-WriteProgress -ErrorAction SilentlyContinue)) {
-        Write-Log "Função 'Safe-WriteProgress' não encontrada. O progresso não será exibido." -Type Warning
-        function Safe-WriteProgress { param($Activity,$Status,$PercentComplete) Write-Host "$Activity - $Status ($PercentComplete%)" }
-    }
 
     # Devolve $true se o NOME do pacote está protegido pela whitelist (comparação por nome, com curinga).
     $emWhitelist = {
@@ -2244,7 +2250,7 @@ function Remove-SystemBloatware {
             foreach ($proc in $processesToStop) {
                 $procCount++
                 try {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         $alvos = @(Get-Process -Name "$proc*" -ErrorAction SilentlyContinue)
                         if ($alvos.Count -gt 0) {
                             try {
@@ -2286,7 +2292,7 @@ function Remove-SystemBloatware {
                 Write-Log "Desinstalando OneDrive para todas as arquiteturas." -Type Info
                 $onedriveSetupPath_x64 = "$env:SystemRoot\SysWOW64\OneDriveSetup.exe"
                 $onedriveSetupPath_x86 = "$env:SystemRoot\System32\OneDriveSetup.exe"
-                if (-not $WhatIf) {
+                if (-not (Test-ModoSimulacao)) {
                     if (Test-Path $onedriveSetupPath_x64) {
                         Write-Log "Desinstalando OneDrive (x64)..." -Type Debug
                         Start-Process -FilePath $onedriveSetupPath_x64 -ArgumentList "/uninstall" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
@@ -2308,7 +2314,7 @@ function Remove-SystemBloatware {
                 foreach ($profile in $userProfiles) {
                     $onedriveUserPath = Join-Path -Path $profile.FullName -ChildPath "OneDrive"
                     $onedriveLocalAppData = Join-Path -Path $profile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         if (Test-Path -LiteralPath $onedriveUserPath) {
                             # Nunca apaga dados: só remove a pasta se estiver vazia.
                             $temArquivos = Get-ChildItem -LiteralPath $onedriveUserPath -Force -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -2341,7 +2347,7 @@ function Remove-SystemBloatware {
                 foreach ($path in $regPaths) {
                     try {
                         if (Test-Path $path) {
-                            if (-not $WhatIf) {
+                            if (-not (Test-ModoSimulacao)) {
                                 Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
                                 Write-Log "Limpado registro: $path" -Type Debug
                             } else {
@@ -2352,7 +2358,7 @@ function Remove-SystemBloatware {
                         Write-Log "Falha ao limpar registro do OneDrive ($path): $($_.Exception.Message)" -Type Warning
                     }
                 }
-                if (-not $WhatIf) {
+                if (-not (Test-ModoSimulacao)) {
                     try {
                         Remove-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "OneDrive" -ErrorAction SilentlyContinue
                         Write-Log "Desativado início automático do OneDrive." -Type Debug
@@ -2385,7 +2391,7 @@ function Remove-SystemBloatware {
                         if ($packages.Count -gt 0) {
                             foreach ($pkg in $packages) {
                                 Write-Log "Removendo AppX $($pkg.Name) (Full Name: $($pkg.PackageFullName)) para todos os usuários..." -Type Info
-                                if (-not $WhatIf) {
+                                if (-not (Test-ModoSimulacao)) {
                                     try { Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop }
                                     catch { Write-Log "Falha ao remover AppX $($pkg.Name): $($_.Exception.Message)" -Type Warning }
                                 }
@@ -2411,7 +2417,7 @@ function Remove-SystemBloatware {
                         if ($provisioned.Count -gt 0) {
                             foreach ($prov in $provisioned) {
                                 Write-Log "Removendo provisionamento $($prov.DisplayName) (PackageName: $($prov.PackageName))..." -Type Info
-                                if (-not $WhatIf) {
+                                if (-not (Test-ModoSimulacao)) {
                                     try { Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction Stop | Out-Null }
                                     catch { Write-Log "Falha ao remover provisionamento $($prov.DisplayName): $($_.Exception.Message)" -Type Warning }
                                 }
@@ -2461,7 +2467,7 @@ function Remove-SystemBloatware {
                     if ($null -ne $packagesToRemoveSpecific -and $packagesToRemoveSpecific.Count -gt 0) {
                         foreach ($pkg in $packagesToRemoveSpecific) {
                             Write-Log "Removendo AppX específico $($pkg.Name) (Full Name: $($pkg.PackageFullName)) para todos os usuários..." -Type Verbose
-                            if (-not $WhatIf) {
+                            if (-not (Test-ModoSimulacao)) {
                                 try { Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop }
                                 catch { Write-Log "Falha ao remover AppX específico $($pkg.Name): $($_.Exception.Message)" -Type Warning }
                             }
@@ -2480,7 +2486,7 @@ function Remove-SystemBloatware {
                     if ($null -ne $provisionedPackagesToRemoveSpecific -and $provisionedPackagesToRemoveSpecific.Count -gt 0) {
                         foreach ($prov in $provisionedPackagesToRemoveSpecific) {
                             Write-Log "Removendo provisionamento de aplicativo específico $($prov.DisplayName) (PackageName: $($prov.PackageName))..." -Type Verbose
-                            if (-not $WhatIf) {
+                            if (-not (Test-ModoSimulacao)) {
                                 try { Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction Stop | Out-Null }
                                 catch { Write-Log "Falha ao remover provisionamento de aplicativo específico $($prov.DisplayName): $($_.Exception.Message)" -Type Warning }
                             }
@@ -2498,7 +2504,7 @@ function Remove-SystemBloatware {
                         }
                         foreach ($id in $wingetId) {
                             Write-Log "Tentando desinstalar '$id' via Winget para '$appDisplayName'..." -Type Verbose
-                            if ($WhatIf) { Write-Log "Modo WhatIf: '$id' seria desinstalado via Winget." -Type Debug; continue }
+                            if ((Test-ModoSimulacao)) { Write-Log "Modo WhatIf: '$id' seria desinstalado via Winget." -Type Debug; continue }
                             # Zera o código de saída para que $LASTEXITCODE reflita só o winget; -ErrorAction não vale para exe nativo.
                             $global:LASTEXITCODE = 0
                             $wingetResult = & winget.exe uninstall --id $id --exact --silent --disable-interactivity 2>&1
@@ -2580,7 +2586,7 @@ function Remove-SystemBloatware {
                     $taskName = $task -replace '^.*\\' # Extrai apenas o nome da tarefa
                     try {
                         if ($PSCmdlet.ShouldProcess("tarefa agendada '$task'", "desativar/remover")) {
-                            if (-not $WhatIf) {
+                            if (-not (Test-ModoSimulacao)) {
                                 # Tenta desativar primeiro (menos destrutivo)
                                 $disableResult = schtasks.exe /change /TN $task /DISABLE 2>&1
                                 if ($LASTEXITCODE -ne 0 -and $disableResult -notlike "*Task does not exist*") {
@@ -2612,7 +2618,7 @@ function Remove-SystemBloatware {
                 Write-Log "Removendo pins do Menu Iniciar e Barra de Tarefas..." -Type Info
                 $startLayout = "$env:LOCALAPPDATA\Microsoft\Windows\Shell\LayoutModification.xml"
                 if (Test-Path $startLayout) {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         Remove-Item $startLayout -Force -ErrorAction SilentlyContinue
                         Write-Log "Arquivo LayoutModification.xml removido." -Type Success
                         Write-Log "Pins removidos (pode ser necessário reiniciar o Explorer para ver as mudanças)." -Type Warning
@@ -2835,7 +2841,7 @@ function Install-Applications {
 
                 try {
                     Write-Log "Tentando instalar $($app.Name) (ID: $($app.Id))..." -Type Info
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         # A Winget pode retornar um exit code diferente de 0 mesmo em caso de sucesso (ex: se o app já está instalado)
                         # Redirecionar stderr para stdout para capturar todas as mensagens
                         $installResult = (winget install --id $app.Id -e --accept-package-agreements --accept-source-agreements 2>&1)
@@ -2894,7 +2900,7 @@ function Repair-SnippingTool {
         # --- 1) Garantir que a tecla PrtScn está mapeada pro recorte de tela ---
         Grant-WriteProgress -Activity $activity -Status "Verificando atalho do Print Screen..." -PercentComplete 15
         $chaveAtalho = 'HKCU:\Control Panel\Keyboard'
-        if (-not $WhatIf) {
+        if (-not (Test-ModoSimulacao)) {
             if (-not (Test-Path $chaveAtalho)) { New-Item -Path $chaveAtalho -Force | Out-Null }
             Set-ItemProperty -Path $chaveAtalho -Name 'PrintScreenKeyForSnippingEnabled' -Value 1 -Type DWord -Force -ErrorAction Stop
             Write-Log "Atalho Print Screen reativado para abrir o recorte de tela." -Type Success
@@ -2907,7 +2913,7 @@ function Repair-SnippingTool {
         Grant-WriteProgress -Activity $activity -Status "Reregistrando o pacote da Ferramenta de Captura..." -PercentComplete 45
         $pacote = Get-AppxPackage -Name 'Microsoft.ScreenSketch' -ErrorAction SilentlyContinue
         if ($pacote) {
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 try {
                     $manifesto = Join-Path $pacote.InstallLocation 'AppXManifest.xml'
                     Add-AppxPackage -DisableDevelopmentMode -Register $manifesto -ErrorAction Stop
@@ -2925,7 +2931,7 @@ function Repair-SnippingTool {
         # --- 3) Último recurso: reinstalar via winget, se disponível ---
         Grant-WriteProgress -Activity $activity -Status "Garantindo instalação via winget..." -PercentComplete 75
         if (Get-Command winget -ErrorAction SilentlyContinue) {
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 $resultado = (winget install --id 9MZ95KL8MR0L -e --accept-package-agreements --accept-source-agreements --source msstore 2>&1)
                 if ($LASTEXITCODE -eq 0 -or $resultado -like "*already installed*" -or $resultado -like "*No available upgrade*") {
                     Write-Log "Ferramenta de Captura confirmada/reinstalada via winget (Microsoft Store)." -Type Success
@@ -2969,7 +2975,7 @@ function Install-Lightshot {
         }
 
         Grant-WriteProgress -Activity $activity -Status "Instalando Skillbrains.Lightshot..." -PercentComplete 60
-        if (-not $WhatIf) {
+        if (-not (Test-ModoSimulacao)) {
             $resultado = (winget install --id Skillbrains.Lightshot -e --accept-package-agreements --accept-source-agreements 2>&1)
             if ($LASTEXITCODE -eq 0) {
                 Write-Log "Lightshot instalado (ou já estava na última versão)." -Type Success
@@ -3000,8 +3006,8 @@ function Invoke-ScreenshotToolFix {
 
     if (-not $PSCmdlet.ShouldProcess("ferramentas de captura de tela", "reparar nativa + instalar Lightshot")) { return }
 
-    try { Repair-SnippingTool -ErrorAction Stop -WhatIf:$WhatIf } catch { Write-Log "ERRO: Falha em Repair-SnippingTool: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Install-Lightshot -ErrorAction Stop -WhatIf:$WhatIf } catch { Write-Log "ERRO: Falha em Install-Lightshot: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Repair-SnippingTool -ErrorAction Stop -WhatIf:(Test-ModoSimulacao) } catch { Write-Log "ERRO: Falha em Repair-SnippingTool: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
+    try { Install-Lightshot -ErrorAction Stop -WhatIf:(Test-ModoSimulacao) } catch { Write-Log "ERRO: Falha em Install-Lightshot: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
 }
 
 function Update-PowerShell {
@@ -3740,7 +3746,7 @@ if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
 
         if (-not (Test-Path -LiteralPath $pastaDestino)) {
             if ($PSCmdlet.ShouldProcess($pastaDestino, "criar pasta do profile")) {
-                if (-not $WhatIf) { New-Item -ItemType Directory -Path $pastaDestino -Force -ErrorAction Stop | Out-Null }
+                if (-not (Test-ModoSimulacao)) { New-Item -ItemType Directory -Path $pastaDestino -Force -ErrorAction Stop | Out-Null }
             }
         }
 
@@ -3946,7 +3952,7 @@ Write-Host "Perfil Script Supremo (aprimorado) carregado. Digite 'skills' para l
                 $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
                 $backupDir = "C:\ScriptsLogs\PerfilPowerShell_Backup_$ts"
                 if ($PSCmdlet.ShouldProcess($pastaDestino, "fazer backup antes de alterar")) {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         New-Item -ItemType Directory -Path $backupDir -Force -ErrorAction Stop | Out-Null
                         if ($vaiAlterarDestino) { Copy-Item -LiteralPath $destino -Destination (Join-Path $backupDir (Split-Path -Leaf $destino)) -Force -ErrorAction Stop }
                         if (Test-Path -LiteralPath $arquivoSupremo) { Copy-Item -LiteralPath $arquivoSupremo -Destination (Join-Path $backupDir 'ScriptSupremo.profile.ps1') -Force -ErrorAction Stop }
@@ -3964,7 +3970,7 @@ Write-Host "Perfil Script Supremo (aprimorado) carregado. Digite 'skills' para l
         # (b) + (d) Perfil do Supremo em arquivo próprio, UTF-8 com BOM.
         Grant-WriteProgress -Activity $activity -Status "Gravando '$arquivoSupremo'..." -PercentComplete 60
         if ($PSCmdlet.ShouldProcess($arquivoSupremo, "gravar perfil do Script Supremo (modo $Modo)")) {
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 [System.IO.File]::WriteAllText($arquivoSupremo, $conteudoFinal, $utf8Bom)
                 if ($Modo -eq 'Aprimorado') {
                     New-Item -ItemType Directory -Path $pastaSkills -Force -ErrorAction Stop | Out-Null
@@ -3983,7 +3989,7 @@ Write-Host "Perfil Script Supremo (aprimorado) carregado. Digite 'skills' para l
             Write-Log "O perfil '$destino' já carrega o ScriptSupremo.profile.ps1; nada a anexar." -Type Debug
         }
         elseif ($PSCmdlet.ShouldProcess($destino, "anexar a linha que carrega o ScriptSupremo.profile.ps1")) {
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 if (Test-Path -LiteralPath $destino) {
                     [System.IO.File]::AppendAllText($destino, "`r`n$linhaDotSource`r`n", $utf8Bom)
                 } else {
@@ -4186,7 +4192,7 @@ function Install-PortableApps {
     # Copia apps portáteis de uma pasta compartilhada para C:\Portateis e cria atalho no menu Iniciar.
     # Cada subpasta com um .exe aparece na janela com checkbox; só os marcados são copiados.
     param(
-        [string]$Origem = 'G:\Drives compartilhados\Tecnologia\Portateis',
+        [string]$Origem = (Join-Path (Get-CmsPastaTecnologia) 'Portateis'),
         [string]$Destino = 'C:\Portateis'
     )
     Write-Log -Message "Procurando apps portáteis em $Origem..." -Type Info
@@ -4420,7 +4426,7 @@ function Install-NetworkPrinters {
     [CmdletBinding(SupportsShouldProcess = $true)]
     # Filas da unidade 2: TCP/IP porta 9100, com os nomes que já existem nas máquinas da U2.
     # Os pacotes de driver (INF) ficam em $PastaDrivers, em subpastas L3250, C5810 e Samsung.
-    param([string]$PastaDrivers = 'G:\Drives compartilhados\Tecnologia\Drivers')
+    param([string]$PastaDrivers = (Join-Path (Get-CmsPastaTecnologia) 'Drivers'))
     Write-Log -Message "Instalando impressoras da unidade 2..." -Type Info
     $impressoras = @(
         @{ Fila = 'EPSON-MUNDO2';   Driver = 'EPSON WF-C5810 Series';                            Ip = '172.17.40.157'; Pacote = 'C5810';   Inf = 'E1WF1BQE.INF' }
@@ -4500,7 +4506,7 @@ function Reset-GoogleDriveDesktop {
 
         # --- 2) Encerrar o Google Drive ---
         Write-Log "Encerrando o processo GoogleDriveFS..." -Type Info
-        if (-not $WhatIf) {
+        if (-not (Test-ModoSimulacao)) {
             Get-Process -Name 'GoogleDriveFS' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             & taskkill.exe /F /IM GoogleDriveFS.exe 2>$null | Out-Null
 
@@ -4540,7 +4546,7 @@ function Reset-GoogleDriveDesktop {
         Write-Log "Removendo contas, configurações e cache local do Google Drive..." -Type Info
         foreach ($pasta in $pastasDrive) {
             if (Test-Path -LiteralPath $pasta) {
-                if (-not $WhatIf) {
+                if (-not (Test-ModoSimulacao)) {
                     Write-Log "Removendo: $pasta" -Type Debug
                     Remove-Item -LiteralPath $pasta -Recurse -Force -ErrorAction Stop
                 } else {
@@ -4552,7 +4558,7 @@ function Reset-GoogleDriveDesktop {
         # --- 5) Limpar preferências no registro ---
         $chaveRegistro = 'HKCU:\Software\Google\DriveFS'
         if (Test-Path -LiteralPath $chaveRegistro) {
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 Remove-Item -LiteralPath $chaveRegistro -Recurse -Force -ErrorAction Stop
                 Write-Log "Chave de registro '$chaveRegistro' removida." -Type Debug
             } else {
@@ -4568,7 +4574,7 @@ function Reset-GoogleDriveDesktop {
         }
 
         if ($executavelDrive -and (Test-Path -LiteralPath $executavelDrive)) {
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 Start-Process -FilePath $executavelDrive
                 Write-Log "Reset concluído. Google Drive reaberto — faça login novamente pelas contas desejadas." -Type Success
             } else {
@@ -4595,23 +4601,23 @@ function Invoke-All-NetworkAdvanced {
     if ($PSCmdlet.ShouldProcess("todas as otimizações de rede", "executar")) {
         Grant-WriteProgress -Activity $activity -Status "Limpando DNS..." -PercentComplete 10
         Write-Log "Chamando Clear-DNS..." -Type Info
-        if (-not $WhatIf) { Clear-DNS -WhatIf:$WhatIf } # Assumindo que Clear-DNS existe e suporta WhatIf
+        if (-not (Test-ModoSimulacao)) { Clear-DNS -WhatIf:(Test-ModoSimulacao) } # Assumindo que Clear-DNS existe e suporta WhatIf
 
         Grant-WriteProgress -Activity $activity -Status "Otimizando desempenho de rede..." -PercentComplete 30
         Write-Log "Chamando Optimize-NetworkPerformance..." -Type Info
-        Optimize-NetworkPerformance -WhatIf:$WhatIf
+        Optimize-NetworkPerformance -WhatIf:(Test-ModoSimulacao)
 
         Grant-WriteProgress -Activity $activity -Status "Configurando DNS para Google/Cloudflare..." -PercentComplete 50
         Write-Log "Chamando Set-DnsGoogleCloudflare..." -Type Info
-        Set-DnsGoogleCloudflare -WhatIf:$WhatIf
+        Set-DnsGoogleCloudflare -WhatIf:(Test-ModoSimulacao)
 
         Grant-WriteProgress -Activity $activity -Status "Testando velocidade da internet..." -PercentComplete 70
         Write-Log "Chamando Test-InternetSpeed..." -Type Info
-        Test-InternetSpeed -WhatIf:$WhatIf
+        Test-InternetSpeed -WhatIf:(Test-ModoSimulacao)
 
         Grant-WriteProgress -Activity $activity -Status "Limpando ARP cache..." -PercentComplete 90
         Write-Log "Chamando Clear-ARP..." -Type Info
-        if (-not $WhatIf) { Clear-ARP -WhatIf:$WhatIf } # Assumindo que Clear-ARP existe e suporta WhatIf
+        if (-not (Test-ModoSimulacao)) { Clear-ARP -WhatIf:(Test-ModoSimulacao) } # Assumindo que Clear-ARP existe e suporta WhatIf
 
         Write-Log "Todas as otimizações e configurações de rede avançadas concluídas." -Type Success
         Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
@@ -4657,7 +4663,7 @@ function Set-DnsGoogleCloudflare {
                 Write-Log "Configurando DNS para adaptador $($config.InterfaceAlias)." -Type Info
 
                 try {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         # Guarda o DNS atual (reversão: Set-DnsClientServerAddress -InterfaceAlias <nome> -ServerAddresses <antigos> ou -ResetServerAddresses)
                         $dnsAtual = Get-DnsClientServerAddress -InterfaceAlias $config.InterfaceAlias -AddressFamily IPv4 -ErrorAction Stop
                         if (-not (Test-Path -LiteralPath "C:\ScriptsLogs")) { New-Item -ItemType Directory -Path "C:\ScriptsLogs" -Force -ErrorAction Stop | Out-Null }
@@ -4709,7 +4715,7 @@ function Test-InternetSpeed {
             Grant-WriteProgress -Activity $activity -Status "Verificando instalação do Speedtest CLI..." -PercentComplete 30
             if (-not (Get-Command speedtest -ErrorAction SilentlyContinue)) {
                 Write-Log "Speedtest CLI não encontrado. Tentando instalar via Winget..." -Type Info
-                if (-not $WhatIf) {
+                if (-not (Test-ModoSimulacao)) {
                     Write-Log "Instalando Ookla.Speedtest.CLI..." -Type Info
                     # Executável nativo: nunca passar -ErrorAction como argumento; checar $LASTEXITCODE
                     winget install --id Ookla.Speedtest.CLI -e --accept-package-agreements --accept-source-agreements | Out-Null
@@ -4727,7 +4733,7 @@ function Test-InternetSpeed {
 
             Grant-WriteProgress -Activity $activity -Status "Executando teste de velocidade..." -PercentComplete 70
             Write-Log "Executando comando 'speedtest'. Isso pode demorar um pouco..." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # Roda como job com tempo limite de 180 s; licença e GDPR aceitas para não travar esperando entrada
                 $exeSpeed = (Get-Command speedtest -ErrorAction Stop).Source
                 $jobSpeed = Start-Job -ScriptBlock {
@@ -4769,7 +4775,7 @@ function Optimize-NetworkPerformance {
             Grant-WriteProgress -Activity $activity -Status "Habilitando RSS (Receive Side Scaling) para multi-core NICs." -PercentComplete 30
             Write-Log "Habilitando RSS (Receive Side Scaling)..." -Type Info
             try {
-                if (-not $WhatIf) {
+                if (-not (Test-ModoSimulacao)) {
                     & netsh int tcp set global rss=enabled
                     if ($LASTEXITCODE -ne 0) { throw "Falha ao habilitar RSS." }
                     Write-Log "RSS habilitado." -Type Success
@@ -4798,7 +4804,7 @@ function Optimize-NetworkPerformance {
                 Write-Log "Processando chave de registro: $path" -Type Debug
                 foreach ($name in $networkRegTweaks[$path].Keys) {
                     $value = $networkRegTweaks[$path][$name]
-                    if ($WhatIf) {
+                    if ((Test-ModoSimulacao)) {
                         Write-Log "Modo WhatIf: Registro '$path\$name' seria definido para '$value'." -Type Debug
                         continue
                     }
@@ -4813,7 +4819,7 @@ function Optimize-NetworkPerformance {
                     }
                 }
             }
-            if ($WhatIf) {
+            if ((Test-ModoSimulacao)) {
                 Write-Log "Modo WhatIf: nenhum ajuste de registro foi aplicado." -Type Debug
             } elseif ($falhasReg -eq 0) {
                 Write-Log "Ajustes de registro de rede aplicados ($aplicadosReg)." -Type Success
@@ -4842,7 +4848,7 @@ function Disable-IPv6 {
         try {
             Grant-WriteProgress -Activity $activity -Status "Criando/modificando entrada de registro para IPv6..." -PercentComplete 50
             Write-Log "Criando ou modificando a entrada de registro 'DisabledComponents' para desabilitar IPv6." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 $chaveIpv6 = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
                 # Guarda o valor anterior (ou AUSENTE) para o Restore-DefaultIPv6.
                 # Não sobrescreve um backup já existente, para não perder o original em execuções repetidas.
@@ -4880,7 +4886,7 @@ function Clear-DNS {
         try {
             Grant-WriteProgress -Activity $activity -Status "Executando 'ipconfig /flushdns'..." -PercentComplete 50
             Write-Log "Executando 'ipconfig /flushdns'..." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 $process = Start-Process -FilePath "ipconfig.exe" -ArgumentList "/flushdns" -WindowStyle Hidden -Wait -PassThru
                 $process.WaitForExit() # Garante que o processo termine antes de continuar
                 if ($process.ExitCode -ne 0) {
@@ -4909,7 +4915,7 @@ function Clear-ARP {
         try {
             Grant-WriteProgress -Activity $activity -Status "Executando 'netsh interface ip delete arpcache'..." -PercentComplete 50
             Write-Log "Executando 'netsh interface ip delete arpcache'..." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 $process = Start-Process -FilePath "netsh.exe" -ArgumentList "interface ip delete arpcache" -WindowStyle Hidden -Wait -PassThru
                 $process.WaitForExit() # Garante que o processo termine antes de continuar
                 if ($process.ExitCode -ne 0) {
@@ -4945,7 +4951,7 @@ function Show-SystemInfo {
     if ($PSCmdlet.ShouldProcess("informações do sistema", "exibir")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Coletando dados..." -PercentComplete 50
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 systeminfo | Out-Host
                 Write-Log "Informações do sistema exibidas." -Type Success
             } else {
@@ -4971,7 +4977,7 @@ function Show-DiskUsage {
     if ($PSCmdlet.ShouldProcess("uso do disco", "exibir")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Coletando dados de volume..." -PercentComplete 50
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 Get-Volume | Select-Object DriveLetter, FileSystemLabel, @{Name="Size(GB)";Expression={[math]::Round($_.Size/1GB,2)}}, @{Name="Free(GB)";Expression={[math]::Round($_.SizeRemaining/1GB,2)}} | Format-Table -AutoSize | Out-Host
                 Write-Log "Uso do disco exibido." -Type Success
             } else {
@@ -4997,7 +5003,7 @@ function Show-NetworkInfo {
     if ($PSCmdlet.ShouldProcess("informações de rede", "exibir")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Coletando configuração IP..." -PercentComplete 30
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 ipconfig /all | Out-Host
                 Write-Log "Informações de ipconfig exibidas." -Type Debug
             } else {
@@ -5005,7 +5011,7 @@ function Show-NetworkInfo {
             }
 
             Grant-WriteProgress -Activity $activity -Status "Coletando detalhes de interface..." -PercentComplete 70
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 Get-NetIPConfiguration | Select-Object InterfaceAlias, IPv4Address, IPv4DefaultGateway, DNSServer | Format-Table -AutoSize | Out-Host
                 Write-Log "Detalhes de Get-NetIPConfiguration exibidos." -Type Debug
             } else {
@@ -5035,31 +5041,31 @@ function Invoke-All-DiagnosticsAdvanced {
         try {
             Grant-WriteProgress -Activity $activity -Status "Exibindo informações do sistema..." -PercentComplete 10
             Write-Log "Chamando Show-SystemInfo..." -Type Info
-            Show-SystemInfo -WhatIf:$WhatIf
+            Show-SystemInfo -WhatIf:(Test-ModoSimulacao)
 
             Grant-WriteProgress -Activity $activity -Status "Exibindo uso do disco..." -PercentComplete 25
             Write-Log "Chamando Show-DiskUsage..." -Type Info
-            Show-DiskUsage -WhatIf:$WhatIf
+            Show-DiskUsage -WhatIf:(Test-ModoSimulacao)
 
             Grant-WriteProgress -Activity $activity -Status "Exibindo informações de rede..." -PercentComplete 40
             Write-Log "Chamando Show-NetworkInfo..." -Type Info
-            Show-NetworkInfo -WhatIf:$WhatIf
+            Show-NetworkInfo -WhatIf:(Test-ModoSimulacao)
 
             Grant-WriteProgress -Activity $activity -Status "Executando verificação SFC..." -PercentComplete 55
             Write-Log "Chamando Invoke-SFC-Scan..." -Type Info
-            Invoke-SFC-Scan -WhatIf:$WhatIf
+            Invoke-SFC-Scan -WhatIf:(Test-ModoSimulacao)
 
             Grant-WriteProgress -Activity $activity -Status "Executando verificação DISM..." -PercentComplete 70
             Write-Log "Chamando Invoke-DISM-Scan..." -Type Info
-            Invoke-DISM-Scan -WhatIf:$WhatIf
+            Invoke-DISM-Scan -WhatIf:(Test-ModoSimulacao)
 
             Grant-WriteProgress -Activity $activity -Status "Testando saúde dos discos (SMART)..." -PercentComplete 85
             Write-Log "Chamando Test-SMART-Drives..." -Type Info
-            Test-SMART-Drives -WhatIf:$WhatIf
+            Test-SMART-Drives -WhatIf:(Test-ModoSimulacao)
 
             Grant-WriteProgress -Activity $activity -Status "Agendando teste de memória..." -PercentComplete 95
             Write-Log "Chamando Test-Memory..." -Type Info
-            Test-Memory -WhatIf:$WhatIf
+            Test-Memory -WhatIf:(Test-ModoSimulacao)
 
             Write-Log "Todas as funções avançadas de diagnóstico e informações concluídas." -Type Success
 
@@ -5084,7 +5090,7 @@ function Invoke-SFC-Scan {
         try {
             Grant-WriteProgress -Activity $activity -Status "Iniciando 'sfc /scannow'. Isso pode levar um tempo..." -PercentComplete 20
             Write-Log "Executando 'sfc /scannow' para verificar e reparar arquivos de sistema." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # SFC requer privilégios de administrador
                 $sfcResult = sfc /scannow 2>&1
                 $sfcResult | Out-Host
@@ -5114,7 +5120,7 @@ function Invoke-DISM-Scan {
         try {
             Grant-WriteProgress -Activity $activity -Status "Iniciando 'DISM /Online /Cleanup-Image /RestoreHealth'. Isso pode levar um tempo..." -PercentComplete 20
             Write-Log "Executando 'DISM /Online /Cleanup-Image /RestoreHealth' para reparar a imagem do Windows." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # DISM requer privilégios de administrador
                 $dismResult = DISM /Online /Cleanup-Image /RestoreHealth 2>&1
                 $dismResult | Out-Host
@@ -5160,7 +5166,7 @@ function Test-SMART-Drives {
 
                 if ($drive.PredictFailure) {
                     Write-Log "ALERTA: Disco com PROBLEMAS detectados via SMART: $($drive.InstanceName)" -Type Error
-                    if (-not $WhatIf) { Write-Log "É altamente recomendado fazer backup dos dados deste disco imediatamente." -Type Warning }
+                    if (-not (Test-ModoSimulacao)) { Write-Log "É altamente recomendado fazer backup dos dados deste disco imediatamente." -Type Warning }
                 } else {
                     Write-Log "Disco OK (SMART): $($drive.InstanceName)" -Type Success
                 }
@@ -5187,7 +5193,7 @@ function Test-Memory {
         try {
             Grant-WriteProgress -Activity $activity -Status "Iniciando ferramenta de diagnóstico de memória (mdsched.exe)..." -PercentComplete 50
             Write-Log "Abrindo a Ferramenta de Diagnóstico de Memória do Windows. Você precisará selecionar a opção para reiniciar e verificar." -Type Info
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 # mdsched.exe abre uma GUI, não é uma operação de console direta.
                 # Não haverá uma "saída" que o PowerShell possa capturar diretamente.
                 Start-Process -FilePath "mdsched.exe" -Wait -NoNewWindow -ErrorAction Stop
@@ -5451,21 +5457,21 @@ function Enable-PrivacyHardening {
     if ($PSCmdlet.ShouldProcess("ajustes de privacidade agressiva", "aplicar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Configurando telemetria..." -PercentComplete 20
-            if (-not $WhatIf) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null }
+            if (-not (Test-ModoSimulacao)) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null }
             else { Write-Log "Modo WhatIf: Telemetria seria desativada via reg.exe." -Type Debug }
 
             Grant-WriteProgress -Activity $activity -Status "Configurando ID de publicidade..." -PercentComplete 40
-            if (-not $WhatIf) { reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f | Out-Null }
+            if (-not (Test-ModoSimulacao)) { reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f | Out-Null }
             else { Write-Log "Modo WhatIf: ID de publicidade seria desativada." -Type Debug }
 
             Grant-WriteProgress -Activity $activity -Status "Restringindo personalização de entrada..." -PercentComplete 60
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitTextCollection /t REG_DWORD /d 1 /f | Out-Null
                 reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization" /v RestrictImplicitInkCollection /t REG_DWORD /d 1 /f | Out-Null
             } else { Write-Log "Modo WhatIf: Restrições de personalização de entrada seriam aplicadas." -Type Debug }
 
             Grant-WriteProgress -Activity $activity -Status "Desativando coleta de contatos..." -PercentComplete 80
-            if (-not $WhatIf) { reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /t REG_DWORD /d 0 /f | Out-Null }
+            if (-not (Test-ModoSimulacao)) { reg.exe add "HKCU\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" /v HarvestContacts /t REG_DWORD /d 0 /f | Out-Null }
             else { Write-Log "Modo WhatIf: Coleta de contatos seria desativada." -Type Debug }
 
             Write-Log "Privacidade agressiva aplicada com sucesso." -Type Success
@@ -5489,26 +5495,26 @@ function Disable-Cortana-AndSearch {
     if ($PSCmdlet.ShouldProcess("Cortana e Busca do Windows", "desativar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Desativando Cortana via registro..." -PercentComplete 10
-            if (-not $WhatIf) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f | Out-Null }
+            if (-not (Test-ModoSimulacao)) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f | Out-Null }
             else { Write-Log "Modo WhatIf: Cortana seria desativada via registro." -Type Debug }
 
             Grant-WriteProgress -Activity $activity -Status "Desativando busca na nuvem via registro..." -PercentComplete 25
-            if (-not $WhatIf) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCloudSearch /t REG_DWORD /d 0 /f | Out-Null }
+            if (-not (Test-ModoSimulacao)) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCloudSearch /t REG_DWORD /d 0 /f | Out-Null }
             else { Write-Log "Modo WhatIf: Busca na nuvem seria desativada." -Type Debug }
 
             Grant-WriteProgress -Activity $activity -Status "Parando e desabilitando serviço Windows Search (WSearch)..." -PercentComplete 50
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 Stop-Service WSearch -Force -ErrorAction SilentlyContinue
                 Set-Service WSearch -StartupType Disabled -ErrorAction SilentlyContinue
                 Write-Log "Serviço WSearch parado e desabilitado." -Type Debug
             } else { Write-Log "Modo WhatIf: Serviço WSearch seria parado e desabilitado." -Type Debug }
 
             Grant-WriteProgress -Activity $activity -Status "Desativando telemetria via registro..." -PercentComplete 75
-            if (-not $WhatIf) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null }
+            if (-not (Test-ModoSimulacao)) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null }
             else { Write-Log "Modo WhatIf: Telemetria seria desativada." -Type Debug }
 
             Grant-WriteProgress -Activity $activity -Status "Desativando relatórios de erro via registro..." -PercentComplete 90
-            if (-not $WhatIf) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\ErrorReporting" /v Disabled /t REG_DWORD /d 1 /f | Out-Null }
+            if (-not (Test-ModoSimulacao)) { reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows\ErrorReporting" /v Disabled /t REG_DWORD /d 1 /f | Out-Null }
             else { Write-Log "Modo WhatIf: Relatórios de erro seriam desativados." -Type Debug }
 
             Write-Log "Cortana, Search, Telemetria e Relatório de Erro desativados com sucesso." -Type Success
@@ -5529,13 +5535,13 @@ function Disable-UAC {
     if ($PSCmdlet.ShouldProcess("UAC", "desativar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Desativando 'EnableLUA' no registro..." -PercentComplete 40
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0 -Force -ErrorAction Stop | Out-Null
             } else {
                 Write-Log "Modo WhatIf: 'EnableLUA' seria definido para 0." -Type Debug
             }
             Grant-WriteProgress -Activity $activity -Status "Definindo 'ConsentPromptBehaviorAdmin' para 0..." -PercentComplete 70
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "ConsentPromptBehaviorAdmin" -Value 0 -Force -ErrorAction Stop | Out-Null
             } else {
                 Write-Log "Modo WhatIf: 'ConsentPromptBehaviorAdmin' seria definido para 0." -Type Debug
@@ -5560,7 +5566,7 @@ function Disable-ActionCenter-Notifications {
     if ($PSCmdlet.ShouldProcess("Action Center e Notificações", "desativar")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Desativando Notification Center via registro..." -PercentComplete 30
-            if (-not $WhatIf) {
+            if (-not (Test-ModoSimulacao)) {
                 reg.exe add "HKCU\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
                 reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 0 /f | Out-Null
                 reg.exe add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f | Out-Null
@@ -5706,7 +5712,7 @@ function Grant-PrivacyAndBloatwarePrevention {
                 Grant-WriteProgress -Activity $activity -Status "Desativando Wi-Fi Sense..." -PercentComplete (($currentStep / $totalSteps) * 100)
                 Write-Log "Desativando Wi-Fi Sense..." -Type Info
                 try {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features" -Name "AutoConnectOpenHotspots" -Value 0 -Force -ErrorAction Stop
                         Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\features" -Name "AutoConnectSuggestedOpenHotspots" -Value 0 -Force -ErrorAction Stop
                         Write-Log "Wi-Fi Sense desativado." -Type Success
@@ -5724,7 +5730,7 @@ function Grant-PrivacyAndBloatwarePrevention {
                 Grant-WriteProgress -Activity $activity -Status "Desativando ID de publicidade..." -PercentComplete (($currentStep / $totalSteps) * 100)
                 Write-Log "Desativando ID de publicidade..." -Type Info
                 try {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0 -Force -ErrorAction Stop
                         Write-Log "ID de publicidade desativado." -Type Success
                     } else {
@@ -5740,7 +5746,7 @@ function Grant-PrivacyAndBloatwarePrevention {
                 Grant-WriteProgress -Activity $activity -Status "Desativando Cortana..." -PercentComplete (($currentStep / $totalSteps) * 100)
                 Write-Log "Desativando Cortana..." -Type Info
                 try {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "AllowCortana" -Value 0 -Force -ErrorAction Stop
                         Write-Log "Cortana desativada." -Type Success
                     } else {
@@ -5756,7 +5762,7 @@ function Grant-PrivacyAndBloatwarePrevention {
                 Grant-WriteProgress -Activity $activity -Status "Desativando solicitações de feedback..." -PercentComplete (($currentStep / $totalSteps) * 100)
                 Write-Log "Desativando solicitações de feedback..." -Type Info
                 try {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Siuf\Rules" -Name "Period" -Value 0 -Force -ErrorAction Stop
                         Write-Log "Solicitações de feedback desativadas." -Type Success
                     } else {
@@ -5772,7 +5778,7 @@ function Grant-PrivacyAndBloatwarePrevention {
                 Grant-WriteProgress -Activity $activity -Status "Desativando conteúdo sugerido..." -PercentComplete (($currentStep / $totalSteps) * 100)
                 Write-Log "Desativando conteúdo sugerido..." -Type Info
                 try {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-338387Enabled" -Value 0 -Force -ErrorAction Stop
                         Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContent-338388Enabled" -Value 0 -Force -ErrorAction Stop
                         Write-Log "Conteúdo sugerido desativado." -Type Success
@@ -5789,7 +5795,7 @@ function Grant-PrivacyAndBloatwarePrevention {
                 Grant-WriteProgress -Activity $activity -Status "Desativando atualizações automáticas de apps da Loja..." -PercentComplete (($currentStep / $totalSteps) * 100)
                 Write-Log "Desativando atualizações automáticas de aplicativos da Microsoft Store..." -Type Info
                 try {
-                    if (-not $WhatIf) {
+                    if (-not (Test-ModoSimulacao)) {
                         Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore" -Name "AutoDownload" -Value 2 -Force -ErrorAction Stop # 2 = Desativar
                         Write-Log "Atualizações automáticas da Loja desativadas." -Type Success
                     } else {
@@ -6970,7 +6976,7 @@ function Restore-SystemDefaults {
                     Write-Log "Restaurando: $path - $name = $value" -Type Debug
 
                     try {
-                        if (-not $WhatIf) {
+                        if (-not (Test-ModoSimulacao)) {
                             if ($null -eq $value) {
                                 # $null = valor padrão é ausente: remove (ex.: LaunchTo)
                                 Remove-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue
