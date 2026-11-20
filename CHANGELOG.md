@@ -4,6 +4,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
 ## [Não lançado] - GUI repaginada
 
+### Rotina Colégio reestruturada
+- `Invoke-Colegio` agora faz uma pré-checagem (administrador, 5 GB livres, bateria, internet e reinício pendente) e roda as etapas de `Get-ColegioEtapas`, na ordem: segurança, atualizações, remoções, privacidade, ajustes, limpeza por último e relatório. A lista é a fonte única da rotina e da GUI (`Show-ColegioEtapas` mostra as etapas sem executar).
+- `Invoke-RotinaEtapas` registra o resultado real de cada etapa (OK, FALHOU, PULADA, SIMULADA, AUSENTE), contando exceções e erros escritos no log, e termina com o resumo e o caminho do log. Nunca reinicia sozinha.
+- Desatendida por padrão: `-Wifi` (janela de senha), `-Apps` (seletor de apps) e `-Personalizacao` (menu clássico, tema escuro, sudo, relógio com segundos, histórico da área de transferência) são opcionais.
+- Fora da rotina por decisão: `Grant-ExtraTweaks`, `Set-DnsGoogleCloudflare` e `Grant-HardenOfficeMacros` (as funções continuam existindo). `Disable-IPv6` fica. Removidos da rotina: o ponto de restauração duplicado, o backup duplicado e `New-FolderForced C:\SCript`.
+- `Write-Log` passa a contar erros para o executor saber se uma etapa falhou.
 ### Adicionado
 - `Invoke-UninstallReview` e categoria "Desinstalações" na GUI: lê apps da Store (todas as contas), programas que vêm com o notebook, programas instalados e programas do usuário atual, tudo com checkbox vazio; remove em modo silencioso só o que for marcado. Aceita `-SomenteRelatorio` e `-Itens`. Sem administrador, lista só a conta atual e avisa.
 - Categoria "Scripts externos" na GUI com Atualizar pela URL, Chris Titus Toolbox e Ativador get.activated.win. As funções e o menu de texto (J) continuam como estavam; só não apareciam no catálogo da GUI.
