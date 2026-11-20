@@ -2076,13 +2076,10 @@ function Remove-SystemBloatware {
         # Geralmente são os nomes das famílias de pacotes ou partes deles.
         [Parameter(Mandatory=$false)]
         [string[]]$AppxBloatwareToRemove = @(
-            "*Bing*",
-            "*Edge*", # Cuidado: desinstala o Edge
-            "*News*",
-            "*Weather*",
+            "Microsoft.Bing*", # BingNews, BingWeather, BingSearch etc.
             "*GetHelp*",
             "*GetStarted*",
-            "*Maps*",
+            "Microsoft.WindowsMaps",
             "*SkypeApp*",
             "*SolitaireCollection*",
             "*StickyNotes*",
@@ -2092,17 +2089,11 @@ function Remove-SystemBloatware {
             "*Xbox*",
             "*ZuneMusic*",
             "*ZuneVideo*",
-            "*AppInstaller*",
-            "*VP9VideoExtensions*",
-            "*WebMediaExtensions*",
-            "*HEVCVideoExtension*",
-            "*MSN.",
             "*OfficeHub*",
-            "*OneNote*",
+            "Microsoft.Office.OneNote",
             "*Paint3D*",
-            "*People*",
+            "Microsoft.People",
             "*Print3D*",
-            "*ScreenSketch*",
             "*MixedRealityPortal*",
             "*ConnectivityStore*",
             "*DolbyAccess*",
@@ -2113,21 +2104,25 @@ function Remove-SystemBloatware {
             "*Instagram*",
             "*Facebook*",
             "*Twitter*",
-            "*Microsoft.StorePurchaseApp*",
             "*WindowsDefaultLockScreen*",
-            "*WindowsMaps*",
             "*WindowsMail*",
             "*Microsoft.GamingApp*",
             "*GamingServices*",
             "*Windows.ContactSupport*",
-            "*Microsoft.Windows.Photos.Addon*",
             "*LinkedIn*",
             "*OutlookForWindows*"
         ),
         # Lista de aplicativos AppX/UWP a serem MANTIDOS, mesmo que correspondam a um padrão em $AppxBloatwareToRemove.
         [Parameter(Mandatory=$false)]
         [string[]]$AppxWhitelist = @(
-            "Microsoft.DesktopAppInstaller",
+            "Microsoft.DesktopAppInstaller", # winget
+            "Microsoft.HEVCVideoExtension", # codecs
+            "Microsoft.HEIFImageExtension",
+            "Microsoft.AV1VideoExtension",
+            "Microsoft.RawImageExtension",
+            "Microsoft.VP9VideoExtensions",
+            "Microsoft.WebMediaExtensions",
+            "Microsoft.WebpImageExtension",
             "Microsoft.LockApp",
             "Microsoft.NET.Native.Framework.2.2", # Exemplo de versão, você pode precisar ajustar para *
             "Microsoft.NET.Native.Runtime.2.2", # Exemplo de versão, você pode precisar ajustar para *
@@ -2136,7 +2131,13 @@ function Remove-SystemBloatware {
             "Microsoft.UI.Xaml.2.8", # Exemplo de versão, você pode precisar ajustar para *
             "Microsoft.VCLibs.140.00", # Exemplo de versão, você pode precisar ajustar para *
             "Microsoft.Windows.Photos",
+            "Microsoft.Photos",
+            "Microsoft.SecHealthUI", # Defender
             "Microsoft.Windows.SecHealthUI",
+            "Microsoft.WindowsAppRuntime",
+            "Microsoft.WindowsStore",
+            "Microsoft.StorePurchaseApp",
+            "Microsoft.ScreenSketch",
             "Microsoft.Windows.ShellExperienceHost",
             "Microsoft.Windows.StartMenuExperienceHost",
             "Microsoft.WindowsAlarms",
@@ -2157,7 +2158,6 @@ function Remove-SystemBloatware {
             "Microsoft To Do",
             "Notas Autoadesivas",
             "Outlook", # Novo Outlook para Windows (UWP)
-            "Paleta de Comandos", # Assumindo Windows Terminal
             "Solitaire Collection",
             "Xbox" # Diversos apps Xbox
             # Adicione outros apps que você queira desinstalar especificamente via Winget ou AppX se não forem pegos pelos padrões genéricos
@@ -2165,6 +2165,9 @@ function Remove-SystemBloatware {
         # Se True, tenta remover o OneDrive completamente.
         [Parameter(Mandatory=$false)]
         [switch]$RemoveOneDrive,
+        # Confirma a remoção do OneDrive quando ScriptConfig.ConfirmBeforeDestructive está ativo (sem Read-Host, seguro para GUI).
+        [Parameter(Mandatory=$false)]
+        [switch]$ConfirmarOneDrive,
         # Se True, tenta desabilitar o Windows Recall (se presente).
         [Parameter(Mandatory=$false)]
         [switch]$DisableWindowsRecall,
@@ -2186,6 +2189,13 @@ function Remove-SystemBloatware {
     if (-not (Get-Command Safe-WriteProgress -ErrorAction SilentlyContinue)) {
         Write-Log "Função 'Safe-WriteProgress' não encontrada. O progresso não será exibido." -Type Warning
         function Safe-WriteProgress { param($Activity,$Status,$PercentComplete) Write-Host "$Activity - $Status ($PercentComplete%)" }
+    }
+
+    # Devolve $true se o NOME do pacote está protegido pela whitelist (comparação por nome, com curinga).
+    $emWhitelist = {
+        param([string]$Nome)
+        foreach ($w in $AppxWhitelist) { if ($Nome -like $w -or $Nome -like "$w*") { return $true } }
+        return $false
     }
 
     if ($PSCmdlet.ShouldProcess("bloatware do sistema", "remover")) {
@@ -2212,9 +2222,14 @@ function Remove-SystemBloatware {
                 $procCount++
                 try {
                     if (-not $WhatIf) {
-                        Get-Process -Name "$proc*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-                        if ($LASTEXITCODE -eq 0) {
-                            Write-Log "Processo '$proc' encerrado." -Type Verbose
+                        $alvos = @(Get-Process -Name "$proc*" -ErrorAction SilentlyContinue)
+                        if ($alvos.Count -gt 0) {
+                            try {
+                                $alvos | Stop-Process -Force -ErrorAction Stop
+                                Write-Log "Processo '$proc' encerrado." -Type Verbose
+                            } catch {
+                                Write-Log "Falha ao encerrar '$proc': $($_.Exception.Message)" -Type Warning
+                            }
                         }
                     } else {
                         Write-Log "Modo WhatIf: Processo '$proc' seria encerrado." -Type Debug
@@ -2231,19 +2246,14 @@ function Remove-SystemBloatware {
                 Safe-WriteProgress -Activity $activity -Status "Removendo OneDrive completamente..." -PercentComplete (($overallStep / $totalOverallSteps) * 100)
                 Write-Log "Iniciando remoção completa do OneDrive..." -Type Info
 
-                # --- Verificação de confirmação (se $ScriptConfig.ConfirmationRequired estiver definido e for True) ---
-                # A variável $ScriptConfig não foi fornecida nas funções, então assumo que é global ou definida externamente.
-                # Se não for, esta verificação será ignorada ou causará um erro de variável indefinida.
-                if ((Get-Variable -Name ScriptConfig -ErrorAction SilentlyContinue) -and $ScriptConfig.ConfirmationRequired) {
-                    Write-Log "AVISO: A remoção do OneDrive é irreversível e pode afetar a sincronização de arquivos." -Type Warning
-                    $confirm = Read-Host "Tem certeza que deseja prosseguir com a remoção do OneDrive? (s/n)"
-                    if ($confirm -ne 's') {
-                        Write-Log "Remoção do OneDrive cancelada pelo usuário." -Type Info
-                        # Pula o restante da remoção do OneDrive e vai para a próxima seção
-                        $overallStep++ # Para garantir que o progresso continue
-                        continue
-                    }
+                # Confirmação (chave real: ConfirmBeforeDestructive). Sem Read-Host: a GUI chama esta função.
+                # Sem -ConfirmarOneDrive, a remoção do OneDrive é ignorada (a etapa é irreversível).
+                $onedriveAutorizado = $true
+                if ((Get-Variable -Name ScriptConfig -ErrorAction SilentlyContinue) -and $ScriptConfig.ConfirmBeforeDestructive -and -not $ConfirmarOneDrive) {
+                    Write-Log "A remoção do OneDrive é irreversível. Ignorada: use -ConfirmarOneDrive para confirmar." -Type Warning
+                    $onedriveAutorizado = $false
                 }
+                if ($onedriveAutorizado) {
 
                 $onedriveSubSteps = 3 # Desinstalar, Remover pastas, Limpar registro
                 $currentOnedriveStep = 1
@@ -2276,9 +2286,15 @@ function Remove-SystemBloatware {
                     $onedriveUserPath = Join-Path -Path $profile.FullName -ChildPath "OneDrive"
                     $onedriveLocalAppData = Join-Path -Path $profile.FullName -ChildPath "AppData\Local\Microsoft\OneDrive"
                     if (-not $WhatIf) {
-                        if (Test-Path $onedriveUserPath) {
-                            Remove-Item -Path $onedriveUserPath -Recurse -Force -ErrorAction SilentlyContinue
-                            Write-Log "Removido pasta OneDrive de $($profile.BaseName)." -Type Debug
+                        if (Test-Path -LiteralPath $onedriveUserPath) {
+                            # Nunca apaga dados: só remove a pasta se estiver vazia.
+                            $temArquivos = Get-ChildItem -LiteralPath $onedriveUserPath -Force -ErrorAction SilentlyContinue | Select-Object -First 1
+                            if ($temArquivos) {
+                                Write-Log "Pasta OneDrive de $($profile.BaseName) contém arquivos; mantida." -Type Warning
+                            } else {
+                                Remove-Item -LiteralPath $onedriveUserPath -Force -ErrorAction SilentlyContinue
+                                Write-Log "Removida pasta OneDrive vazia de $($profile.BaseName)." -Type Debug
+                            }
                         }
                         if (Test-Path $onedriveLocalAppData) {
                             Remove-Item -Path $onedriveLocalAppData -Recurse -Force -ErrorAction SilentlyContinue
@@ -2315,13 +2331,14 @@ function Remove-SystemBloatware {
                 }
                 if (-not $WhatIf) {
                     try {
-                        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "OneDrive" -Value "" -ErrorAction SilentlyContinue
+                        Remove-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "OneDrive" -ErrorAction SilentlyContinue
                         Write-Log "Desativado início automático do OneDrive." -Type Debug
                     } catch { Write-Log "Falha ao desativar início automático do OneDrive: $($_.Exception.Message)" -Type Warning }
                 } else {
                     Write-Log "Modo WhatIf: Início automático do OneDrive seria desativado." -Type Debug
                 }
                 Write-Log "Remoção completa do OneDrive concluída." -Type Success
+                } # End if $onedriveAutorizado
             } # End if $RemoveOneDrive
             $overallStep++
 
@@ -2338,17 +2355,16 @@ function Remove-SystemBloatware {
                 Write-Log "Processando AppX (Remove-AppxPackage): '$appPattern'" -Type Verbose
                 # Lógica de Test-ShouldRemovePackage integrada:
                 # Verifica se o pacote NÃO está na whitelist.
-                if ($AppxWhitelist -notcontains $appPattern) {
+                # A whitelist vale sobre o NOME de cada pacote encontrado (não sobre o padrão).
+                if ($true) {
                     try {
-                        $packages = Get-AppxPackage -AllUsers -Name "*$appPattern*" -ErrorAction SilentlyContinue
-                        if ($null -ne $packages -and $packages.Count -gt 0) {
+                        $packages = @(Get-AppxPackage -AllUsers -Name $appPattern -ErrorAction SilentlyContinue | Where-Object { -not (& $emWhitelist $_.Name) })
+                        if ($packages.Count -gt 0) {
                             foreach ($pkg in $packages) {
                                 Write-Log "Removendo AppX $($pkg.Name) (Full Name: $($pkg.PackageFullName)) para todos os usuários..." -Type Info
                                 if (-not $WhatIf) {
-                                    Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-                                    if ($LASTEXITCODE -ne 0) {
-                                        Write-Log "Falha ao remover AppX $($pkg.Name)." -Type Warning
-                                    }
+                                    try { Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop }
+                                    catch { Write-Log "Falha ao remover AppX $($pkg.Name): $($_.Exception.Message)" -Type Warning }
                                 }
                             }
                         } else {
@@ -2357,8 +2373,6 @@ function Remove-SystemBloatware {
                     } catch {
                         Write-Log "ERRO (Get/Remove-AppxPackage) para '$appPattern': $($_.Exception.Message)" -Type Error
                     }
-                } else {
-                    Write-Log "Aplicativo AppX '$appPattern' está na whitelist. Pulando remoção (Get-AppxPackage)." -Type Info
                 }
             }
             $currentAppxSubStep++
@@ -2368,17 +2382,15 @@ function Remove-SystemBloatware {
             foreach ($appPattern in $AppxBloatwareToRemove) {
                 Write-Log "Processando provisionamento (Remove-AppxProvisionedPackage): '$appPattern'" -Type Verbose
                 # Lógica de Test-ShouldRemovePackage integrada para provisionamento
-                if ($AppxWhitelist -notcontains $appPattern) {
+                if ($true) {
                     try {
-                        $provisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object DisplayName -like "*$appPattern*"
-                        if ($null -ne $provisioned -and $provisioned.Count -gt 0) {
+                        $provisioned = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like $appPattern -and -not (& $emWhitelist $_.DisplayName) })
+                        if ($provisioned.Count -gt 0) {
                             foreach ($prov in $provisioned) {
                                 Write-Log "Removendo provisionamento $($prov.DisplayName) (PackageName: $($prov.PackageName))..." -Type Info
                                 if (-not $WhatIf) {
-                                    Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction SilentlyContinue
-                                    if ($LASTEXITCODE -ne 0) {
-                                        Write-Log "Falha ao remover provisionamento $($prov.DisplayName)." -Type Warning
-                                    }
+                                    try { Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction Stop | Out-Null }
+                                    catch { Write-Log "Falha ao remover provisionamento $($prov.DisplayName): $($_.Exception.Message)" -Type Warning }
                                 }
                             }
                         } else {
@@ -2387,8 +2399,6 @@ function Remove-SystemBloatware {
                     } catch {
                         Write-Log "ERRO (Get/Remove-AppxProvisionedPackage) para '$appPattern': $($_.Exception.Message)" -Type Error
                     }
-                } else {
-                    Write-Log "Aplicativo AppX '$appPattern' está na whitelist. Pulando provisionamento." -Type Info
                 }
             }
             Write-Log "Remoção de bloatware AppX/UWP genéricos concluída." -Type Success
@@ -2411,7 +2421,6 @@ function Remove-SystemBloatware {
                     "Microsoft To Do"       { "*MicrosoftToDo*" }
                     "Notas Autoadesivas"    { "*Microsoft.MicrosoftStickyNotes*" }
                     "Outlook"               { "*Microsoft.OutlookForWindows*" }
-                    "Paleta de Comandos"    { "*Microsoft.WindowsTerminal*" }
                     "Solitaire Collection"  { "*MicrosoftSolitaireCollection*" }
                     "Xbox"                  { "*Microsoft.XboxApp*" ; "*Microsoft.XboxGamingOverlay*" ; "*Microsoft.XboxIdentityProvider*" ; "*Microsoft.XboxSpeechToTextOverlay*" ; "*Microsoft.GamingServices*" }
                     default                 { "*$appDisplayName*" }
@@ -2423,14 +2432,15 @@ function Remove-SystemBloatware {
                     foreach ($pattern in $appxNamePattern) {
                         $packagesToRemoveSpecific += Get-AppxPackage -AllUsers -Name $pattern -ErrorAction SilentlyContinue
                     }
-                    $packagesToRemoveSpecific = $packagesToRemoveSpecific | Select-Object -Unique PackageFullName
+                    # Whitelist por nome do pacote; Sort-Object -Unique mantém o objeto (Name etc.)
+                    $packagesToRemoveSpecific = @($packagesToRemoveSpecific | Where-Object { -not (& $emWhitelist $_.Name) } | Sort-Object PackageFullName -Unique)
 
                     if ($null -ne $packagesToRemoveSpecific -and $packagesToRemoveSpecific.Count -gt 0) {
                         foreach ($pkg in $packagesToRemoveSpecific) {
                             Write-Log "Removendo AppX específico $($pkg.Name) (Full Name: $($pkg.PackageFullName)) para todos os usuários..." -Type Verbose
                             if (-not $WhatIf) {
-                                Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
-                                if ($LASTEXITCODE -ne 0) { Write-Log "Falha ao remover AppX específico $($pkg.Name)." -Type Warning }
+                                try { Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop }
+                                catch { Write-Log "Falha ao remover AppX específico $($pkg.Name): $($_.Exception.Message)" -Type Warning }
                             }
                         }
                     } else { Write-Log "Nenhum pacote AppX específico encontrado para '$appDisplayName'." -Type Debug }
@@ -2442,14 +2452,14 @@ function Remove-SystemBloatware {
                     foreach ($pattern in $appxNamePattern) {
                         $provisionedPackagesToRemoveSpecific += Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object DisplayName -like $pattern
                     }
-                    $provisionedPackagesToRemoveSpecific = $provisionedPackagesToRemoveSpecific | Select-Object -Unique PackageName
+                    $provisionedPackagesToRemoveSpecific = @($provisionedPackagesToRemoveSpecific | Where-Object { -not (& $emWhitelist $_.DisplayName) } | Sort-Object PackageName -Unique)
 
                     if ($null -ne $provisionedPackagesToRemoveSpecific -and $provisionedPackagesToRemoveSpecific.Count -gt 0) {
                         foreach ($prov in $provisionedPackagesToRemoveSpecific) {
                             Write-Log "Removendo provisionamento de aplicativo específico $($prov.DisplayName) (PackageName: $($prov.PackageName))..." -Type Verbose
                             if (-not $WhatIf) {
-                                Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction SilentlyContinue
-                                if ($LASTEXITCODE -ne 0) { Write-Log "Falha ao remover provisionamento de aplicativo específico $($prov.DisplayName)." -Type Warning }
+                                try { Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction Stop | Out-Null }
+                                catch { Write-Log "Falha ao remover provisionamento de aplicativo específico $($prov.DisplayName): $($_.Exception.Message)" -Type Warning }
                             }
                         }
                     } else { Write-Log "Nenhum provisionamento de aplicativo específico encontrado para '$appDisplayName'." -Type Debug }
@@ -2465,13 +2475,17 @@ function Remove-SystemBloatware {
                         }
                         foreach ($id in $wingetId) {
                             Write-Log "Tentando desinstalar '$id' via Winget para '$appDisplayName'..." -Type Verbose
-                            $wingetResult = winget uninstall $id --silent --force -e -h -ErrorAction SilentlyContinue
+                            if ($WhatIf) { Write-Log "Modo WhatIf: '$id' seria desinstalado via Winget." -Type Debug; continue }
+                            # Zera o código de saída para que $LASTEXITCODE reflita só o winget; -ErrorAction não vale para exe nativo.
+                            $global:LASTEXITCODE = 0
+                            $wingetResult = & winget.exe uninstall --id $id --exact --silent --disable-interactivity 2>&1
+                            $wingetSaida = ($wingetResult | Out-String)
                             if ($LASTEXITCODE -eq 0) {
                                 Write-Log "'$id' desinstalado via Winget com sucesso." -Type Success
-                            } elseif ($wingetResult -like "*No installed package found matching the input criteria*") {
+                            } elseif ($wingetSaida -match 'No installed package|Nenhum pacote instalado|No package found|Nenhum pacote encontrado') {
                                 Write-Log "'$id' não encontrado via Winget." -Type Debug
                             } else {
-                                Write-Log "Winget falhou ou encontrou um erro para '$id': $wingetResult" -Type Warning
+                                Write-Log "Winget falhou (código $LASTEXITCODE) para '$id': $wingetSaida" -Type Warning
                             }
                         }
                     } else { Write-Log "Winget não encontrado. Pulando tentativa de desinstalação via Winget para '$appDisplayName'." -Type Debug }
@@ -3972,43 +3986,105 @@ function Show-CheckboxPicker {
     return $script:selecaoBloat
 }
 
+function Get-BloatwareUninstallCommand {
+    # Interpreta a string de desinstalação de um programa Win32 (registro) e devolve como executar sem janela.
+    # Só interpreta (não executa nada). Devolve: Tipo ('Msi' | 'Exe' | $null), Exe, Args, Motivo (quando não dá para automatizar).
+    # Regras: MSI exige GUID válido (usa /x); Inno (unins*.exe) ganha /VERYSILENT; demais só rodam se a string
+    # (de preferência QuietUninstallString) já trouxer argumento silencioso. Nunca inventa /S.
+    [CmdletBinding()]
+    param(
+        [string]$Texto,
+        [switch]$Silenciosa   # $true quando a string veio de QuietUninstallString
+    )
+    $r = [pscustomobject]@{ Tipo = $null; Exe = $null; Args = $null; Motivo = $null }
+    if ([string]::IsNullOrWhiteSpace($Texto)) { $r.Motivo = 'string de desinstalação vazia'; return $r }
+
+    if ($Texto -match '(?i)msiexec') {
+        $guid = [regex]::Match($Texto, '\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}').Value
+        if (-not $guid) { $r.Motivo = 'sem GUID MSI válido'; return $r }
+        $r.Tipo = 'Msi'; $r.Exe = 'msiexec.exe'; $r.Args = "/x $guid /qn /norestart"
+        return $r
+    }
+
+    # Separa executável e argumentos reais (com ou sem aspas)
+    $exe = $null; $argumentos = ''
+    if ($Texto -match '^\s*"([^"]+)"\s*(.*)$')           { $exe = $Matches[1]; $argumentos = $Matches[2] }
+    elseif ($Texto -match '^\s*(.+?\.exe)(?:\s+(.*))?$') { $exe = $Matches[1]; $argumentos = [string]$Matches[2] }
+    if (-not $exe) { $r.Motivo = 'string de desinstalação não reconhecida'; return $r }
+    if ($exe -match '(?i)(^|\\)rundll32\.exe$') { $r.Motivo = 'desinstalador via rundll32 (não silencioso)'; return $r }
+
+    $silencioso = $Silenciosa.IsPresent -or ($argumentos -match '(?i)(^|\s)[/-](very)?silent(\s|$)|(^|\s)[/-]quiet(\s|$)|(^|\s)/qn(\s|$)|(^|\s)/S(\s|$)')
+    if (-not $silencioso -and $exe -match '(?i)(^|\\)unins\d*\.exe$') {
+        # Inno Setup
+        $argumentos = ($argumentos + ' /VERYSILENT /NORESTART /SUPPRESSMSGBOXES').Trim()
+        $silencioso = $true
+    }
+    if (-not $silencioso) { $r.Motivo = 'sem desinstalação silenciosa; remova manualmente'; return $r }
+    $r.Tipo = 'Exe'; $r.Exe = $exe; $r.Args = $argumentos
+    return $r
+}
+
 function Invoke-BloatwareReview {
     [CmdletBinding(SupportsShouldProcess = $true)]
     # 1) Varre apps Appx (todas as contas) e programas Win32 instalados.
     # 2) Mostra o relatório com checkbox (marcados os que costumam ser bloatware de fornecedor/consumo).
     # 3) Remove só o que foi marcado. Gera o relatório em texto em C:\ScriptsLogs.
-    param()
+    # Modo sem tela: -SomenteRelatorio só gera o relatório; -Itens remove os nomes informados sem abrir a janela.
+    # Sessão não interativa sem -Itens também só gera o relatório (nunca trava esperando janela).
+    param(
+        [string[]]$Itens,
+        [switch]$SomenteRelatorio
+    )
     Write-Log -Message "Varredura de bloatware: montando o relatório..." -Type Info
 
-    # Nunca mostrar componentes do Windows, Store, runtimes ou drivers
-    $nucleo = '^Microsoft\.Windows\.|^Microsoft\.Store|^Microsoft\.Desktop|^Microsoft\.UI|^Microsoft\.VCLibs|^Microsoft\.NET|^Microsoft\.SecHealthUI|^Microsoft\.AAD|^MicrosoftWindows\.Client|^Microsoft\.Winget|^Windows\.|^Microsoft\.Services\.Store|^Microsoft\.Xaml|^Microsoft\.AsyncText|^Microsoft\.Accounts|^Microsoft\.Credential|^Microsoft\.Bio|^Microsoft\.ECApp|^Microsoft\.LockApp|^Microsoft\.CloudExperience|^Microsoft\.Win32|^Microsoft\.Authentication'
-    # Marcados por padrão (podem ser desmarcados na janela)
-    $marcarPorPadrao = 'Bing|News|Weather|GetHelp|GetStarted|Maps|Solitaire|Clipchamp|Xbox|ZuneMusic|ZuneVideo|YourPhone|Phone|Feedback|Todos|Whiteboard|DevHome|Family|CrossDevice|MSTeams|OfficeHub|OutlookForWindows|PowerAutomate|Journal|MixedReality|Dropbox|Dolby|Lenovo|McAfee|Copilot|Edge\.GameAssist|Spotify|Netflix|TikTok|Facebook|Instagram|LinkedIn|Wallet|Skype|People|Paint3D|Print3D'
-    $fornecedorWin32 = 'McAfee|WebAdvisor|Copilot|Lenovo|Smart Connect|Dropbox|Teams'
+    # Nunca mostrar componentes do Windows, Store, Terminal, Calculadora, codecs, runtimes ou drivers
+    $nucleo = '^Microsoft\.Windows\.(?!DevHome)|^Microsoft\.Store|^Microsoft\.Desktop|^Microsoft\.UI|^Microsoft\.VCLibs|^Microsoft\.NET|^Microsoft\.SecHealthUI|^Microsoft\.AAD|^MicrosoftWindows\.Client|^Microsoft\.Winget|^Windows\.|^Microsoft\.Services\.Store|^Microsoft\.Xaml|^Microsoft\.AsyncText|^Microsoft\.Accounts|^Microsoft\.Credential|^Microsoft\.Bio|^Microsoft\.ECApp|^Microsoft\.LockApp|^Microsoft\.CloudExperience|^Microsoft\.Win32|^Microsoft\.Authentication' +
+              '|^Microsoft\.Windows(Store|Terminal|Calculator|Notepad|Camera|Alarms|SoundRecorder|AppRuntime|Photos)|^Microsoft\.(Photos|Paint|ScreenSketch|MSPaint)\b|^Microsoft\.WindowsAppRuntime|^MicrosoftCorporationII\.WinAppRuntime|^Microsoft\.(HEVC|VP9|Webp|WebMedia|HEIF|AV1|RawImage)\w*Extension|^NVIDIACorp\.|^RealtekSemiconductorCorp\.|^Microsoft\.MicrosoftEdge|^Microsoft\.Edge(?!\.GameAssist)'
+    # Marcados por padrão (podem ser desmarcados na janela). Nomes inteiros, sem substrings amplas
+    # (Phone, Family, Maps, People, Lenovo, Teams soltos marcavam apps legítimos).
+    $marcarPorPadrao = '^Microsoft\.(BingNews|BingWeather|GetHelp|Getstarted|MicrosoftSolitaireCollection|ZuneMusic|ZuneVideo|YourPhone|WindowsFeedbackHub|MicrosoftOfficeHub|OutlookForWindows|Todos|Whiteboard|MixedReality\.Portal|PowerAutomateDesktop|MicrosoftJournal|Windows\.DevHome|GamingApp|549981C3F5F10)$|^Microsoft\.Xbox|^MicrosoftWindows\.CrossDevice$|^MicrosoftCorporationII\.MicrosoftFamily$|^Clipchamp\.Clipchamp$|^MSTeams$|^MicrosoftTeams$|Dropbox|Dolby|McAfee|Spotify|Netflix|TikTok|Facebook|Instagram|LinkedIn|Skype|Copilot|Microsoft\.Edge\.GameAssist'
+    # Win32: só utilitários de fornecedor/consumo (Lenovo Vantage/Smart Connect, não "Lenovo" solto; Teams, não o Meeting Add-in)
+    $fornecedorWin32 = 'McAfee|WebAdvisor|Copilot|Dropbox|^Lenovo (Vantage|Smart Connect)$|^Microsoft Teams( classic)?$|Teams Machine-Wide Installer'
+    # Win32 nunca listado: redistribuíveis, runtimes, SDKs, drivers e componentes de sistema
+    $ignorarWin32 = 'Redistributable|Visual C\+\+|\.NET|Windows SDK|WebView2|Microsoft Edge|Driver|Update for|Security Update|Hotfix|NVIDIA|Realtek'
 
-    $itens = @()
+    $itensLista = @()
     $vistos = @{}
     foreach ($pac in (Get-AppxPackage -AllUsers | Where-Object { -not $_.IsFramework -and -not $_.NonRemovable })) {
         if ($pac.Name -match $nucleo -or $vistos.ContainsKey($pac.Name)) { continue }
         $vistos[$pac.Name] = $true
         $marcado = [bool]($pac.Name -match $marcarPorPadrao)
-        $itens += [pscustomobject]@{ Texto = "[App] $($pac.Name)"; Valor = [pscustomobject]@{ Tipo = 'Appx'; Nome = $pac.Name; Completo = $pac.PackageFullName }; Marcado = $marcado }
+        $itensLista += [pscustomobject]@{ Texto = "[App] $($pac.Name)"; Valor = [pscustomobject]@{ Tipo = 'Appx'; Nome = $pac.Name; Completo = $pac.PackageFullName }; Marcado = $marcado }
     }
     $chaves = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
-    foreach ($p in (Get-ItemProperty $chaves -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -and $_.UninstallString })) {
-        $marcado = [bool]($p.DisplayName -match $fornecedorWin32)
-        $itens += [pscustomobject]@{ Texto = "[Programa] $($p.DisplayName) $($p.DisplayVersion)"; Valor = [pscustomobject]@{ Tipo = 'Win32'; Nome = $p.DisplayName; Desinstalar = [string]$p.UninstallString }; Marcado = $marcado }
+    $win32 = Get-ItemProperty $chaves -ErrorAction SilentlyContinue | Where-Object {
+        $_.DisplayName -and ($_.UninstallString -or $_.QuietUninstallString) -and
+        $_.SystemComponent -ne 1 -and -not $_.ParentKeyName -and $_.DisplayName -notmatch $ignorarWin32
     }
-    if ($itens.Count -eq 0) { Write-Log -Message "Nenhum aplicativo candidato encontrado." -Type Info; return }
+    foreach ($p in $win32) {
+        $marcado = [bool]($p.DisplayName -match $fornecedorWin32)
+        $itensLista += [pscustomobject]@{ Texto = "[Programa] $($p.DisplayName) $($p.DisplayVersion)"; Valor = [pscustomobject]@{ Tipo = 'Win32'; Nome = $p.DisplayName; Desinstalar = [string]$p.UninstallString; Quieta = [string]$p.QuietUninstallString }; Marcado = $marcado }
+    }
+    if ($itensLista.Count -eq 0) { Write-Log -Message "Nenhum aplicativo candidato encontrado." -Type Info; return }
 
     # Relatório em texto (para arquivo), antes da escolha
     $pastaRel = 'C:\ScriptsLogs'
     New-Item -ItemType Directory -Force -Path $pastaRel | Out-Null
     $rel = Join-Path $pastaRel ("Bloatware_" + $env:COMPUTERNAME + '_' + (Get-Date -Format 'yyyyMMdd-HHmm') + '.txt')
-    $itens | ForEach-Object { ('[{0}] {1}' -f ($(if ($_.Marcado) { 'sugerido' } else { '-' })), $_.Texto) } | Set-Content -LiteralPath $rel -Encoding UTF8
+    $itensLista | ForEach-Object { ('[{0}] {1}' -f ($(if ($_.Marcado) { 'sugerido' } else { '-' })), $_.Texto) } | Set-Content -LiteralPath $rel -Encoding UTF8
     Write-Log -Message "Relatório salvo em $rel" -Type Info
 
-    $escolhidos = Show-CheckboxPicker -Titulo 'Remover aplicativos (marque os que deseja desinstalar)' -Itens $itens
+    if ($SomenteRelatorio) { Write-Log -Message "Modo somente relatório: nada foi removido." -Type Info; return }
+    if ($Itens) {
+        $escolhidos = @($itensLista | Where-Object { $Itens -contains $_.Valor.Nome })
+    }
+    elseif (-not [Environment]::UserInteractive) {
+        Write-Log -Message "Sessão sem tela e sem -Itens: somente relatório, nada foi removido." -Type Warning
+        return
+    }
+    else {
+        $escolhidos = Show-CheckboxPicker -Titulo 'Remover aplicativos (marque os que deseja desinstalar)' -Itens $itensLista
+    }
     if (-not $escolhidos) { Write-Log -Message "Nenhum aplicativo escolhido ou janela cancelada." -Type Info; return }
 
     foreach ($e in $escolhidos) {
@@ -4023,15 +4099,14 @@ function Invoke-BloatwareReview {
                 Write-Log -Message "App removido: $($v.Nome)" -Type Success
             }
             else {
-                $u = $v.Desinstalar
-                if ($u -match 'msiexec') {
-                    $guid = [regex]::Match($u, '\{[0-9A-Fa-f\-]{36}\}').Value
-                    $proc = Start-Process msiexec.exe -ArgumentList "/x $guid /qn /norestart" -Wait -PassThru
-                }
-                else {
-                    $caminho = ($u -replace '^"([^"]+)".*$', '$1') -replace '^([^ ]+\.exe).*$', '$1'
-                    $proc = Start-Process -FilePath $caminho -ArgumentList '/S' -Wait -PassThru
-                }
+                # Prefere a QuietUninstallString; senão usa a UninstallString com os argumentos reais.
+                if ($v.Quieta) { $cmd = Get-BloatwareUninstallCommand -Texto $v.Quieta -Silenciosa }
+                else { $cmd = Get-BloatwareUninstallCommand -Texto $v.Desinstalar }
+                if (-not $cmd.Tipo) { Write-Log -Message "Programa '$($v.Nome)' pulado: $($cmd.Motivo)." -Type Warning; continue }
+                if ($cmd.Tipo -eq 'Exe' -and -not (Test-Path -LiteralPath $cmd.Exe)) { Write-Log -Message "Programa '$($v.Nome)' pulado: executável não encontrado ($($cmd.Exe))." -Type Warning; continue }
+                $proc = Start-Process -FilePath $cmd.Exe -ArgumentList $cmd.Args -PassThru -WindowStyle Hidden
+                # Limite de 15 minutos para não travar o laço se um assistente abrir
+                if (-not $proc.WaitForExit(900000)) { Write-Log -Message "Programa '$($v.Nome)': desinstalador não terminou em 15 minutos; seguindo." -Type Warning; continue }
                 Write-Log -Message "Programa '$($v.Nome)': código de saída $($proc.ExitCode)." -Type Info
             }
         }
@@ -6338,20 +6413,23 @@ function Restore-BloatwareSafe {
 
     foreach ($app in $apps) {
         try {
-            $pkg = Get-AppxPackage -AllUsers -Name $app
-            if ($pkg) {
-                $manifest = Join-Path $pkg.InstallLocation "AppxManifest.xml"
-                if (Test-Path $manifest) {
-                    Add-AppxPackage -DisableDevelopmentMode -Register $manifest
-                    Write-Log "$app reinstalado com sucesso." -Type Success
-                } else {
-                    Write-Log "AppxManifest não encontrado para $app." -Type Error
+            $pkgs = @(Get-AppxPackage -AllUsers -Name $app -ErrorAction SilentlyContinue)
+            if ($pkgs.Count -gt 0) {
+                # Pode haver mais de um pacote (várias contas/versões): trata cada um.
+                foreach ($pkg in $pkgs) {
+                    $manifest = Join-Path $pkg.InstallLocation "AppxManifest.xml"
+                    if (Test-Path -LiteralPath $manifest) {
+                        Add-AppxPackage -DisableDevelopmentMode -Register $manifest -ErrorAction Stop
+                        Write-Log "${app} reinstalado com sucesso." -Type Success
+                    } else {
+                        Write-Log "AppxManifest não encontrado para ${app}." -Type Error
+                    }
                 }
             } else {
                 Write-Log "$app não está instalado. Pulando." -Type Warning
             }
         } catch {
-            Write-Log "❌ Erro ao reinstalar $(app): $_" -Type Error
+            Write-Log "Erro ao reinstalar ${app}: $($_.Exception.Message)" -Type Error
         }
     }
 
@@ -7248,15 +7326,10 @@ function Show-BloatwareMenu {
         Write-Host " A) Aplicar Endurecimento de Privacidade Agressivo"
         Write-Host " B) Aplicar Prevenção de Bloatware e Privacidade"
         Write-Host " C) Desativar Serviços Desnecessários"
-        Write-Host " D) Desativar Tarefas Agendadas de Bloatware"
         Write-Host " E) Desativar Windows Recall"
         Write-Host " F) Forçar Remoção Completa do OneDrive"
-        Write-Host " G) Parar Processos de Bloatware em Execução"
         Write-Host " H) Reforçar Segurança de Macros do Office"
-        Write-Host " I) Remover Aplicativos Pré-instalados (Bloatware)"
-        Write-Host " J) Remover Pastas de Bloatware Seguras"
-        Write-Host " K) Remover Pins do Menu Iniciar e Barra de Tarefas"
-        Write-Host " L) Remover Windows Copilot"
+        Write-Host " I) Remover Aplicativos Pré-instalados (varredura com seleção)"
         Write-Host " Z) Rotina Completa (Executa todas as opções relacionadas)" -ForegroundColor Green
         Write-Host " X) Voltar ao menu anterior" -ForegroundColor Red
         Write-Host "=============================================" -ForegroundColor Cyan
@@ -7266,15 +7339,10 @@ function Show-BloatwareMenu {
             'A' { Enable-PrivacyHardening; Show-SuccessMessage }   # NOVO: função órfã, agora acessível
             'B' { Grant-PrivacyAndBloatwarePrevention; Show-SuccessMessage }
             'C' { Disable-UnnecessaryServices; Show-SuccessMessage }
-            'D' { Invoke-BloatwareReview; Show-SuccessMessage }
             'E' { Disable-WindowsRecall; Show-SuccessMessage }
-            'F' { Invoke-BloatwareReview; Show-SuccessMessage }
-            'G' { Invoke-BloatwareReview; Show-SuccessMessage }
+            'F' { Remove-OneDrive-AndRestoreFolders; Show-SuccessMessage }
             'H' { Grant-HardenOfficeMacros; Show-SuccessMessage }  # NOVO: função órfã, agora acessível
-            'I' { Invoke-BloatwareReview; Show-SuccessMessage } # Assumindo que Invoke-BloatwareReview é a função para isso
-            'J' { Restore-BloatwareSafe; Show-SuccessMessage } # Assumindo que esta remove pastas seguras
-            'K' { Invoke-BloatwareReview; Show-SuccessMessage }
-            'L' { Invoke-BloatwareReview; Show-SuccessMessage }
+            'I' { Invoke-BloatwareReview; Show-SuccessMessage } # Varredura com seleção: cobre apps pré-instalados, Copilot, etc.
             'Z' { Invoke-Bloatware; Show-SuccessMessage } # Chama o orquestrador de Bloatware
             'X' { return }
             default {
