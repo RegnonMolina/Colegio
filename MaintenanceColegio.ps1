@@ -4422,6 +4422,98 @@ function Invoke-BloatwareReview {
     Write-Log -Message "Remoção concluída para os itens marcados." -Type Success
 }
 
+function Invoke-CleanupReview {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    # Varredura de limpeza: lista as áreas que costumam ocupar espaço (temporários, cache do Windows Update,
+    # Windows.old, spooler etc.) com o tamanho de cada uma, e limpa só as marcadas.
+    # Modo sem tela: -SomenteRelatorio só lista; -Itens limpa os Ids informados sem abrir a janela.
+    # Sessão não interativa sem -Itens também só gera o relatório (nunca trava esperando janela).
+    param(
+        [string[]]$Itens,
+        [switch]$SomenteRelatorio
+    )
+    Write-Log -Message "Varredura de limpeza: medindo as áreas..." -Type Info
+
+    # Soma o tamanho de uma pasta (0 se não existir ou sem acesso)
+    $medir = {
+        param([string]$Caminho)
+        if (-not $Caminho -or -not (Test-Path -LiteralPath $Caminho)) { return [int64]0 }
+        $s = (Get-ChildItem -LiteralPath $Caminho -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+        if ($s) { return [int64]$s } else { return [int64]0 }
+    }
+    $formatar = {
+        param([int64]$Bytes)
+        if ($Bytes -ge 1GB) { return ('{0:N2} GB' -f ($Bytes / 1GB)) }
+        if ($Bytes -ge 1MB) { return ('{0:N1} MB' -f ($Bytes / 1MB)) }
+        return ('{0:N0} KB' -f ($Bytes / 1KB))
+    }
+
+    $win = $env:SystemRoot
+    # Id estável (usado em -Itens), rótulo, pasta medida e ação. Em ação com função própria,
+    # a função existente faz a limpeza (com seus cuidados); nas demais esvazia-se o conteúdo da pasta.
+    $areas = @(
+        @{ Id = 'TempUsuario';   Rotulo = 'Temporários do usuário (TEMP)';          Pasta = $env:TEMP;                                  Funcao = $null }
+        @{ Id = 'TempWindows';   Rotulo = 'Temporários do Windows (Windows\Temp)';  Pasta = (Join-Path $win 'Temp');                    Funcao = $null }
+        @{ Id = 'Prefetch';      Rotulo = 'Prefetch (cache de programas)';           Pasta = (Join-Path $win 'Prefetch');                Funcao = 'Clear-Prefetch' }
+        @{ Id = 'CacheWU';       Rotulo = 'Cache do Windows Update (downloads)';     Pasta = (Join-Path $win 'SoftwareDistribution\Download'); Funcao = 'Clear-WUCache' }
+        @{ Id = 'RelatoriosWER'; Rotulo = 'Relatórios de erro do Windows (WER)';     Pasta = (Join-Path $env:ProgramData 'Microsoft\Windows\WER'); Funcao = $null }
+        @{ Id = 'Spooler';       Rotulo = 'Fila do spooler de impressão';            Pasta = (Join-Path $win 'System32\spool\PRINTERS'); Funcao = 'Clear-PrintSpooler' }
+        @{ Id = 'WindowsOld';    Rotulo = 'Windows.old (instalação anterior)';       Pasta = (Join-Path $env:SystemDrive '\Windows.old'); Funcao = 'Remove-WindowsOld' }
+    )
+    $itensLista = @()
+    foreach ($a in $areas) {
+        $existe = $a.Pasta -and (Test-Path -LiteralPath $a.Pasta)
+        if (-not $existe) { continue }
+        $bytes = & $medir $a.Pasta
+        $itensLista += [pscustomobject]@{
+            Texto   = ('[Limpeza] {0}  ({1})' -f $a.Rotulo, (& $formatar $bytes))
+            Valor   = [pscustomobject]@{ Tipo = 'Limpeza'; Nome = $a.Id; Rotulo = $a.Rotulo; Pasta = $a.Pasta; Funcao = $a.Funcao; Bytes = $bytes }
+            Marcado = $false
+        }
+    }
+    if ($itensLista.Count -eq 0) { Write-Log -Message "Nada encontrado para limpar." -Type Info; return }
+
+    # Relatório em texto (para arquivo), antes da escolha
+    $pastaRel = 'C:\ScriptsLogs'
+    New-Item -ItemType Directory -Force -Path $pastaRel | Out-Null
+    $rel = Join-Path $pastaRel ("Limpeza_" + $env:COMPUTERNAME + '_' + (Get-Date -Format 'yyyyMMdd-HHmm') + '.txt')
+    $itensLista | ForEach-Object { $_.Texto } | Set-Content -LiteralPath $rel -Encoding UTF8
+    $itensLista | ForEach-Object { Write-Log -Message $_.Texto -Type Info }
+    Write-Log -Message "Relatório salvo em $rel" -Type Info
+
+    if ($SomenteRelatorio) { Write-Log -Message "Modo somente relatório: nada foi removido." -Type Info; return }
+    if ($Itens) {
+        $escolhidos = @($itensLista | Where-Object { $Itens -contains $_.Valor.Nome })
+    }
+    elseif (-not [Environment]::UserInteractive) {
+        Write-Log -Message "Sessão sem tela e sem -Itens: somente relatório, nada foi removido." -Type Warning
+        return
+    }
+    else {
+        $escolhidos = Show-CheckboxPicker -Titulo 'Limpeza (marque o que deseja limpar)' -Itens $itensLista
+    }
+    if (-not $escolhidos) { Write-Log -Message "Nada escolhido ou janela cancelada." -Type Info; return }
+
+    $liberado = [int64]0
+    foreach ($e in $escolhidos) {
+        $v = $e.Valor
+        if (-not $PSCmdlet.ShouldProcess($v.Rotulo, 'limpar')) { continue }
+        try {
+            if ($v.Funcao) {
+                & $v.Funcao
+            }
+            else {
+                Get-ChildItem -LiteralPath $v.Pasta -Force -ErrorAction SilentlyContinue |
+                    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            $liberado += $v.Bytes
+            Write-Log -Message "Limpo: $($v.Rotulo)" -Type Success
+        }
+        catch { Write-Log -Message "ERRO ao limpar '$($v.Rotulo)': $($_.Exception.Message)" -Type Error }
+    }
+    Write-Log -Message "Limpeza concluída. Espaço estimado liberado: $(& $formatar $liberado)." -Type Success
+}
+
 function Install-NetworkPrinters {
     [CmdletBinding(SupportsShouldProcess = $true)]
     # Filas da unidade 2: TCP/IP porta 9100, com os nomes que já existem nas máquinas da U2.

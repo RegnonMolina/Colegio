@@ -2,6 +2,22 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [Não lançado] - GUI repaginada
+
+### Alterado (Gui.ps1)
+- Painel de status com cartões por rotina (Apps, Bloatware, Completa, Contas, Impressoras, Limpeza, Portáteis, Rede), guardado em `%APPDATA%\ScriptSupremo`.
+- Todas as listas começam com o checkbox vazio; "Executar" roda as marcadas em sequência e mostra ✓ verde ou ✗ vermelho conforme o resultado real (exceção, linha de erro no log ou código de saída diferente de 0; 3010 conta como sucesso).
+- Janela de checkbox única (Show-GuiCheckboxPicker) com Marcar todos e Desmarcar todos; no runspace de fundo substitui Show-CheckboxPicker.
+- Nova categoria Bloatware (varredura, remover padrão, rotina completa) e item "Varredura de limpeza" na categoria Limpeza.
+- Simular (WhatIf) sempre visível, marcado por padrão em ações destrutivas, com resumo e confirmação.
+- Log ao vivo com filtro por nível e exportação em .txt; atalhos Ctrl+F e Enter; temas claro, escuro, automático e alto contraste (verde-petróleo #0f5c56).
+- Sem Read-Host: entradas viram janelas; senhas só em janela mascarada, nunca gravadas.
+- Campos para os parâmetros novos: senhas das contas Suporte e Colégio (SecureString), modo do perfil PowerShell (Básico ou Aprimorado), nome do notebook, modo de atualização do Windows (Listar, Críticas, Todas) e reinício automático (desligado por padrão). Nova ação "Atualizações do Windows (escolher o modo)" usa Grant-WindowsUpdates.
+- Descrições do catálogo sincronizadas com as correções da revisão (PR #2).
+
+### Adicionado (MaintenanceColegio.ps1)
+- `Invoke-CleanupReview` (-Itens, -SomenteRelatorio): lista as áreas de limpeza com tamanho (TEMP, Windows\Temp, Prefetch, cache do Windows Update, WER, spooler, Windows.old) e limpa só as marcadas, respeitando -WhatIf.
+
 ## [2.4.1] - 2026-08-17
 
 ### Removido

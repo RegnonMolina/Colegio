@@ -9,7 +9,7 @@
 # no escopo quando este arquivo roda. Requer WPF (Windows + .NET).
 #
 # Recursos desta versão:
-#  - Painel de status com um cartão por rotina (Apps, Completa, Contas, Impressoras,
+#  - Painel de status com um cartão por rotina (Apps, Bloatware, Completa, Contas, Impressoras,
 #    Limpeza, Portáteis, Rede): última execução e resultado (sucesso, aviso, erro),
 #    guardados em %APPDATA%\ScriptSupremo\gui-status.json. Clicar no cartão abre a ação.
 #  - Janela de checkbox única (Show-GuiCheckboxPicker) para bloatware, apps portáteis,
@@ -168,7 +168,9 @@ function ConvertTo-GuiNivelLog {
 
 # Resultado de uma execução a partir dos níveis do log gerado durante ela.
 function Get-GuiResultadoExec {
-    param([object[]]$Niveis, [bool]$FalhaTecnica)
+    param([object[]]$Niveis, [bool]$FalhaTecnica, [int]$CodigoSaida = 0)
+    # Código de saída diferente de 0 (3010 = sucesso com reinício pendente) também conta como falha.
+    if ($CodigoSaida -ne 0 -and $CodigoSaida -ne 3010) { return 'erro' }
     if ($FalhaTecnica -or ($Niveis -contains 'erro')) { return 'erro' }
     if ($Niveis -contains 'aviso') { return 'aviso' }
     return 'sucesso'
@@ -234,7 +236,7 @@ function Get-GuiActionCatalog {
     @(
         # --- Limpeza ---
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Agendar CHKDSK no reinício';          Func='New-ChkDsk';                  Desc='Executa "chkdsk C: /f /r /x". Como o disco do sistema está em uso, o Windows agenda a verificação para a próxima reinicialização e repara erros e setores defeituosos.'; Destr=$false }
-        [pscustomobject]@{ Cat='Limpeza'; Titulo='Varredura de limpeza (escolher o que remover)'; Func='Invoke-GuiVarreduraLimpeza'; Desc='Lista as pastas de cache e temporários (TEMP do usuário, Windows\Temp, Prefetch, cache do Windows Update e relatórios de erro) com o tamanho de cada uma. Marque o que deseja limpar e confirme: só as pastas marcadas são esvaziadas. Nada é removido antes da confirmação.'; Destr=$true }
+        [pscustomobject]@{ Cat='Limpeza'; Titulo='Varredura de limpeza (escolher o que remover)'; Func='Invoke-CleanupReview'; Desc='Lista as pastas de cache e temporários (TEMP do usuário, Windows\Temp, Prefetch, cache do Windows Update e relatórios de erro) com o tamanho de cada uma. Marque o que deseja limpar e confirme: só as pastas marcadas são esvaziadas. Nada é removido antes da confirmação.'; Destr=$true }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpar arquivos e pastas vazias';     Func='Clear-EmptyFilesAndFolders';  Desc='Remove arquivos de 0 byte e pastas vazias (protege .gitkeep e desktop.ini). Suporta simulação.'; Destr=$true; Params=@(
                                             @{ Nome='Path';             Rotulo='Pastas-raiz (vazio = %TEMP% padrão)'; Tipo='paths';  Default=''; Exemplo='Ex.: D:\Outra Pasta;E:\Downloads (separe várias pastas por ;)'; Pasta=$true }
                                             @{ Nome='IncludeEmptyFiles'; Rotulo='Também remover arquivos de 0 byte';    Tipo='switch'; Default=$true }
@@ -267,9 +269,9 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Forçar remoção do OneDrive';      Func='Remove-OneDrive-AndRestoreFolders'; Desc='Desinstala o OneDrive e restaura Documentos, Imagens, Área de Trabalho e outras pastas para as pastas locais, fora da sincronização.'; Destr=$true }
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Prevenção de bloatware e privacidade'; Func='Grant-PrivacyAndBloatwarePrevention'; Desc='Aplica os ajustes ativados em $ScriptConfig.PrivacyTweaks (ex.: desativar Wi-Fi Sense). Só faz algo para as opções ativadas na configuração do script.'; Destr=$false }
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Reforço de segurança (Defender)';  Func='Enable-WindowsHardening';     Desc='Aplica configurações de segurança do Microsoft Defender (ASR, bloqueio na nuvem, PUA e outras).'; Destr=$false }
-        [pscustomobject]@{ Cat='Privacidade'; Titulo='Varredura de bloatware (escolher o que remover)'; Func='Invoke-BloatwareReview';     Desc='Lista os apps Appx e os programas instalados (sem componentes do Windows) numa janela com checkbox. Os que costumam ser bloatware de fábrica já vêm marcados. Remove só o que você marcar e salva o relatório em C:\ScriptsLogs.'; Destr=$true }
-        [pscustomobject]@{ Cat='Privacidade'; Titulo='Remover bloatware (padrão)';     Func='Remove-SystemBloatware';      Desc='Remove apps pré-instalados que não são do colégio (Bing, News, Weather, Xbox, Solitaire etc.), respeitando a lista de exceções: winget, Terminal, Store, Calculadora, Fotos, Defender e codecs ficam. O Edge não é removido. Pastas do OneDrive só com -ConfirmarOneDrive.'; Destr=$true }
-        [pscustomobject]@{ Cat='Privacidade'; Titulo='Rotina completa de bloatware';    Func='Invoke-Bloatware';            Desc='Roda em sequência: prevenção de bloatware e privacidade, remover bloatware (padrão, sem remover o Edge), desativar serviços desnecessários, desativar Recall, forçar remoção do OneDrive e remover pasta Windows.old.'; Destr=$true }
+        [pscustomobject]@{ Cat='Bloatware'; Titulo='Varredura de bloatware (escolher o que remover)'; Func='Invoke-BloatwareReview';     Desc='Lista os apps Appx e os programas instalados (sem componentes do Windows) numa janela com checkbox. Os que costumam ser bloatware de fábrica já vêm marcados. Remove só o que você marcar e salva o relatório em C:\ScriptsLogs.'; Destr=$true }
+        [pscustomobject]@{ Cat='Bloatware'; Titulo='Remover bloatware (padrão)';     Func='Remove-SystemBloatware';      Desc='Remove apps pré-instalados que não são do colégio (Bing, News, Weather, Xbox, Solitaire etc.), respeitando a lista de exceções: winget, Terminal, Store, Calculadora, Fotos, Defender e codecs ficam. O Edge não é removido. Pastas do OneDrive só com -ConfirmarOneDrive.'; Destr=$true }
+        [pscustomobject]@{ Cat='Bloatware'; Titulo='Rotina completa de bloatware';    Func='Invoke-Bloatware';            Desc='Roda em sequência: prevenção de bloatware e privacidade, remover bloatware (padrão, sem remover o Edge), desativar serviços desnecessários, desativar Recall, forçar remoção do OneDrive e remover pasta Windows.old.'; Destr=$true }
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Segurança de macros do Office';   Func='Grant-HardenOfficeMacros';     Desc='Desabilita macros perigosos do Office (Word, Excel e PowerPoint).'; Destr=$false }
 
         # --- Rede ---
@@ -289,7 +291,10 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Rede'; Titulo='Testar velocidade da internet';         Func='Test-InternetSpeed';          Desc='Instala o Speedtest CLI da Ookla (Ookla.Speedtest.CLI) pelo winget, se ainda não estiver instalado, e roda o teste de download, upload e ping, com tempo limite de 3 minutos e log.'; Destr=$false }
 
         # --- Sistema ---
-        [pscustomobject]@{ Cat='Sistema'; Titulo='Criar contas Suporte e Colégio';    Func='Invoke-ContasEscola';         Desc='Cria a conta Suporte (administradora, para manutenção) e a conta Colégio (padrão, para uso diário), se ainda não existirem. As senhas são digitadas em janelas mascaradas e nunca são gravadas. A conta Colégio só sai dos administradores com a sessão Suporte ativa.'; Destr=$true }
+        [pscustomobject]@{ Cat='Sistema'; Titulo='Criar contas Suporte e Colégio';    Func='Invoke-ContasEscola';         Desc='Cria a conta Suporte (administradora, para manutenção) e a conta Colégio (padrão, para uso diário), se ainda não existirem. As senhas são digitadas em janelas mascaradas e nunca são gravadas. A conta Colégio só sai dos administradores com a sessão Suporte ativa.'; Destr=$true; Params=@(
+                                            @{ Nome='SenhaSuporte'; Rotulo='Senha da conta Suporte (campo mascarado, nunca gravada)'; Tipo='password'; Default=''; Exemplo='Em branco: a conta Suporte não é criada.' }
+                                            @{ Nome='SenhaColegio'; Rotulo='Senha da conta Colégio (campo mascarado, nunca gravada)'; Tipo='password'; Default=''; Exemplo='Em branco: a conta Colégio não é criada.' }
+                                          ) }
         [pscustomobject]@{ Cat='Sistema'; Titulo='Criar ponto de restauração';        Func='New-SystemRestorePoint';      Desc='Habilita a Proteção do Sistema e cria um ponto de restauração.'; Destr=$false }
         [pscustomobject]@{ Cat='Sistema'; Titulo='Efeitos visuais para desempenho';   Func='Set-VisualPerformance';       Desc='Pelo registro: VisualFXSetting=2 ("Ajustar para obter um melhor desempenho") e ajusta o UserPreferencesMask. Desliga animações, sombras e transparências. Pode ser preciso reiniciar o Explorer.'; Destr=$false }
         [pscustomobject]@{ Cat='Sistema'; Titulo='Otimizações gerais do sistema';     Func='Grant-SystemOptimizations';   Desc='Ativa a otimização de inicialização (BootOptimizeFunction) e outros ajustes gerais de registro.'; Destr=$false }
@@ -329,11 +334,16 @@ function Get-GuiActionCatalog {
 
         # --- Instalação ---
         [pscustomobject]@{ Cat='Instalação'; Titulo='Atualizar PowerShell';           Func='Update-PowerShell';           Desc='Instala ou atualiza o PowerShell (aka.ms/install-powershell).'; Destr=$false }
+        [pscustomobject]@{ Cat='Instalação'; Titulo='Atualizações do Windows (escolher o modo)'; Func='Grant-WindowsUpdates'; Desc='Usa o módulo PSWindowsUpdate. Listar só mostra o que está pendente. Críticas instala só as de segurança e as críticas. Todas instala tudo. O computador só reinicia sozinho se a opção de reinício automático for marcada.'; Destr=$true; Params=@(
+                                            @{ Nome='Modo'; Rotulo='Modo de atualização'; Tipo='choice'; Default='Listar'; Opcoes=@('Criticas','Listar','Todas') }
+                                            @{ Nome='AutoReboot'; Rotulo='Reiniciar automaticamente se for preciso'; Tipo='switch'; Default=$false }
+                                          ) }
         [pscustomobject]@{ Cat='Instalação'; Titulo='Atualizar Windows e drivers';     Func='Update-WindowsAndDrivers';    Desc='Instala o módulo PSWindowsUpdate (se faltar) e roda Get-WindowsUpdate com instalação automática, sem reiniciar sozinho. Depois roda "winget upgrade --all", que atualiza TODOS os programas instalados pelo winget, não só drivers.'; Destr=$false }
         [pscustomobject]@{ Cat='Instalação'; Titulo='Instalar aplicativos';           Func='Install-Applications';        Desc='Escolha os aplicativos abaixo (winget; usa Apps.json se existir) e clique em Executar. Janela de checkbox com "Marcar todos" e "Desmarcar todos".'; Destr=$false; Params=$paramsInstalarApps }
         [pscustomobject]@{ Cat='Instalação'; Titulo='Instalar apps portáteis';        Func='Install-PortableApps';        Desc='Copia para C:\Portateis os apps portáteis da pasta compartilhada da Tecnologia (cada pasta com um .exe) que você marcar na janela de checkbox, e cria atalho no menu Iniciar.'; Destr=$false }
         [pscustomobject]@{ Cat='Instalação'; Titulo='Instalar Lightshot';             Func='Install-Lightshot';           Desc='Instala (ou atualiza para) a versão mais recente do Lightshot pelo winget (Skillbrains.Lightshot).'; Destr=$false }
         [pscustomobject]@{ Cat='Instalação'; Titulo='Instalar perfil PowerShell (produtividade)'; Func='Install-PowerShellProfile'; Desc='Instala uma cópia "limpa" do perfil pessoal neste notebook: funções de log, limpeza e rede, aliases, e PSReadLine, oh-my-posh, Terminal-Icons, zoxide e PSFzf (cada um só ativa se já estiver instalado). Faz backup do perfil existente antes de sobrescrever. Precisa abrir um terminal novo depois.'; Destr=$true; Params=@(
+                                            @{ Nome='Modo'; Rotulo='Modo do perfil'; Tipo='choice'; Default='Basico'; Opcoes=@('Aprimorado','Basico'); Exemplo='Básico: funções e aliases. Aprimorado: acrescenta PSReadLine, oh-my-posh, Terminal-Icons, zoxide e PSFzf.' }
                                             @{ Nome='SemBackup'; Rotulo='Desativar o backup automático do perfil existente antes de sobrescrever'; Tipo='switch'; Default=$false }
                                           ) }
         [pscustomobject]@{ Cat='Instalação'; Titulo='Reparar Ferramenta de Captura e instalar Lightshot'; Func='Invoke-ScreenshotToolFix'; Desc='Corrige a Ferramenta de Captura nativa (reativa o Print Screen, reregistra o pacote Microsoft.ScreenSketch e confirma a instalação pelo winget ou pela Microsoft Store) e em seguida instala a versão mais recente do Lightshot. Uso típico: o print nativo parou de funcionar.'; Destr=$false }
@@ -1219,8 +1229,15 @@ $global:GuiWorkerScript = {
     $global:WhatIf = [bool]$Simular
     $WhatIfPreference = [bool]$Simular
     $global:GuiTemaAtivo = $Tema
+    # Resultado real da execução, lido pela janela: exceção e código de saída do último comando nativo.
+    $global:LASTEXITCODE = 0
+    $global:GuiUltimoResultado = [pscustomobject]@{ Excecao = $null; CodigoSaida = 0 }
     try { & $FuncName @Splat @Extra }
-    catch { Write-Log "ERRO na GUI ao executar $FuncName : $($_.Exception.Message)" -Type Error }
+    catch {
+        $global:GuiUltimoResultado.Excecao = $_.Exception.Message
+        Write-Log "ERRO na GUI ao executar $FuncName : $($_.Exception.Message)" -Type Error
+    }
+    if ($LASTEXITCODE -is [int]) { $global:GuiUltimoResultado.CodigoSaida = $LASTEXITCODE }
 }
 
 # ----------------------------------------------------------------------------
@@ -1665,7 +1682,7 @@ function Invoke-MaintenanceGuiWindow {
                 'choice'   { $v = '' + $pc.Ctrl.SelectedItem; if ($v) { $splat[$nome] = $v } }
                 'paths'    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
                 'files'    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = @($v -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } }
-                'password' { $v = $pc.Ctrl.Password; if ($v) { $splat[$nome] = $v; $senhas += $nome } }
+                'password' { $v = $pc.Ctrl.Password; if ($v) { if ($nome -like "Senha*") { $splat[$nome] = (ConvertTo-SecureString -String $v -AsPlainText -Force) } else { $splat[$nome] = $v }; $senhas += $nome } }
                 default    { $v = ('' + $pc.Ctrl.Text).Trim(); if ($v) { $splat[$nome] = $v } }
             }
         }
@@ -2047,6 +2064,16 @@ function Invoke-MaintenanceGuiWindow {
             try { [void]$st.PS.EndInvoke($st.Handle) }
             catch { $falha = $true; & $anexarLog ("[Error] Falha na execução: " + $_.Exception.Message) 'erro' }
             if ($st.PS.HadErrors) { $falha = $true }
+            # Exceção e código de saída gravados pelo script de fundo (resultado real, não presumido)
+            $codigoSaida = 0
+            try {
+                $ur = $st.Worker.SessionStateProxy.GetVariable('GuiUltimoResultado')
+                if ($ur) {
+                    if ($ur.Excecao) { $falha = $true }
+                    $codigoSaida = [int]$ur.CodigoSaida
+                    if ($codigoSaida -ne 0 -and $codigoSaida -ne 3010) { & $anexarLog ("[Error] Código de saída $codigoSaida.") 'erro' }
+                }
+            } catch { }
             try { $st.PS.Dispose() } catch { }
             $st.PS = $null; $st.Handle = $null
             if ($st.Cronometro) { $st.Cronometro.Stop() }
@@ -2058,7 +2085,7 @@ function Invoke-MaintenanceGuiWindow {
             # Aviso ([Warning]) não conta como falha.
             $seg = $st.Linhas.GetRange($st.RunInicio, $st.Linhas.Count - $st.RunInicio)
             $niveis = @($seg | ForEach-Object { $_.Nivel })
-            $resultado = Get-GuiResultadoExec -Niveis $niveis -FalhaTecnica $falha
+            $resultado = Get-GuiResultadoExec -Niveis $niveis -FalhaTecnica $falha -CodigoSaida $codigoSaida
             $rotina = Get-GuiRotinaPorFunc -Func $st.Acao.Func
             if (-not $st.Simular -and $rotina) {
                 Set-GuiRotinaStatus -Rotina $rotina -Resultado $resultado -Acao $st.Acao.Titulo
