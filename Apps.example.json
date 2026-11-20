@@ -1,7 +1,6 @@
 [
   { "Name": "7-Zip",                    "Id": "7zip.7zip" },
   { "Name": "AnyDesk",                  "Id": "AnyDesk.AnyDesk" },
-  { "Name": "AutoHotkey",               "Id": "AutoHotkey.AutoHotkey" },
   { "Name": "Foxit Reader",             "Id": "Foxit.FoxitReader" },
   { "Name": "Google Chrome",            "Id": "Google.Chrome" },
   { "Name": "Google Drive",             "Id": "Google.GoogleDrive" },
