@@ -361,7 +361,17 @@ function Get-GuiActionCatalog {
 
         # --- Rotinas ---
         [pscustomobject]@{ Cat='Rotinas'; Titulo='Manutenção completa';               Func='Show-FullMaintenance';        Desc='Roda em sequência: aplicativos padrão, impressoras de rede e otimização de rede, desativa SMBv1 e reforça macros do Office, remove bloatware, OneDrive, rotina completa de limpeza, tweaks de privacidade, painel de controle e extras, desativa Cortana e termina com SFC e DISM. Não agenda CHKDSK (exige reinício).'; Destr=$true }
-        [pscustomobject]@{ Cat='Rotinas'; Titulo='Rotina Colégio (completa)';         Func='Invoke-Colegio';              Desc='A rotina mais completa: primeiro cria ponto de restauração e backup do registro, depois roda quase todas as funções do sistema em ordem: limpeza, rede (Wi-Fi, DNS, ARP e IPv6), bloatware e privacidade, contas, personalização, desempenho e reforço do Defender. Termina instalando os aplicativos padrão. Inclui a revisão de bloatware com checkbox e as impressoras da unidade 2. Também reforça a desativação do SMBv1 no meio da rotina.'; Destr=$true }
+        [pscustomobject]@{ Cat='Rotinas'; Titulo='Rotina Colégio (completa)';         Func='Invoke-Colegio';              Desc='Pré-checagem (administrador, espaço, bateria, internet, reinício pendente) e depois as etapas, nesta ordem: ponto de restauração e backup do registro, atualizações críticas, remoções (OneDrive, bloatware, Recall), privacidade e segurança, ajustes de desempenho e, por último, a limpeza. Desatendida por padrão; Wi-Fi, apps e personalização são opcionais. Termina com a tabela de resultado por etapa e o caminho do log. Nunca reinicia sozinha. Fora da rotina: DNS Google/Cloudflare, tweaks extras e macros do Office.'; Destr=$true; Params=@(
+                                            @{ Nome='Wifi'; Rotulo='Cadastrar o Wi-Fi VemProMundo - Adm (abre janela de senha)'; Tipo='switch'; Default=$false }
+                                            @{ Nome='Apps'; Rotulo='Instalar aplicativos no fim (abre o seletor de apps)'; Tipo='switch'; Default=$false }
+                                            @{ Nome='Personalizacao'; Rotulo='Incluir personalização (menu clássico, tema escuro, sudo, relógio com segundos)'; Tipo='switch'; Default=$false }
+                                            @{ Nome='IgnorarPreChecagem'; Rotulo='Ignorar a pré-checagem (não recomendado)'; Tipo='switch'; Default=$false }
+                                          ) }
+        [pscustomobject]@{ Cat='Rotinas'; Titulo='Rotina Colégio: ver as etapas';     Func='Show-ColegioEtapas';          Desc='Mostra, sem executar nada, as etapas que a Rotina Colégio rodaria, na ordem. É a mesma lista que a rotina usa.'; Destr=$false; Params=@(
+                                            @{ Nome='Wifi'; Rotulo='Incluir o Wi-Fi'; Tipo='switch'; Default=$false }
+                                            @{ Nome='Apps'; Rotulo='Incluir a instalação de aplicativos'; Tipo='switch'; Default=$false }
+                                            @{ Nome='Personalizacao'; Rotulo='Incluir personalização'; Tipo='switch'; Default=$false }
+                                          ) }
 
         # --- Ferramentas ---
         [pscustomobject]@{ Cat='Ferramentas'; Titulo='Converter vídeos iVMS-4200 (HEVC para MP4)'; Func='Convert-IvmsCctvVideos'; Desc='Converte vídeos exportados do iVMS-4200 (H.265, com proporção errada) para MP4 compatível, via ffmpeg: remuxa o vídeo sem recodificar, corrige a proporção, recodifica o áudio para AAC e ativa o faststart. Salva com o mesmo nome do arquivo de origem e não sobrescreve por padrão. Requer ffmpeg no PATH.'; Destr=$false; Params=@(
