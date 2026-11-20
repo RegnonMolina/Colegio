@@ -237,6 +237,9 @@ function Write-Log {
         default { $Type.ToUpper() } # Caso um tipo desconhecido seja passado
     }
 
+    # Conta erros para a Rotina Colégio saber se uma etapa falhou de verdade (não só se lançou exceção)
+    if ($tipoPortugues -eq 'ERRO' -or $tipoPortugues -eq 'CRÍTICO') { $script:ColegioErrosLog = [int]$script:ColegioErrosLog + 1 }
+
     # Formatar a data/hora para português (dd/MM/yyyy HH:mm:ss)
     $timestamp = (Get-Date).ToString("dd/MM/yyyy HH:mm:ss")
 
@@ -495,65 +498,214 @@ function Invoke-Undo {
     Show-SuccessMessage
 }
 
+function Test-ColegioInternet {
+    # Teste rápido de internet (TCP 443 em github.com, limite de 3 segundos). Não depende de ICMP.
+    try {
+        $cliente = New-Object System.Net.Sockets.TcpClient
+        $pedido = $cliente.BeginConnect('github.com', 443, $null, $null)
+        $ok = $pedido.AsyncWaitHandle.WaitOne(3000, $false) -and $cliente.Connected
+        $cliente.Close()
+        return [bool]$ok
+    }
+    catch { return $false }
+}
+
+function Test-ColegioPreRequisitos {
+    # Pré-checagem antes da Rotina Colégio. Falhas impedem a rotina; avisos só informam.
+    # Falha: sem administrador, menos de 5 GB livres no disco do sistema, ou na bateria abaixo de 30%.
+    # Aviso: sem internet (etapas que precisam de rede são puladas) e reinício pendente.
+    [CmdletBinding()]
+    param()
+    $falhas = @(); $avisos = @()
+
+    $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $admin) { $falhas += 'Execute como administrador.' }
+
+    $letra = $env:SystemDrive.TrimEnd(':')
+    $livre = (Get-PSDrive -Name $letra -ErrorAction SilentlyContinue).Free
+    if ($null -ne $livre -and $livre -lt 5GB) { $falhas += ('Pouco espaço livre em {0}: ({1:N1} GB). São necessários 5 GB.' -f $letra, ($livre / 1GB)) }
+
+    $bateria = Get-CimInstance -ClassName Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($bateria -and $bateria.BatteryStatus -eq 1 -and $bateria.EstimatedChargeRemaining -lt 30) {
+        $falhas += "Bateria em $($bateria.EstimatedChargeRemaining)% e sem carregador. Conecte o carregador."
+    }
+
+    $internet = Test-ColegioInternet
+    if (-not $internet) { $avisos += 'Sem internet: as etapas que precisam de rede serão puladas.' }
+
+    $pendente = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or
+                (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or
+                [bool](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations
+    if ($pendente) { $avisos += 'Há um reinício pendente do Windows. Reinicie assim que a rotina terminar.' }
+
+    return [pscustomobject]@{ Ok = ($falhas.Count -eq 0); Falhas = $falhas; Avisos = $avisos; Internet = $internet; ReinicioPendente = [bool]$pendente }
+}
+
+function Get-ColegioEtapas {
+    # Fonte única das etapas da Rotina Colégio, na ordem de execução. A rotina e a GUI usam esta lista.
+    # Ordem: segurança, rede, atualizações, apps, remoções, privacidade, ajustes, personalização, limpeza (por último), relatório.
+    # Fora da rotina por decisão: Grant-ExtraTweaks, Set-DnsGoogleCloudflare e Grant-HardenOfficeMacros.
+    # Opcionais: -Wifi (abre janela de senha), -Apps (abre o seletor de apps) e -Personalizacao (gostos pessoais).
+    [CmdletBinding()]
+    param([switch]$Wifi, [switch]$Apps, [switch]$Personalizacao)
+    $lista = New-Object System.Collections.Generic.List[object]
+    $novo = {
+        param($Grupo, $Nome, $Funcao, $Parametros = $null, [bool]$Rede = $false)
+        [pscustomobject]@{ Grupo = $Grupo; Nome = $Nome; Funcao = $Funcao; Args = $Parametros; PrecisaRede = $Rede }
+    }
+    $lista.Add((& $novo 'Segurança' 'Ponto de restauração' 'New-SystemRestorePoint'))
+    $lista.Add((& $novo 'Segurança' 'Backup do registro' 'Backup-Registry'))
+    if ($Wifi) { $lista.Add((& $novo 'Rede' 'Wi-Fi VemProMundo - Adm' 'Add-WiFiNetwork')) }
+    $lista.Add((& $novo 'Atualizações' 'Outros produtos Microsoft' 'Enable-OtherMicrosoftUpdates'))
+    $lista.Add((& $novo 'Atualizações' 'Windows Update acelerado' 'Enable-WindowsUpdateFast'))
+    $lista.Add((& $novo 'Atualizações' 'Atualizações críticas do Windows' 'Grant-WindowsUpdates' @{ Modo = 'Criticas' } $true))
+    if ($Apps) { $lista.Add((& $novo 'Apps' 'Instalar aplicativos' 'Install-Applications' $null $true)) }
+    $lista.Add((& $novo 'Remoções' 'OneDrive' 'Remove-OneDrive-AndRestoreFolders'))
+    $lista.Add((& $novo 'Remoções' 'Bloatware padrão' 'Remove-SystemBloatware'))
+    $lista.Add((& $novo 'Remoções' 'Windows Recall' 'Disable-WindowsRecall'))
+    # Privacidade: função consolidada, quando existir; senão a antiga equivalente
+    $privacidade = if (Get-Command Set-PrivacyBaseline -CommandType Function -ErrorAction SilentlyContinue) { 'Set-PrivacyBaseline' } else { 'Enable-PrivacyHardening' }
+    $lista.Add((& $novo 'Privacidade e segurança' 'Privacidade' $privacidade))
+    $lista.Add((& $novo 'Privacidade e segurança' 'Notificações da Central de Ações' 'Disable-ActionCenter-Notifications'))
+    $lista.Add((& $novo 'Privacidade e segurança' 'IPv6' 'Disable-IPv6'))
+    $lista.Add((& $novo 'Privacidade e segurança' 'Serviços desnecessários' 'Disable-UnnecessaryServices'))
+    $lista.Add((& $novo 'Privacidade e segurança' 'SMBv1' 'Disable-SMBv1'))
+    $lista.Add((& $novo 'Privacidade e segurança' 'Reforço do Windows' 'Enable-WindowsHardening'))
+    $lista.Add((& $novo 'Privacidade e segurança' 'GPO e registro' 'Grant-GPORegistrySettings'))
+    $lista.Add((& $novo 'Ajustes' 'Painel de controle' 'Grant-ControlPanelTweaks'))
+    $lista.Add((& $novo 'Ajustes' 'Interface' 'Grant-UITweaks'))
+    $lista.Add((& $novo 'Ajustes' 'Otimizações do sistema' 'Grant-SystemOptimizations'))
+    $lista.Add((& $novo 'Ajustes' 'Explorer' 'Optimize-ExplorerPerformance'))
+    $lista.Add((& $novo 'Ajustes' 'Desempenho de rede' 'Optimize-NetworkPerformance'))
+    $lista.Add((& $novo 'Ajustes' 'Plano de energia' 'Set-OptimizedPowerPlan'))
+    $lista.Add((& $novo 'Ajustes' 'Efeitos visuais' 'Set-VisualPerformance'))
+    $lista.Add((& $novo 'Ajustes' 'Tema de desempenho' 'Set-PerformanceTheme'))
+    $lista.Add((& $novo 'Ajustes' 'Reabrir apps após reiniciar' 'Enable-RestartAppsAfterReboot'))
+    if ($Personalizacao) {
+        $lista.Add((& $novo 'Personalização' 'Menu de contexto clássico' 'Enable-ClassicContextMenu'))
+        $lista.Add((& $novo 'Personalização' 'Histórico da área de transferência' 'Enable-ClipboardHistory'))
+        $lista.Add((& $novo 'Personalização' 'Tema escuro' 'Enable-DarkTheme'))
+        $lista.Add((& $novo 'Personalização' 'sudo do Windows' 'Enable-Sudo'))
+        $lista.Add((& $novo 'Personalização' 'Finalizar tarefa na barra' 'Enable-TaskbarEndTask'))
+        $lista.Add((& $novo 'Personalização' 'Segundos no relógio' 'Enable-TaskbarSeconds'))
+    }
+    $lista.Add((& $novo 'Limpeza' 'Arquivos e pastas vazios' 'Clear-EmptyFilesAndFolders'))
+    $lista.Add((& $novo 'Limpeza' 'Limpeza completa' 'Grant-Cleanup'))
+    $lista.Add((& $novo 'Relatório' 'Informações de rede' 'Show-NetworkInfo'))
+    return $lista.ToArray()
+}
+
+function Show-ColegioEtapas {
+    # Mostra, sem executar nada, as etapas que a Rotina Colégio rodaria (mesma lista usada pela rotina).
+    [CmdletBinding()]
+    param([switch]$Wifi, [switch]$Apps, [switch]$Personalizacao)
+    $etapas = Get-ColegioEtapas -Wifi:$Wifi -Apps:$Apps -Personalizacao:$Personalizacao
+    $n = 0
+    foreach ($e in $etapas) {
+        $n++
+        $rede = if ($e.PrecisaRede) { ' (precisa de internet)' } else { '' }
+        Write-Log -Message ('{0,2}. [{1}] {2} -> {3}{4}' -f $n, $e.Grupo, $e.Nome, $e.Funcao, $rede) -Type Info
+    }
+    Write-Log -Message ("{0} etapas. Fora da rotina: Grant-ExtraTweaks, Set-DnsGoogleCloudflare e Grant-HardenOfficeMacros." -f $etapas.Count) -Type Info
+}
+
+function Invoke-RotinaEtapas {
+    # Executa uma lista de etapas e registra o resultado real de cada uma (OK, FALHOU, PULADA, SIMULADA, AUSENTE).
+    # Uma etapa conta como FALHOU se lançar exceção ou se escrever erros no log durante a execução.
+    # Em simulação (-WhatIf), a função é chamada com -WhatIf quando suporta; senão a etapa só é listada como SIMULADA.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object[]]$Etapas,
+        [string]$Titulo = 'Rotina',
+        [bool]$Internet = $true
+    )
+    $simulacao = Test-ModoSimulacao
+    $resultados = @()
+    $total = $Etapas.Count
+    $n = 0
+    foreach ($e in $Etapas) {
+        $n++
+        $r = [pscustomobject]@{ Ordem = $n; Grupo = $e.Grupo; Etapa = $e.Nome; Funcao = $e.Funcao; Status = 'OK'; Segundos = 0.0; Detalhe = '' }
+        Write-Log -Message ("[{0}/{1}] {2}: {3}" -f $n, $total, $e.Grupo, $e.Nome) -Type Info
+        $cmd = Get-Command $e.Funcao -CommandType Function -ErrorAction SilentlyContinue
+        if (-not $cmd) {
+            $r.Status = 'AUSENTE'; $r.Detalhe = "função $($e.Funcao) não existe"
+            Write-Log -Message "Etapa '$($e.Nome)': $($r.Detalhe)." -Type Error
+            $resultados += $r; continue
+        }
+        if ($e.PrecisaRede -and -not $Internet) {
+            $r.Status = 'PULADA'; $r.Detalhe = 'sem internet'
+            Write-Log -Message "Etapa '$($e.Nome)' pulada: sem internet." -Type Warning
+            $resultados += $r; continue
+        }
+        $splat = @{}
+        if ($e.Args) { foreach ($k in $e.Args.Keys) { $splat[$k] = $e.Args[$k] } }
+        if ($simulacao) {
+            if ($cmd.Parameters.ContainsKey('WhatIf')) { $splat['WhatIf'] = $true }
+            else {
+                $r.Status = 'SIMULADA'; $r.Detalhe = 'sem suporte a -WhatIf: não executada'
+                $resultados += $r; continue
+            }
+        }
+        $errosAntes = [int]$script:ColegioErrosLog
+        $relogio = [System.Diagnostics.Stopwatch]::StartNew()
+        try { & $e.Funcao @splat | Out-Null }
+        catch { $r.Status = 'FALHOU'; $r.Detalhe = $_.Exception.Message }
+        $relogio.Stop()
+        $r.Segundos = [math]::Round($relogio.Elapsed.TotalSeconds, 1)
+        $novosErros = [int]$script:ColegioErrosLog - $errosAntes
+        if ($r.Status -eq 'OK' -and $novosErros -gt 0 -and -not $simulacao) { $r.Status = 'FALHOU'; $r.Detalhe = "$novosErros erro(s) no log" }
+        $resultados += $r
+    }
+
+    # Tabela final: no log e na tela
+    Write-Log -Message "Resumo da $($Titulo):" -Type Info
+    foreach ($r in $resultados) {
+        $tipo = switch ($r.Status) { 'OK' { 'Success' } 'FALHOU' { 'Error' } 'AUSENTE' { 'Error' } default { 'Warning' } }
+        $detalhe = if ($r.Detalhe) { " ($($r.Detalhe))" } else { '' }
+        Write-Log -Message ('{0,-8} {1}: {2} [{3}s]{4}' -f $r.Status, $r.Grupo, $r.Etapa, $r.Segundos, $detalhe) -Type $tipo
+    }
+    $ok = @($resultados | Where-Object Status -eq 'OK').Count
+    $falhou = @($resultados | Where-Object { $_.Status -in 'FALHOU', 'AUSENTE' }).Count
+    $puladas = @($resultados | Where-Object { $_.Status -in 'PULADA', 'SIMULADA' }).Count
+    Write-Log -Message "Total: $ok OK, $falhou com falha, $puladas puladas ou simuladas, de $total etapas." -Type Info
+    $script:ColegioUltimoResultado = $resultados
+    return $resultados
+}
+
 function Invoke-Colegio {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    # Rotina Colégio: pré-checagem, depois as etapas de Get-ColegioEtapas na ordem
+    # (ponto de restauração, backup do registro, atualizações, remoções, privacidade, ajustes, limpeza por último).
+    # Sem parâmetros é desatendida: -Wifi (janela de senha), -Apps (seletor de apps) e -Personalizacao são opcionais.
+    # Termina com a tabela de resultado por etapa e o caminho do log. Nunca reinicia sozinha.
+    param(
+        [switch]$Wifi,
+        [switch]$Apps,
+        [switch]$Personalizacao,
+        [switch]$IgnorarPreChecagem
+    )
     Write-Log "Iniciando rotina completa de manutenção do Colégio..." -Type Info
 
-    # CORREÇÃO #13 (auditoria): ponto de restauração criado ANTES de qualquer limpeza
-    # destrutiva (Windows.old, WinSxS, etc.). A chamada original continua mais abaixo,
-    # mas esta garante o checkpoint no início, quando ele realmente serve pra reverter.
-    try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "AVISO: Não foi possível criar ponto de restauração no início da rotina: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning }
+    $pre = Test-ColegioPreRequisitos
+    foreach ($a in $pre.Avisos) { Write-Log -Message "AVISO: $a" -Type Warning }
+    if (-not $pre.Ok -and -not $IgnorarPreChecagem) {
+        foreach ($f in $pre.Falhas) { Write-Log -Message "Pré-checagem: $f" -Type Error }
+        Write-Log "Rotina cancelada pela pré-checagem. Nada foi alterado. Use -IgnorarPreChecagem para forçar." -Type Warning
+        return
+    }
 
-    # CORREÇÃO #6 (auditoria): backup do registro ANTES de qualquer alteração/remoção de
-    # chaves na rotina. A chamada alfabética original (Backup-Registry) continua mais abaixo.
-    try { Backup-Registry -ErrorAction Stop } catch { Write-Log "AVISO: Não foi possível fazer backup do registro no início da rotina: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning }
+    $etapas = Get-ColegioEtapas -Wifi:$Wifi -Apps:$Apps -Personalizacao:$Personalizacao
+    $resultados = Invoke-RotinaEtapas -Etapas $etapas -Titulo 'Rotina Colégio' -Internet:$pre.Internet
 
-	try { Set-PerformanceTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-PerformanceTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Add-WiFiNetwork -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Add-WiFiNetwork: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    # Backup-Registry duplicado removido aqui (#6): já é chamado no início da rotina (linha do checkpoint/backup).
-    # Clear-ARP, Clear-DNS, Clear-DeepSystemCleanup, Clear-Prefetch, Clear-TemporaryFiles, Clear-WUCache,
-    # Clear-WinSxS, Optimize-Volumes e Remove-WindowsOld rodam dentro de Grant-Cleanup (sem repetir aqui).
-    try { Clear-EmptyFilesAndFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Clear-EmptyFilesAndFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-ActionCenter-Notifications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-ActionCenter-Notifications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-IPv6 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-IPv6: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-UnnecessaryServices -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-UnnecessaryServices: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-WindowsRecall -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-WindowsRecall: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-ClassicContextMenu -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClassicContextMenu: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-ClipboardHistory -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-ClipboardHistory: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-DarkTheme -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-DarkTheme: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-OtherMicrosoftUpdates -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-OtherMicrosoftUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-PrivacyHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-PrivacyHardening: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-RestartAppsAfterReboot -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-RestartAppsAfterReboot: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Disable-SMBv1 -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Disable-SMBv1: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error } # (era Enable-SMBv1, que sem o switch desativava; agora Enable-SMBv1 habilita de fato)
-    try { Enable-Sudo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-Sudo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-TaskbarEndTask -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarEndTask: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-TaskbarSeconds -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-TaskbarSeconds: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-WindowsHardening -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsHardening: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Enable-WindowsUpdateFast -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Enable-WindowsUpdateFast: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-Cleanup -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-Cleanup: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-ControlPanelTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ControlPanelTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-ExtraTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-ExtraTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-GPORegistrySettings -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-GPORegistrySettings: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-HardenOfficeMacros -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-HardenOfficeMacros: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-PrivacyAndBloatwarePrevention -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyAndBloatwarePrevention: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-PrivacyTweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-PrivacyTweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-SystemOptimizations -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-SystemOptimizations: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-UITweaks -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-UITweaks: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Grant-WindowsUpdates -Modo Criticas -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Grant-WindowsUpdates: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { New-FolderForced -Path "C:\SCript" -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-FolderForced: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { New-SystemRestorePoint -ErrorAction Stop } catch { Write-Log "ERRO: Falha em New-SystemRestorePoint: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Optimize-ExplorerPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-ExplorerPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Optimize-NetworkPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Optimize-NetworkPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-OneDrive-AndRestoreFolders -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-OneDrive-AndRestoreFolders: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Remove-SystemBloatware -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Remove-SystemBloatware: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Set-DnsGoogleCloudflare -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-DnsGoogleCloudflare: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Set-OptimizedPowerPlan -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-OptimizedPowerPlan: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Set-VisualPerformance -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Set-VisualPerformance: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-    try { Show-NetworkInfo -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Show-NetworkInfo: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-	try { Install-Applications -ErrorAction Stop } catch { Write-Log "ERRO: Falha em Install-Applications: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error }
-
-    Write-Log "Todas as rotinas de manutenção do Colégio foram concluídas." -Type Success
-
-    Show-SuccessMessage
+    $falhas = @($resultados | Where-Object { $_.Status -in 'FALHOU', 'AUSENTE' }).Count
+    if ($pre.ReinicioPendente -or $resultados.Count -gt 0) {
+        Write-Log "Reinicie o computador quando possível para concluir as alterações (a rotina não reinicia sozinha)." -Type Info
+    }
+    $logCaminho = if ($ScriptConfig -and $ScriptConfig.LogFilePath) { $ScriptConfig.LogFilePath } else { "C:\ScriptsLogs\$env:COMPUTERNAME-ScriptLog.log" }
+    Write-Log "Log completo em: $logCaminho" -Type Info
+    if ($falhas -eq 0) { Write-Log "Todas as etapas da Rotina Colégio concluíram sem falhas." -Type Success; Show-SuccessMessage }
+    else { Write-Log "A Rotina Colégio terminou com $falhas etapa(s) com falha. Veja o resumo acima." -Type Warning }
 }
 
 #endregion
