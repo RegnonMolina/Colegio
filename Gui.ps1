@@ -55,6 +55,7 @@ $global:GuiTemas = @{
 # Ordem das rotinas nos cartões de status (alfabética). Chave = rótulo do cartão; valor = Função do catálogo.
 $global:GuiRotinas = [ordered]@{
     'Apps'        = 'Install-Applications'
+    'Bloatware'   = 'Invoke-BloatwareReview'
     'Completa'    = 'Invoke-Colegio'
     'Contas'      = 'Invoke-ContasEscola'
     'Impressoras' = 'Install-NetworkPrinters'
@@ -225,13 +226,15 @@ function Get-GuiActionCatalog {
     $paramsInstalarApps = @()
     try {
         foreach ($appDisp in (Get-ScriptSupremoAppsList)) {
-            $paramsInstalarApps += @{ Nome = "App_$($appDisp.Id)"; Rotulo = "$($appDisp.Name)  ($($appDisp.Id))"; Tipo = 'switch'; Default = $true; AppObj = $appDisp }
+            # Checkbox começa vazio: só instala o que o usuário marcar (Install-Applications sem -Apps instalaria TUDO).
+            $paramsInstalarApps += @{ Nome = "App_$($appDisp.Id)"; Rotulo = "$($appDisp.Name)  ($($appDisp.Id))"; Tipo = 'switch'; Default = $false; AppObj = $appDisp }
         }
     } catch { $paramsInstalarApps = @() }
 
     @(
         # --- Limpeza ---
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Agendar CHKDSK no reinício';          Func='New-ChkDsk';                  Desc='Executa "chkdsk C: /f /r /x". Como o disco do sistema está em uso, o Windows agenda a verificação para a próxima reinicialização e repara erros e setores defeituosos.'; Destr=$false }
+        [pscustomobject]@{ Cat='Limpeza'; Titulo='Varredura de limpeza (escolher o que remover)'; Func='Invoke-GuiVarreduraLimpeza'; Desc='Lista as pastas de cache e temporários (TEMP do usuário, Windows\Temp, Prefetch, cache do Windows Update e relatórios de erro) com o tamanho de cada uma. Marque o que deseja limpar e confirme: só as pastas marcadas são esvaziadas. Nada é removido antes da confirmação.'; Destr=$true }
         [pscustomobject]@{ Cat='Limpeza'; Titulo='Limpar arquivos e pastas vazias';     Func='Clear-EmptyFilesAndFolders';  Desc='Remove arquivos de 0 byte e pastas vazias (protege .gitkeep e desktop.ini). Suporta simulação.'; Destr=$true; Params=@(
                                             @{ Nome='Path';             Rotulo='Pastas-raiz (vazio = %TEMP% padrão)'; Tipo='paths';  Default=''; Exemplo='Ex.: D:\Outra Pasta;E:\Downloads (separe várias pastas por ;)'; Pasta=$true }
                                             @{ Nome='IncludeEmptyFiles'; Rotulo='Também remover arquivos de 0 byte';    Tipo='switch'; Default=$true }
@@ -264,7 +267,7 @@ function Get-GuiActionCatalog {
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Forçar remoção do OneDrive';      Func='Remove-OneDrive-AndRestoreFolders'; Desc='Desinstala o OneDrive e restaura Documentos, Imagens, Área de Trabalho e outras pastas para as pastas locais, fora da sincronização.'; Destr=$true }
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Prevenção de bloatware e privacidade'; Func='Grant-PrivacyAndBloatwarePrevention'; Desc='Aplica os ajustes ativados em $ScriptConfig.PrivacyTweaks (ex.: desativar Wi-Fi Sense). Só faz algo para as opções ativadas na configuração do script.'; Destr=$false }
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Reforço de segurança (Defender)';  Func='Enable-WindowsHardening';     Desc='Aplica configurações de segurança do Microsoft Defender (ASR, bloqueio na nuvem, PUA e outras).'; Destr=$false }
-        [pscustomobject]@{ Cat='Privacidade'; Titulo='Revisar bloatware (com checkbox)'; Func='Invoke-BloatwareReview';     Desc='Lista os apps Appx e os programas instalados (sem componentes do Windows) numa janela com checkbox. Os que costumam ser bloatware de fábrica já vêm marcados. Remove só o que você marcar e salva o relatório em C:\ScriptsLogs.'; Destr=$true }
+        [pscustomobject]@{ Cat='Privacidade'; Titulo='Varredura de bloatware (escolher o que remover)'; Func='Invoke-BloatwareReview';     Desc='Lista os apps Appx e os programas instalados (sem componentes do Windows) numa janela com checkbox. Os que costumam ser bloatware de fábrica já vêm marcados. Remove só o que você marcar e salva o relatório em C:\ScriptsLogs.'; Destr=$true }
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Remover bloatware (padrão)';     Func='Remove-SystemBloatware';      Desc='Remove, sem perguntar, dezenas de apps pré-instalados (Bing, News, Weather, Xbox, Skype, Solitaire, Netflix, Spotify, TikTok, Instagram, Facebook, LinkedIn, Maps, OneNote, Paint 3D, People, Dolby e outros) e apps específicos (Copilot, Microsoft Teams, Clipchamp, Microsoft To Do, Notas Autoadesivas, novo Outlook). ATENÇÃO: o padrão "*Edge*" também remove o Microsoft Edge. OneDrive, Recall e tarefas agendadas ficam de fora por padrão.'; Destr=$true }
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Rotina completa de bloatware';    Func='Invoke-Bloatware';            Desc='Roda em sequência: prevenção de bloatware e privacidade, remover bloatware (padrão, incluindo o Edge), desativar serviços desnecessários, desativar Recall, forçar remoção do OneDrive e remover pasta Windows.old.'; Destr=$true }
         [pscustomobject]@{ Cat='Privacidade'; Titulo='Segurança de macros do Office';   Func='Grant-HardenOfficeMacros';     Desc='Desabilita macros perigosos do Office (Word, Excel e PowerPoint).'; Destr=$false }
@@ -540,20 +543,34 @@ $script:GuiXaml = @'
 
       <Grid Grid.Column="2">
         <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
           <RowDefinition Height="*" MinHeight="80"/>
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <ListBox x:Name="LstAcoes" Grid.Row="0">
+        <!-- Barra da lista: marcar/desmarcar todas as ações visíveis e contador das marcadas -->
+        <Grid Grid.Row="0" Margin="0,0,0,6">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <Button x:Name="BtnMarcarTodas" Grid.Column="0" Content="Marcar todas" Style="{DynamicResource BotaoSecundario}" Padding="10,4"/>
+          <Button x:Name="BtnDesmarcarTodas" Grid.Column="1" Content="Desmarcar todas" Style="{DynamicResource BotaoSecundario}" Padding="10,4" Margin="6,0,0,0"/>
+          <TextBlock x:Name="TxtMarcadas" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="{DynamicResource Muted}"/>
+        </Grid>
+        <ListBox x:Name="LstAcoes" Grid.Row="1">
           <ListBox.ItemTemplate>
             <DataTemplate>
               <StackPanel Orientation="Horizontal" Margin="2">
+                <CheckBox IsChecked="{Binding Marcado, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="Marcar para executar em sequência"/>
                 <TextBlock Text="{Binding Marca}" Width="18" Foreground="{Binding Cor}" FontWeight="Bold"/>
                 <TextBlock Text="{Binding Titulo}" Foreground="{Binding Cor}"/>
+                <TextBlock Text="{Binding ResultadoTexto}" Foreground="{Binding ResultadoCor}" FontWeight="Bold" Margin="8,0,0,0"/>
               </StackPanel>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
-        <Border Grid.Row="1" Background="{DynamicResource PanelDark}" BorderBrush="{DynamicResource Border}"
+        <Border Grid.Row="2" Background="{DynamicResource PanelDark}" BorderBrush="{DynamicResource Border}"
                 BorderThickness="1" CornerRadius="6" Margin="0,6,0,0" Padding="10,8">
           <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="110">
             <TextBlock x:Name="TxtAcaoResumo" TextWrapping="Wrap" Foreground="{DynamicResource Muted}"
@@ -738,6 +755,57 @@ function New-GuiJanela {
 }
 
 # Janela de checkbox ÚNICA do GUI: bloatware, apps, portáteis e impressoras.
+# Componente único de checkbox do GUI: usado nas janelas de seleção, nos parâmetros "sim/não"
+# e (via GuiAcaoItem, no DataTemplate da lista de ações) em todas as listas.
+function New-GuiCheckBox {
+    param([string]$Texto = '', [bool]$Marcado = $false)
+    $cb = New-Object System.Windows.Controls.CheckBox
+    $cb.Content = $Texto
+    $cb.IsChecked = $Marcado
+    $cb.Margin = '0,4'
+    $cb.TextWrapping = 'Wrap'
+    return $cb
+}
+
+# Item da lista de ações (classe .NET para o binding TwoWay do CheckBox e a atualização da marca ✓/✗).
+# Add-Type só roda uma vez por sessão.
+if (-not ('GuiAcaoItem' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System.ComponentModel;
+public class GuiAcaoItem : INotifyPropertyChanged {
+    private bool _marcado;
+    private string _marca = "", _titulo = "", _cor = "", _resultado = "", _resultadoCor = "";
+    public object Acao { get; set; }
+    public event PropertyChangedEventHandler PropertyChanged;
+    private void Avisar(string nome) {
+        var h = PropertyChanged;
+        if (h != null) h(this, new PropertyChangedEventArgs(nome));
+    }
+    public bool Marcado { get { return _marcado; } set { if (_marcado != value) { _marcado = value; Avisar("Marcado"); } } }
+    public string Marca { get { return _marca; } set { _marca = value; Avisar("Marca"); } }
+    public string Titulo { get { return _titulo; } set { _titulo = value; Avisar("Titulo"); } }
+    public string Cor { get { return _cor; } set { _cor = value; Avisar("Cor"); } }
+    // Resultado: "" (ainda não executada), "exec" (em execução), "ok" (✓) ou "erro" (✗).
+    public string ResultadoTexto {
+        get {
+            if (_resultado == "ok") return "✓";
+            if (_resultado == "erro") return "✗";
+            if (_resultado == "exec") return "…";
+            return "";
+        }
+    }
+    public string ResultadoCor { get { return _resultadoCor; } }
+    public string Estado { get { return _resultado; } }
+    public void Definir(string resultado, string cor) {
+        _resultado = resultado ?? "";
+        _resultadoCor = cor ?? "";
+        Avisar("ResultadoTexto");
+        Avisar("ResultadoCor");
+    }
+}
+'@
+}
+
 # Substitui Show-CheckboxPicker no runspace de fundo (ver New-GuiWorkerRunspace).
 # Itens: @{ Texto; Valor; Marcado }. Devolve os itens marcados ou $null se cancelar.
 function Show-GuiCheckboxPicker {
@@ -775,21 +843,25 @@ function Show-GuiCheckboxPicker {
     [System.Windows.Controls.Grid]::SetRow($scroll, 1)
     [void]$raiz.Children.Add($scroll)
 
+    # Todas as opções começam DESMARCADAS. Itens que o sistema sugere ganham a marca "(sugerido)" no texto.
     $checks = New-Object System.Collections.Generic.List[object]
     foreach ($item in $Itens) {
-        $cb = New-Object System.Windows.Controls.CheckBox
-        $cb.Content = [string]$item.Texto
-        $cb.IsChecked = [bool]$item.Marcado
-        $cb.Margin = '0,4'
+        $texto = [string]$item.Texto
+        if ($item.Marcado) { $texto = "$texto  (sugerido)" }
+        $cb = New-GuiCheckBox -Texto $texto
         [void]$painel.Children.Add($cb)
         $checks.Add([pscustomobject]@{ Caixa = $cb; Item = $item })
     }
 
     $atualizarContador = {
-        $n = @($checks | Where-Object { $_.Caixa.IsChecked -eq $true }).Count
-        $lblContador.Text = "$n de $($checks.Count) marcado(s)"
+        try {
+            $n = @($checks | Where-Object { $_.Caixa.IsChecked -eq $true }).Count
+            $lblContador.Text = "$n de $($checks.Count) marcado(s)"
+        } catch { Show-GuiHandlerError -Contexto 'Contador da seleção' -ErroObj $_ }
     }.GetNewClosure()
-    foreach ($c in $checks) { $c.Caixa.Add_Click($atualizarContador) }
+    foreach ($c in $checks) {
+        $c.Caixa.Add_Click({ param($s, $e) try { & $atualizarContador } catch { Show-GuiHandlerError -Contexto 'Marcar item' -ErroObj $_ } }.GetNewClosure())
+    }
     & $atualizarContador
 
     $rodape = New-Object System.Windows.Controls.StackPanel
@@ -1242,6 +1314,9 @@ function Invoke-MaintenanceGuiWindow {
     $txtLog     = & $F 'TxtLog'
     $btnCopiarLog   = & $F 'BtnCopiarLog'
     $btnExportarLog = & $F 'BtnExportarLog'
+    $btnMarcarTodas   = & $F 'BtnMarcarTodas'
+    $btnDesmarcarTodas = & $F 'BtnDesmarcarTodas'
+    $txtMarcadas      = & $F 'TxtMarcadas'
 
     $tema = Set-GuiAppearance -Window $window -Prefs $prefs
 
@@ -1286,6 +1361,9 @@ function Invoke-MaintenanceGuiWindow {
         LogPath=(Join-Path 'C:\ScriptsLogs' "$env:COMPUTERNAME-ScriptLog.log"); LogPos=0; Pendente=''
         Linhas=(New-Object System.Collections.Generic.List[object]); RunInicio=0; FiltroNivel='todos'
         Selecao=$null; Acao=$null; Simular=$false; ParamControls=@{}; TemaAtual=$tema; Prefs=$prefs
+        # Fila de execução (ações marcadas, em sequência) e contadores do resultado geral
+        Fila=(New-Object System.Collections.Generic.List[object]); FilaIdx=0; FilaSimular=$false
+        FilaTotal=0; FilaOk=0; FilaErros=0; FilaAvisos=0; CronometroFila=$null
     }
     if ($global:ScriptConfig -and $global:ScriptConfig.LogFilePath) { $st.LogPath = $global:ScriptConfig.LogFilePath }
 
@@ -1344,8 +1422,26 @@ function Invoke-MaintenanceGuiWindow {
     & $preencherCategorias
 
     # Filtro da lista de ações (busca + categoria + ocultas)
+    # Estado de cada ação (marcada e resultado ✓/✗) guardado por Função, para sobreviver ao filtro.
+    $st.Marcados = @{}
+    $st.Resultados = @{}
+    $atualizarMarcadas = {
+        try {
+            $n = @($lstAcoes.Items | Where-Object { $_.Marcado }).Count
+            $txtMarcadas.Text = if ($n) { "$n marcada(s)" } else { '' }
+            if (-not $st.Handle) {
+                $btnExec.Content = if ($n) { "Executar ($n marcada$(if ($n -gt 1) { 's' }))" } else { 'Executar' }
+                $btnExec.IsEnabled = ($n -gt 0) -or ($null -ne $lstAcoes.SelectedItem)
+            }
+        } catch { Show-GuiHandlerError -Contexto 'Contador de marcadas' -ErroObj $_ }
+    }
     $Refiltrar = {
         try {
+            # Guarda o estado atual antes de redesenhar a lista
+            foreach ($it in $lstAcoes.Items) {
+                $st.Marcados[$it.Acao.Func] = [bool]$it.Marcado
+                if ($it.Estado -and $it.Estado -ne 'exec') { $st.Resultados[$it.Acao.Func] = @{ Estado = $it.Estado; Cor = $it.ResultadoCor } }
+            }
             $termo = ('' + $txtBusca.Text).Trim().ToLower()
             $cat = '' + $lstCat.SelectedItem
             $lstAcoes.Items.Clear()
@@ -1359,10 +1455,21 @@ function Invoke-MaintenanceGuiWindow {
                         ($a.Func.ToLower().Contains($termo)) -or
                         ($a.Cat.ToLower().Contains($termo)))) { continue }
                 $cor = if ($a.Destr) { [string]$st.TemaAtual.Danger } else { [string]$st.TemaAtual.Ink }
-                $marca = if ($a.Destr) { [char]0x26A0 } else { [char]0x2022 }
-                [void]$lstAcoes.Items.Add([pscustomobject]@{ Titulo=$a.Titulo; Marca=$marca; Cor=$cor; Acao=$a })
+                $marca = if ($a.Destr) { [string][char]0x26A0 } else { [string][char]0x2022 }
+                $item = New-Object GuiAcaoItem
+                $item.Titulo = $a.Titulo
+                $item.Marca = $marca
+                $item.Cor = $cor
+                $item.Acao = $a
+                $item.Marcado = [bool]$st.Marcados[$a.Func]
+                if ($st.Resultados.ContainsKey($a.Func)) {
+                    $res = $st.Resultados[$a.Func]
+                    $item.Definir([string]$res.Estado, [string]$res.Cor)
+                }
+                [void]$lstAcoes.Items.Add($item)
             }
             $txtStatus.Text = "$($lstAcoes.Items.Count) ação(ões) listada(s)."
+            & $atualizarMarcadas
         } catch { Show-GuiHandlerError -Contexto 'Filtrar ações' -ErroObj $_ }
     }
 
@@ -1389,6 +1496,22 @@ function Invoke-MaintenanceGuiWindow {
 
     $txtBusca.Add_TextChanged({ param($s, $e) try { & $Refiltrar } catch { Show-GuiHandlerError -Contexto 'Busca' -ErroObj $_ } })
     $lstCat.Add_SelectionChanged({ param($s, $e) try { & $Refiltrar } catch { Show-GuiHandlerError -Contexto 'Trocar categoria' -ErroObj $_ } })
+
+    # Marcar / desmarcar todas as ações visíveis (lista filtrada). Qualquer CheckBox da lista dispara o contador.
+    $btnMarcarTodas.Add_Click({ param($s, $e)
+        try { foreach ($it in $lstAcoes.Items) { $it.Marcado = $true }; & $atualizarMarcadas }
+        catch { Show-GuiHandlerError -Contexto 'Marcar todas' -ErroObj $_ }
+    })
+    $btnDesmarcarTodas.Add_Click({ param($s, $e)
+        try { foreach ($it in $lstAcoes.Items) { $it.Marcado = $false }; & $atualizarMarcadas }
+        catch { Show-GuiHandlerError -Contexto 'Desmarcar todas' -ErroObj $_ }
+    })
+    $manipuladorMarca = [System.Windows.RoutedEventHandler]{ param($s, $e)
+        try { & $atualizarMarcadas } catch { Show-GuiHandlerError -Contexto 'Marcar ação' -ErroObj $_ }
+    }
+    $lstAcoes.AddHandler([System.Windows.Controls.Primitives.ToggleButton]::CheckedEvent, $manipuladorMarca)
+    $lstAcoes.AddHandler([System.Windows.Controls.Primitives.ToggleButton]::UncheckedEvent, $manipuladorMarca)
+
     & $Refiltrar
     & $renderCards
 
@@ -1604,35 +1727,135 @@ function Invoke-MaintenanceGuiWindow {
     })
 
     # Executar: confirmação com resumo para ações destrutivas, depois runspace de fundo.
-    $executar = {
-        $a = $st.Selecao
-        if (-not $a -or $st.Handle) { return }
-        $montado = & $MontarSplatExtra
-        $simular = [bool]$chkWhatIf.IsChecked
-        if ($a.Destr -and $st.Prefs.ConfirmarDestrutivas) {
-            $resumo = ConvertTo-GuiResumoExec -Acao $a -Splat $montado.Splat -Extra $montado.Extra -Senhas $montado.Senhas -Simular $simular
-            $textoBtn = if ($simular) { 'Simular' } else { 'Executar' }
-            $ok = Show-GuiConfirmacao -Titulo 'Confirmar ação destrutiva' -Texto $resumo -TextoBotao $textoBtn -Perigosa (-not $simular) -Tema $st.TemaAtual -Dono $window
-            if (-not $ok) { $txtStatus.Text = 'Execução cancelada.'; return }
+    # Parâmetros padrão de uma ação (checkboxes vazios por padrão, então só entram os valores default).
+    $ParamsPadrao = {
+        param($a)
+        $splat = @{}
+        $temParams = ($a.PSObject.Properties.Name -contains 'Params') -and $a.Params
+        $apps = @()
+        if ($temParams) {
+            foreach ($p in $a.Params) {
+                if ($p.AppObj) { if ([bool]$p.Default) { $apps += $p.AppObj }; continue }
+                switch ($p.Tipo) {
+                    'switch'   { $splat[$p.Nome] = [bool]$p.Default }
+                    'password' { }
+                    'paths'    { if ($p.Default) { $splat[$p.Nome] = @(('' + $p.Default) -split ';' | Where-Object { $_ }) } }
+                    'files'    { if ($p.Default) { $splat[$p.Nome] = @(('' + $p.Default) -split ';' | Where-Object { $_ }) } }
+                    default    { if ($p.Default) { $splat[$p.Nome] = $p.Default } }
+                }
+            }
         }
-        if (-not $st.Worker) { $st.Worker = New-GuiWorkerRunspace }
-        $st.Simular = $simular
-        $st.Acao = $a
-        $st.RunInicio = $st.Linhas.Count
-        $st.PS = [powershell]::Create()
-        $st.PS.Runspace = $st.Worker
-        [void]$st.PS.AddScript($global:GuiWorkerScript).AddArgument($a.Func).AddArgument($simular).AddArgument($montado.Splat).AddArgument($montado.Extra).AddArgument($st.TemaAtual)
-        $st.Handle = $st.PS.BeginInvoke()
+        if ($apps.Count) { $splat['Apps'] = $apps }
+        return @{ Splat = $splat; Extra = @(); Senhas = @() }
+    }
 
-        $st.Cronometro = [System.Diagnostics.Stopwatch]::StartNew()
+    # Monta a fila: as ações marcadas (na ordem da lista) ou, se nenhuma estiver marcada, a ação selecionada.
+    # A ação selecionada usa os parâmetros da tela; as outras usam os padrões da ação.
+    $montarFila = {
+        $fila = New-Object System.Collections.Generic.List[object]
+        $marcadas = @($lstAcoes.Items | Where-Object { $_.Marcado } | ForEach-Object { $_.Acao })
+        if ($marcadas.Count -eq 0 -and $st.Selecao) { $marcadas = @($st.Selecao) }
+        foreach ($a in $marcadas) {
+            $ehSelecionada = ($st.Selecao -and $a.Func -eq $st.Selecao.Func)
+            $m = if ($ehSelecionada) { & $MontarSplatExtra } else { & $ParamsPadrao $a }
+            # Install-Applications sem -Apps instalaria TUDO: sem app marcado, a ação é pulada.
+            if ($a.Func -eq 'Install-Applications' -and -not $m.Splat.ContainsKey('Apps')) {
+                & $anexarLog "[Warning] $($a.Titulo): nenhum aplicativo marcado. Ação pulada." 'aviso'
+                continue
+            }
+            $fila.Add([pscustomobject]@{ Acao = $a; Splat = $m.Splat; Extra = $m.Extra; Senhas = $m.Senhas })
+        }
+        return ,$fila
+    }
+
+    # Acha o item da lista (ação) pela Função e troca a marca ✓/✗ ou "em execução".
+    $marcarItem = {
+        param([string]$Func, [string]$Estado, [string]$Cor)
+        $st.Resultados[$Func] = @{ Estado = $Estado; Cor = $Cor }
+        foreach ($it in $lstAcoes.Items) {
+            if ($it.Acao.Func -eq $Func) { $it.Definir($Estado, $Cor) }
+        }
+    }
+
+    # Encerra a fila: restaura botões e mostra o resultado geral.
+    $finalizarFila = {
+        $prgExec.IsIndeterminate = $false
+        $prgExec.Visibility = 'Collapsed'
+        $tempoTxt = if ($st.CronometroFila) { ' (' + $st.CronometroFila.Elapsed.ToString('mm\:ss') + ')' } else { '' }
+        $st.Fila = New-Object System.Collections.Generic.List[object]
+        $st.FilaIdx = 0
+        $st.Acao = $null
+        & $atualizarMarcadas
+        $geral = if ($st.FilaErros -gt 0) { 'erro' } elseif ($st.FilaAvisos -gt 0) { 'aviso' } else { 'sucesso' }
+        $resumoFila = "$($st.FilaTotal) ação(ões): $($st.FilaOk) ✓, $($st.FilaErros) ✗."
+        switch ($geral) {
+            'erro'  { $txtStatus.Text = "Concluído com falhas. $resumoFila$tempoTxt Veja o log."; $txtStatus.Foreground = $window.FindResource('Danger') }
+            'aviso' { $txtStatus.Text = "Concluído com avisos. $resumoFila$tempoTxt Veja o log."; $txtStatus.Foreground = $window.FindResource('Aviso') }
+            default { $txtStatus.Text = "Concluído. $resumoFila$tempoTxt"; $txtStatus.Foreground = $window.FindResource('Ink') }
+        }
+        & $anexarLog ">>> Fim da fila: $resumoFila$tempoTxt" 'info'
+    }
+
+    # Inicia a próxima ação da fila no runspace de fundo (ou encerra a fila).
+    $iniciarProximo = {
+        if ($st.FilaIdx -ge $st.Fila.Count) { & $finalizarFila; return }
+        $item = $st.Fila[$st.FilaIdx]
+        $a = $item.Acao
+        $st.Acao = $a
+        $n = $st.FilaIdx + 1
+        $modo = if ($st.FilaSimular) { ' (SIMULAÇÃO)' } else { '' }
+        $st.StatusBase = "Executando $n de $($st.Fila.Count): $($a.Titulo)$modo..."
+        $txtStatus.Text = $st.StatusBase
+        $txtStatus.Foreground = $window.FindResource('Muted')
+        & $marcarItem $a.Func 'exec' ([string]$st.TemaAtual.Func)
+        & $anexarLog ">>> $($a.Titulo) -> $($a.Func)$modo" 'info'
+        try {
+            if (-not $st.Worker) { $st.Worker = New-GuiWorkerRunspace }
+            $st.RunInicio = $st.Linhas.Count
+            $st.PS = [powershell]::Create()
+            $st.PS.Runspace = $st.Worker
+            [void]$st.PS.AddScript($global:GuiWorkerScript).AddArgument($a.Func).AddArgument($st.FilaSimular).AddArgument($item.Splat).AddArgument($item.Extra).AddArgument($st.TemaAtual)
+            $st.Handle = $st.PS.BeginInvoke()
+            $st.Cronometro = [System.Diagnostics.Stopwatch]::StartNew()
+        } catch {
+            # Falha ao iniciar: conta como ✗ e segue para a próxima
+            $st.Handle = $null
+            & $anexarLog ("[Error] Falha ao iniciar $($a.Titulo): " + $_.Exception.Message) 'erro'
+            & $marcarItem $a.Func 'erro' ([string]$st.TemaAtual.Danger)
+            $st.FilaErros = [int]$st.FilaErros + 1
+            $st.FilaIdx = [int]$st.FilaIdx + 1
+            & $iniciarProximo
+            return
+        }
         $prgExec.Visibility = 'Visible'
         $prgExec.IsIndeterminate = $true
         $btnExec.IsEnabled = $false
         $btnExec.Content = 'Executando...'
-        $modo = if ($simular) { ' (SIMULAÇÃO)' } else { '' }
-        $st.StatusBase = "Executando $($a.Titulo)$modo..."
-        $txtStatus.Text = $st.StatusBase
-        & $anexarLog ">>> $($a.Titulo) -> $($a.Func)$modo" 'info'
+    }
+
+    # Executar: confirmação única com o resumo da fila (se houver destrutivas), depois a fila no runspace de fundo.
+    $executar = {
+        if ($st.Handle -or $st.Fila.Count -gt 0) { return }
+        $fila = & $montarFila
+        if ($fila.Count -eq 0) { $txtStatus.Text = 'Nada para executar. Marque ações na lista ou selecione uma.'; return }
+        $simular = [bool]$chkWhatIf.IsChecked
+        $temDestrutiva = @($fila | Where-Object { $_.Acao.Destr }).Count -gt 0
+        if ($temDestrutiva -and $st.Prefs.ConfirmarDestrutivas) {
+            $linhas = @($fila | ForEach-Object { "- $($_.Acao.Titulo)  [$($_.Acao.Func)]" })
+            $modoTxt = if ($simular) { 'Modo: SIMULAÇÃO (nada será alterado).' } else { 'Modo: EXECUÇÃO REAL. As alterações serão feitas no computador.' }
+            $resumo = "Ações a executar em sequência ($($fila.Count)):`n" + ($linhas -join "`n") + "`n`n" + $modoTxt
+            $textoBtn = if ($simular) { 'Simular' } else { 'Executar' }
+            $ok = Show-GuiConfirmacao -Titulo 'Confirmar ações' -Texto $resumo -TextoBotao $textoBtn -Perigosa (-not $simular) -Tema $st.TemaAtual -Dono $window
+            if (-not $ok) { $txtStatus.Text = 'Execução cancelada.'; return }
+        }
+        $st.Fila = $fila
+        $st.FilaIdx = 0
+        $st.FilaSimular = $simular
+        $st.Simular = $simular
+        $st.FilaTotal = $fila.Count
+        $st.FilaOk = 0; $st.FilaErros = 0; $st.FilaAvisos = 0
+        $st.CronometroFila = [System.Diagnostics.Stopwatch]::StartNew()
+        & $iniciarProximo
     }
 
     $btnExec.Add_Click({ param($s, $e)
@@ -1829,11 +2052,10 @@ function Invoke-MaintenanceGuiWindow {
             if ($st.Cronometro) { $st.Cronometro.Stop() }
             $prgExec.IsIndeterminate = $false
             $prgExec.Visibility = 'Collapsed'
-            $btnExec.IsEnabled = ($null -ne $lstAcoes.SelectedItem)
-            $btnExec.Content = 'Executar'
             $tempoTxt = if ($st.Cronometro) { ' (' + $st.Cronometro.Elapsed.ToString('mm\:ss') + ')' } else { '' }
 
-            # Resultado: níveis gerados durante esta execução
+            # Resultado real: exceção, erro do PowerShell ou linha [Error]/[Critical] no log desta ação.
+            # Aviso ([Warning]) não conta como falha.
             $seg = $st.Linhas.GetRange($st.RunInicio, $st.Linhas.Count - $st.RunInicio)
             $niveis = @($seg | ForEach-Object { $_.Nivel })
             $resultado = Get-GuiResultadoExec -Niveis $niveis -FalhaTecnica $falha
@@ -1842,11 +2064,20 @@ function Invoke-MaintenanceGuiWindow {
                 Set-GuiRotinaStatus -Rotina $rotina -Resultado $resultado -Acao $st.Acao.Titulo
                 & $renderCards
             }
-            switch ($resultado) {
-                'erro'  { $txtStatus.Text = "Concluído com erro.$tempoTxt Veja o log."; $txtStatus.Foreground = $window.FindResource('Danger') }
-                'aviso' { $txtStatus.Text = "Concluído com avisos.$tempoTxt Veja o log."; $txtStatus.Foreground = $window.FindResource('Aviso') }
-                default { $txtStatus.Text = "Concluído.$tempoTxt"; $txtStatus.Foreground = $window.FindResource('Ink') }
+            if ($resultado -eq 'erro') {
+                $st.FilaErros = [int]$st.FilaErros + 1
+                & $marcarItem $st.Acao.Func 'erro' ([string]$st.TemaAtual.Danger)
+            } else {
+                $st.FilaOk = [int]$st.FilaOk + 1
+                if ($resultado -eq 'aviso') { $st.FilaAvisos = [int]$st.FilaAvisos + 1 }
+                & $marcarItem $st.Acao.Func 'ok' ([string]$st.TemaAtual.Sucesso)
             }
+            & $anexarLog ("<<< $($st.Acao.Titulo): " + $(if ($resultado -eq 'erro') { 'falhou' } elseif ($resultado -eq 'aviso') { 'concluído com avisos' } else { 'concluído' }) + $tempoTxt) 'info'
+
+            # Próxima ação da fila (ou encerra)
+            $st.PS = $null; $st.Handle = $null
+            $st.FilaIdx = [int]$st.FilaIdx + 1
+            & $iniciarProximo
         }
         } catch {
             try { Write-Log ("Erro no acompanhamento da execução: " + $_.Exception.Message) -Type Error } catch { }
