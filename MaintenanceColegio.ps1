@@ -3026,18 +3026,28 @@ function Install-PowerShellProfile {
         oh-my-posh — cada um só ativa se a ferramenta já estiver instalada
         na máquina, então não quebra nada se faltar alguma).
 
-        Se já existir um profile no destino, faz backup automático em
-        C:\ScriptsLogs\PerfilPowerShell_Backup_<data>\ antes de sobrescrever
-        (a menos que -SemBackup). Cria a pasta do profile se não existir.
+        NÃO sobrescreve o perfil existente: o perfil do Supremo vai para o
+        arquivo próprio ScriptSupremo.profile.ps1 (UTF-8 com BOM, na mesma
+        pasta do perfil) e ao perfil existente é anexada UMA linha de dot-source
+        protegida por Test-Path, depois de backup em
+        C:\ScriptsLogs\PerfilPowerShell_Backup_<data>\ (a menos que -SemBackup).
+        Se a pasta do perfil tiver Skills\*.skill.ps1 ou o perfil for v2
+        (núcleo + skills), aborta com aviso e não altera nada.
         Suporta -WhatIf/-Confirm. Depois de instalado, é preciso abrir um
         novo terminal (ou rodar ". $PROFILE") pra carregar.
+    .PARAMETER Modo
+        Basico (padrão): perfil completo em um arquivo, como antes.
+        Aprimorado: núcleo enxuto + skills (ScriptSupremo\Skills\*.skill.ps1)
+        carregadas sob demanda; liste com o comando Get-Skills (alias skills).
     .PARAMETER SemBackup
-        Desativa o backup automático do profile existente antes de sobrescrever.
+        Desativa o backup automático antes de alterar arquivos existentes.
     .EXAMPLE
         Install-PowerShellProfile
     #>
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param(
+        [ValidateSet('Basico', 'Aprimorado')]
+        [string]$Modo = 'Basico',
         [switch]$SemBackup
     )
 
@@ -3575,31 +3585,29 @@ function Get-Profile-Help {
 }
 
 function reload-profile {
-    Write-Host "Reloading profile..." -ForegroundColor Cyan
-    . $PROFILE
-    Write-Host "Profile recarregado!" -ForegroundColor Green
+    # Dot-source dentro de função roda no escopo da função: funções e aliases não voltariam à sessão.
+    Write-Host "Dot-source dentro de função não recarrega o perfil na sessão atual." -ForegroundColor Yellow
+    Write-Host "Rode direto no prompt:  . `$PROFILE" -ForegroundColor Cyan
 }
 
 function Show-AliasHelp {
-    Write-Host "==== Aliases definidos nos módulos auxiliares ===="
-    if ($Global:CustomAliases.Count -eq 0) {
-        Write-Host "Nenhum alias encontrado nos módulos." -ForegroundColor Yellow
+    Write-Host "==== Aliases do perfil (lidos da sessão) ===="
+    $reais = Get-Alias -ErrorAction SilentlyContinue | Where-Object { $Global:ProfileCategoryMap.ContainsKey($_.Name) } | Sort-Object Name
+    if (-not $reais) {
+        Write-Host "Nenhum alias do perfil encontrado." -ForegroundColor Yellow
         return
     }
-    $aliasesGrouped = $Global:CustomAliases | Group-Object -Property Command | Sort-Object Name
-    foreach ($group in $aliasesGrouped) {
-        $sortedAliases = $group.Group | Sort-Object Name
-        foreach ($alias in $sortedAliases) {
-            Write-Host "$($alias.Name): $($group.Name)" -ForegroundColor Cyan
-        }
+    foreach ($alias in $reais) {
+        Write-Host "$($alias.Name): $($alias.Definition)" -ForegroundColor Cyan
     }
     Write-Host "================================================="
 }
 
 function Show-ProfileHelp {
     Write-Host "=========== Profile Help ============"
-    Write-Host "Funções carregadas:"
-    $Global:CustomFunctions.GetEnumerator() | ForEach-Object { Write-Host "  $_.Key" }
+    Get-Profile-Help | Format-Table -AutoSize | Out-Host
+    Write-Host "Funções registradas em CustomFunctions:"
+    $Global:CustomFunctions.GetEnumerator() | ForEach-Object { Write-Host "  $($_.Key)" }
     Write-Host "Aliases carregados:"
     if ($Global:CustomAliases.Count -eq 0) {
         Write-Host "  Nenhum alias encontrado." -ForegroundColor Yellow
@@ -3681,37 +3689,279 @@ if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
         $destino = $PROFILE.CurrentUserCurrentHost
         Grant-WriteProgress -Activity $activity -Status "Preparando..." -PercentComplete 10
         $pastaDestino = Split-Path -Parent $destino
+        $arquivoSupremo = Join-Path $pastaDestino 'ScriptSupremo.profile.ps1'
+        $pastaSkills = Join-Path $pastaDestino 'ScriptSupremo\Skills'
+        $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+
+        # (a) Perfil v2 (núcleo + Skills\*.skill.ps1) ou pasta Skills do usuário: não mexe em nada.
+        $pastaSkillsUsuario = Join-Path $pastaDestino 'Skills'
+        $temSkillsUsuario = $false
+        if (Test-Path -LiteralPath $pastaSkillsUsuario) {
+            $temSkillsUsuario = (@(Get-ChildItem -LiteralPath $pastaSkillsUsuario -Filter '*.skill.ps1' -File -ErrorAction SilentlyContinue)).Count -gt 0
+        }
+        $ehPerfilV2 = $false
+        if (Test-Path -LiteralPath $destino) {
+            $ehPerfilV2 = [bool](Select-String -LiteralPath $destino -Pattern 'SkillsRoot|SkillsIndex|\.skill\.ps1' -Quiet -ErrorAction SilentlyContinue)
+        }
+        if ($temSkillsUsuario -or $ehPerfilV2) {
+            Write-Log "Perfil v2 (Skills\*.skill.ps1) detectado em '$pastaDestino'. Instalação abortada, nenhuma alteração feita." -Type Warning
+            return
+        }
+
         if (-not (Test-Path -LiteralPath $pastaDestino)) {
             if ($PSCmdlet.ShouldProcess($pastaDestino, "criar pasta do profile")) {
                 if (-not $WhatIf) { New-Item -ItemType Directory -Path $pastaDestino -Force -ErrorAction Stop | Out-Null }
             }
         }
 
+        # (c) Monta o conteúdo do arquivo próprio: básico = perfil embutido; aprimorado = núcleo enxuto + skills.
+        $conteudoFinal = $conteudoProfile
+        $skillsGeradas = @{}
+        if ($Modo -eq 'Aprimorado') {
+            $erros = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseInput($conteudoProfile, [ref]$null, [ref]$erros)
+            $funcoes = @{}
+            foreach ($f in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) { $funcoes[$f.Name] = $f.Extent.Text }
+            # Aliases do perfil embutido: nome -> comando
+            $aliasesPerfil = @{}
+            foreach ($m in [regex]::Matches($conteudoProfile, '(?m)^Set-Alias\s+(\S+)\s+(\S+)')) { $aliasesPerfil[$m.Groups[1].Value] = $m.Groups[2].Value }
+
+            $grupos = [ordered]@{
+                limpeza    = @{ Desc = 'Limpeza e otimização do sistema'; Funcs = @('Clear-DeepSystemCleanup', 'Clear-Prefetch', 'Clear-PrintSpooler', 'Clear-TemporaryFiles', 'Clear-WinSxS', 'Clear-WUCache', 'Grant-Cleanup', 'New-ChkDsk', 'Optimize-Volumes', 'Remove-WindowsOld') }
+                rede       = @{ Desc = 'Rede: ARP, DNS e IPv6'; Funcs = @('Clear-ARP', 'Clear-DNS', 'Disable-IPv6', 'Set-DnsGoogleCloudflare') }
+                utilidades = @{ Desc = 'Utilidades gerais (log, explorer, informações do sistema)'; Funcs = @('flushdns', 'Get-Log', 'Restart-Explorer', 'sysinfo') }
+            }
+            foreach ($nomeGrupo in $grupos.Keys) {
+                $g = $grupos[$nomeGrupo]
+                $corpo = New-Object System.Collections.Generic.List[string]
+                $aliasesGrupo = New-Object System.Collections.Generic.List[string]
+                foreach ($fn in $g.Funcs) {
+                    if (-not $funcoes.ContainsKey($fn)) { throw "Função '$fn' não encontrada no perfil embutido (skill $nomeGrupo)." }
+                    # "function global:" garante que a função fique visível depois do dot-source dentro de Import-Skill
+                    $corpo.Add(($funcoes[$fn] -replace '^function\s+', 'function global:'))
+                    $corpo.Add('')
+                }
+                foreach ($a in ($aliasesPerfil.Keys | Sort-Object)) {
+                    if ($g.Funcs -contains $aliasesPerfil[$a]) {
+                        $aliasesGrupo.Add("$a=$($aliasesPerfil[$a])")
+                        $corpo.Add("Set-Alias -Name $a -Value $($aliasesPerfil[$a]) -Scope Global")
+                    }
+                }
+                $cabecalho = @(
+                    "# Skill: $nomeGrupo",
+                    "# Descrição: $($g.Desc)",
+                    "# Comandos: $($g.Funcs -join ', ')",
+                    "# Aliases: $($aliasesGrupo -join ', ')",
+                    '# Gerada pelo Script Supremo (Install-PowerShellProfile -Modo Aprimorado). Carregada sob demanda.',
+                    ''
+                )
+                $skillsGeradas["$nomeGrupo.skill.ps1"] = (($cabecalho + $corpo) -join "`r`n")
+            }
+
+            $nomesNucleo = 'Confirm-User', 'Grant-WriteProgress', 'Protect-Action', 'Require-Admin', 'Test-IsAdmin', 'Update-SystemErrorMessage', 'Write-Log'
+            $textoNucleo = ($nomesNucleo | ForEach-Object {
+                    if (-not $funcoes.ContainsKey($_)) { throw "Função '$_' não encontrada no perfil embutido (núcleo)." }
+                    $funcoes[$_] + "`r`n"
+                }) -join "`r`n"
+            $posPowerUps = $conteudoProfile.IndexOf('# --- PSReadLine')
+            if ($posPowerUps -lt 0) { throw 'Bloco de power-ups não encontrado no perfil embutido.' }
+            $powerUps = $conteudoProfile.Substring($posPowerUps)
+
+            $nucleoA = @'
+###############################################################################
+#   PERFIL POWERSHELL - SCRIPT SUPREMO (MODO APRIMORADO)                      #
+#   Núcleo enxuto + skills carregadas sob demanda                             #
+###############################################################################
+# Como funciona:
+#   - Este arquivo só faz o mínimo na abertura: índice de skills + stubs + power-ups.
+#   - Cada skill é um arquivo "<nome>.skill.ps1" na pasta ScriptSupremo\Skills, ao lado deste.
+#   - O cabeçalho da skill declara os comandos e aliases; na 1ª chamada de qualquer um
+#     deles a skill é carregada (até lá existe só um stub leve com o mesmo nome).
+#   - Comandos do núcleo: Get-Skills (alias skills), Import-Skill, Reload-Skills,
+#     Edit-Profile (ep), reload-profile (rh), Show-ProfileHelp (ph), Show-AliasHelp (ah).
+
+$Global:ProfileSilentLoad = $true
+
+if (-not (Get-Variable -Name WhatIf -Scope Global -ErrorAction SilentlyContinue)) {
+    $Global:WhatIf = $false
+}
+
+$Global:LogPath = Join-Path $env:LOCALAPPDATA "PowerShell-Logs"
+if (-not (Test-Path $Global:LogPath)) {
+    New-Item -ItemType Directory -Path $Global:LogPath -Force | Out-Null
+}
+$Global:LogFile = Join-Path $Global:LogPath "activity-log.txt"
+
+# --- Funções-base (log, admin, erros) ---
+
+'@
+            $nucleoB = @'
+
+# --- Skills ---
+$__raizPerfil = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PROFILE }
+$Global:SkillsRoot = Join-Path $__raizPerfil 'ScriptSupremo\Skills'
+# Índice em memória: nome -> @{ Arquivo; Descricao; Comandos; Aliases; Carregada }
+$Global:SkillsIndex = [ordered]@{}
+
+function Edit-Profile {
+    <# .SYNOPSIS Abre o perfil do Script Supremo no editor #>
+    notepad (Join-Path $__raizPerfil 'ScriptSupremo.profile.ps1')
+}
+
+function Get-Skills {
+    <#
+    .SYNOPSIS
+        Lista as skills, seus comandos, aliases e se já foram carregadas.
+    .EXAMPLE
+        Get-Skills            # todas
+        Get-Skills rede       # uma skill
+    #>
+    param([string]$Nome)
+    foreach ($k in $Global:SkillsIndex.Keys) {
+        if ($Nome -and ($k -notlike $Nome)) { continue }
+        $s = $Global:SkillsIndex[$k]
+        $status = 'sob demanda'
+        if ($s.Carregada) { $status = 'carregada' }
+        [pscustomobject]@{
+            Skill     = $k
+            Status    = $status
+            Comandos  = ($s.Comandos -join ', ')
+            Aliases   = ($s.Aliases -join ', ')
+            Descricao = $s.Descricao
+        }
+    }
+}
+
+function Import-Skill {
+    <# .SYNOPSIS Carrega uma skill agora. Ex.: Import-Skill rede #>
+    param([Parameter(Mandatory = $true, Position = 0)][string]$Nome)
+    $skill = $Global:SkillsIndex[$Nome]
+    if (-not $skill) { Write-Warning "Skill '$Nome' não encontrada. Use Get-Skills."; return }
+    . $skill.Arquivo
+    $skill.Carregada = $true
+}
+
+function Reload-Skills {
+    <# .SYNOPSIS Re-indexa a pasta de skills e recria os stubs #>
+    $Global:SkillsIndex.Clear()
+    if (-not (Test-Path -LiteralPath $Global:SkillsRoot)) { return }
+    foreach ($arq in (Get-ChildItem -LiteralPath $Global:SkillsRoot -Filter '*.skill.ps1' -File | Sort-Object Name)) {
+        $nome = $arq.Name -replace '\.skill\.ps1$', ''
+        $desc = ''; $cmds = @(); $als = @()
+        foreach ($linha in (Get-Content -LiteralPath $arq.FullName -TotalCount 12 -Encoding UTF8)) {
+            if ($linha -match '^#\s*Descri\S*:\s*(.+)$') { $desc = $Matches[1].Trim() }
+            elseif ($linha -match '^#\s*Comandos:\s*(.+)$') { $cmds = @($Matches[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+            elseif ($linha -match '^#\s*Aliases:\s*(.+)$') { $als = @($Matches[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+        }
+        $Global:SkillsIndex[$nome] = @{ Arquivo = $arq.FullName; Descricao = $desc; Comandos = $cmds; Aliases = $als; Carregada = $false }
+        foreach ($cmd in $cmds) {
+            $corpo = "if (`$Global:SkillsIndex['$nome'].Carregada) { throw 'Skill $nome carregada, mas não define $cmd.' }; Import-Skill '$nome'; $cmd @args"
+            Set-Item -Path "Function:\global:$cmd" -Value ([scriptblock]::Create($corpo))
+        }
+        foreach ($par in $als) {
+            $p = $par -split '=', 2
+            if ($p.Count -eq 2) { Set-Alias -Name $p[0] -Value $p[1] -Scope Global }
+        }
+    }
+}
+
+function reload-profile {
+    # Dot-source dentro de função roda no escopo da função: funções e aliases não voltariam à sessão.
+    Write-Host "Dot-source dentro de função não recarrega o perfil na sessão atual." -ForegroundColor Yellow
+    Write-Host "Rode direto no prompt:  . `$PROFILE" -ForegroundColor Cyan
+}
+
+function Show-AliasHelp {
+    Write-Host "==== Aliases do perfil (lidos da sessão) ===="
+    $nomes = @('ah', 'ep', 'ph', 'rh', 'skills')
+    foreach ($k in $Global:SkillsIndex.Keys) {
+        foreach ($par in $Global:SkillsIndex[$k].Aliases) { $nomes += ($par -split '=', 2)[0] }
+    }
+    Get-Alias -Name $nomes -ErrorAction SilentlyContinue | Sort-Object Name |
+        ForEach-Object { Write-Host "$($_.Name): $($_.Definition)" -ForegroundColor Cyan }
+    Write-Host "============================================="
+}
+
+function Show-ProfileHelp {
+    Write-Host "=========== Profile Help ============"
+    Get-Skills | Format-Table -AutoSize -Wrap | Out-Host
+    Write-Host "Núcleo: Get-Skills (skills), Import-Skill, Reload-Skills, Edit-Profile (ep), reload-profile (rh), Show-AliasHelp (ah)"
+    Write-Host "----------------------------------"
+}
+
+Set-Alias ah     Show-AliasHelp
+Set-Alias ep     Edit-Profile
+Set-Alias ph     Show-ProfileHelp
+Set-Alias rh     reload-profile
+Set-Alias skills Get-Skills
+
+Reload-Skills
+
+$Global:ProfileSilentLoad = $false
+Write-Host "Perfil Script Supremo (aprimorado) carregado. Digite 'skills' para listar as skills." -ForegroundColor Green
+
+'@
+            $conteudoFinal = $nucleoA + $textoNucleo + $nucleoB + $powerUps
+        }
+
+        # Existe algo a alterar? Backup antes de qualquer gravação (perfil do usuário, arquivo próprio e skills).
+        $linhaJaPresente = $false
         if (Test-Path -LiteralPath $destino) {
+            $linhaJaPresente = [bool](Select-String -LiteralPath $destino -SimpleMatch 'ScriptSupremo.profile.ps1' -Quiet -ErrorAction SilentlyContinue)
+        }
+        $vaiAlterarDestino = (Test-Path -LiteralPath $destino) -and (-not $linhaJaPresente)
+        $haAlgoParaSalvar = $vaiAlterarDestino -or (Test-Path -LiteralPath $arquivoSupremo) -or (Test-Path -LiteralPath $pastaSkills)
+        if ($haAlgoParaSalvar) {
             if (-not $SemBackup) {
                 $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
                 $backupDir = "C:\ScriptsLogs\PerfilPowerShell_Backup_$ts"
-                if ($PSCmdlet.ShouldProcess($destino, "fazer backup antes de sobrescrever")) {
+                if ($PSCmdlet.ShouldProcess($pastaDestino, "fazer backup antes de alterar")) {
                     if (-not $WhatIf) {
-                        New-Item -ItemType Directory -Path $backupDir -Force -ErrorAction SilentlyContinue | Out-Null
-                        Copy-Item -LiteralPath $destino -Destination (Join-Path $backupDir (Split-Path -Leaf $destino)) -Force -ErrorAction Stop
-                        Write-Log "Backup do profile existente salvo em '$backupDir'." -Type Info
+                        New-Item -ItemType Directory -Path $backupDir -Force -ErrorAction Stop | Out-Null
+                        if ($vaiAlterarDestino) { Copy-Item -LiteralPath $destino -Destination (Join-Path $backupDir (Split-Path -Leaf $destino)) -Force -ErrorAction Stop }
+                        if (Test-Path -LiteralPath $arquivoSupremo) { Copy-Item -LiteralPath $arquivoSupremo -Destination (Join-Path $backupDir 'ScriptSupremo.profile.ps1') -Force -ErrorAction Stop }
+                        if (Test-Path -LiteralPath $pastaSkills) { Copy-Item -LiteralPath $pastaSkills -Destination (Join-Path $backupDir 'Skills') -Recurse -Force -ErrorAction Stop }
+                        Write-Log "Backup salvo em '$backupDir'." -Type Info
                     } else {
-                        Write-Log "Modo WhatIf: profile existente em '$destino' seria salvo em backup antes de sobrescrever." -Type Debug
+                        Write-Log "Modo WhatIf: backup seria salvo em '$backupDir'." -Type Debug
                     }
                 }
             } else {
-                Write-Log "AVISO: -SemBackup ativo — profile existente em '$destino' será sobrescrito sem backup." -Type Warning
+                Write-Log "AVISO: -SemBackup ativo, arquivos existentes serão alterados sem backup." -Type Warning
             }
         }
 
-        Grant-WriteProgress -Activity $activity -Status "Gravando profile em '$destino'..." -PercentComplete 60
-        if ($PSCmdlet.ShouldProcess($destino, "instalar/atualizar perfil PowerShell")) {
+        # (b) + (d) Perfil do Supremo em arquivo próprio, UTF-8 com BOM.
+        Grant-WriteProgress -Activity $activity -Status "Gravando '$arquivoSupremo'..." -PercentComplete 60
+        if ($PSCmdlet.ShouldProcess($arquivoSupremo, "gravar perfil do Script Supremo (modo $Modo)")) {
             if (-not $WhatIf) {
-                Set-Content -LiteralPath $destino -Value $conteudoProfile -Encoding UTF8 -Force -ErrorAction Stop
-                Write-Log "Perfil PowerShell instalado em '$destino'. Abra um novo terminal (ou rode '. `$PROFILE') pra carregar." -Type Success
+                [System.IO.File]::WriteAllText($arquivoSupremo, $conteudoFinal, $utf8Bom)
+                if ($Modo -eq 'Aprimorado') {
+                    New-Item -ItemType Directory -Path $pastaSkills -Force -ErrorAction Stop | Out-Null
+                    foreach ($nomeArq in ($skillsGeradas.Keys | Sort-Object)) {
+                        [System.IO.File]::WriteAllText((Join-Path $pastaSkills $nomeArq), $skillsGeradas[$nomeArq], $utf8Bom)
+                    }
+                }
             } else {
-                Write-Log "Modo WhatIf: perfil seria gravado em '$destino'." -Type Debug
+                Write-Log "Modo WhatIf: perfil seria gravado em '$arquivoSupremo'." -Type Debug
+            }
+        }
+
+        # Uma única linha de dot-source (ASCII, protegida por Test-Path) no perfil existente; não duplica.
+        $linhaDotSource = 'if (Test-Path -LiteralPath "$PSScriptRoot\ScriptSupremo.profile.ps1") { . "$PSScriptRoot\ScriptSupremo.profile.ps1" }  # Script Supremo (Colegio)'
+        if ($linhaJaPresente) {
+            Write-Log "O perfil '$destino' já carrega o ScriptSupremo.profile.ps1; nada a anexar." -Type Debug
+        }
+        elseif ($PSCmdlet.ShouldProcess($destino, "anexar a linha que carrega o ScriptSupremo.profile.ps1")) {
+            if (-not $WhatIf) {
+                if (Test-Path -LiteralPath $destino) {
+                    [System.IO.File]::AppendAllText($destino, "`r`n$linhaDotSource`r`n", $utf8Bom)
+                } else {
+                    [System.IO.File]::WriteAllText($destino, "$linhaDotSource`r`n", $utf8Bom)
+                }
+                Write-Log "Perfil PowerShell ($Modo) instalado: '$arquivoSupremo' carregado por '$destino'. Abra um novo terminal (ou rode '. `$PROFILE') pra carregar." -Type Success
+            } else {
+                Write-Log "Modo WhatIf: a linha de carga seria anexada a '$destino'." -Type Debug
             }
         }
     } catch {
@@ -3811,8 +4061,19 @@ function Add-WiFiNetwork {
     }
 }
 
+function Test-ConsoleInterativoSupremo {
+    # Verdadeiro só em console real, com usuário presente e fora do modo desatendido.
+    # Falso no runspace de fundo da GUI, com stdin redirecionado ou em tarefa agendada.
+    if ($Unattended) { return $false }
+    if ($Host.Name -ne 'ConsoleHost') { return $false }
+    if (-not [Environment]::UserInteractive) { return $false }
+    try { if ([Console]::IsInputRedirected) { return $false } } catch { return $false }
+    return $true
+}
+
 function Read-SenhaConfirmada([string]$rotulo) {
     # Pede a senha duas vezes na console. Devolve SecureString ou $null se não conferir.
+    # Só deve ser chamada no ramo interativo (ver Test-ConsoleInterativoSupremo).
     $s1 = Read-Host $rotulo -AsSecureString
     $s2 = Read-Host 'Repita a senha' -AsSecureString
     $t1 = [System.Net.NetworkCredential]::new('', $s1).Password
@@ -3826,40 +4087,64 @@ function Read-SenhaConfirmada([string]$rotulo) {
 function Invoke-ContasEscola {
     [CmdletBinding(SupportsShouldProcess = $true)]
     # Conta Suporte (administradora, para manutenção) e conta Colégio (padrão, para o uso diário).
-    # As senhas são digitadas na execução e nunca gravadas.
-    param()
+    # As senhas vêm por parâmetro SecureString ou são digitadas em console interativo; nunca são gravadas.
+    # Na GUI/runspace/desatendido não há prompt: a conta sem senha é pulada com Warning.
+    param(
+        [securestring]$SenhaSuporte,
+        [securestring]$SenhaColegio
+    )
     Write-Log -Message "Configurando contas: Suporte (administração) e Colégio (padrão)..." -Type Info
 
-    if (Get-LocalUser -Name 'Suporte' -ErrorAction SilentlyContinue) {
-        Write-Log -Message "Conta Suporte já existe." -Type Debug
-    }
-    elseif ($PSCmdlet.ShouldProcess('Suporte', 'criar conta administradora')) {
-        $senha = Read-SenhaConfirmada 'Senha para a conta Suporte'
-        if ($senha) {
-            New-LocalUser -Name 'Suporte' -Password $senha -FullName 'Suporte CMS' -Description 'Administração do computador' | Out-Null
-            Add-LocalGroupMember -SID 'S-1-5-32-544' -Member 'Suporte'
-            Write-Log -Message "Conta Suporte criada como administradora." -Type Success
+    $contas = @(
+        @{ Nome = 'Suporte'; Sid = 'S-1-5-32-544'; Full = 'Suporte CMS';            Desc = 'Administração do computador'; Senha = $SenhaSuporte; Rotulo = 'administradora' }
+        @{ Nome = 'Colégio'; Sid = 'S-1-5-32-545'; Full = 'Colégio Mundo do Saber'; Desc = 'Conta padrão do colégio';    Senha = $SenhaColegio; Rotulo = 'padrão, sem administrador' }
+    )
+    foreach ($c in $contas) {
+        if (Get-LocalUser -Name $c.Nome -ErrorAction SilentlyContinue) {
+            Write-Log -Message "Conta $($c.Nome) já existe." -Type Debug
+            continue
         }
-        else { Write-Log -Message "Senhas não conferem: conta Suporte não criada." -Type Error }
-    }
+        if (-not $PSCmdlet.ShouldProcess($c.Nome, "criar conta $($c.Rotulo)")) { continue }
 
-    if (Get-LocalUser -Name 'Colégio' -ErrorAction SilentlyContinue) {
-        Write-Log -Message "Conta Colégio já existe." -Type Debug
-    }
-    elseif ($PSCmdlet.ShouldProcess('Colégio', 'criar conta padrão')) {
-        $senha = Read-SenhaConfirmada 'Senha para a conta Colégio'
-        if ($senha) {
-            New-LocalUser -Name 'Colégio' -Password $senha -FullName 'Colégio Mundo do Saber' -Description 'Conta padrão do colégio' | Out-Null
-            Add-LocalGroupMember -SID 'S-1-5-32-545' -Member 'Colégio'
-            Write-Log -Message "Conta Colégio criada (padrão, sem administrador)." -Type Success
+        $senha = $c.Senha
+        if (-not $senha) {
+            if (Test-ConsoleInterativoSupremo) {
+                $senha = Read-SenhaConfirmada "Senha para a conta $($c.Nome)"
+                if (-not $senha) { Write-Log -Message "Senha vazia ou divergente: conta $($c.Nome) não criada." -Type Error; continue }
+            }
+            else {
+                Write-Log -Message "Conta $($c.Nome) não criada: sem console interativo e sem senha por parâmetro (-SenhaSuporte/-SenhaColegio)." -Type Warning
+                continue
+            }
         }
-        else { Write-Log -Message "Senhas não conferem: conta Colégio não criada." -Type Error }
+        try {
+            New-LocalUser -Name $c.Nome -Password $senha -FullName $c.Full -Description $c.Desc -ErrorAction Stop | Out-Null
+            try {
+                Add-LocalGroupMember -SID $c.Sid -Member $c.Nome -ErrorAction Stop
+            }
+            catch {
+                # Evita conta órfã sem grupo: desfaz a criação e relata
+                Remove-LocalUser -Name $c.Nome -ErrorAction SilentlyContinue
+                throw
+            }
+            Write-Log -Message "Conta $($c.Nome) criada ($($c.Rotulo))." -Type Success
+        }
+        catch { Write-Log -Message "ERRO ao criar a conta $($c.Nome): $($_.Exception.Message)" -Type Error }
     }
 
     # Tira Colégio dos administradores só com a sessão Suporte ativa (evita perder o acesso no meio)
     if ($env:USERNAME -eq 'Suporte') {
-        Remove-LocalGroupMember -SID 'S-1-5-32-544' -Member 'Colégio' -ErrorAction SilentlyContinue
-        Write-Log -Message "Conta Colégio fora dos administradores (vale no próximo login)." -Type Success
+        try {
+            $ehAdmin = Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop | Where-Object { $_.Name -like '*\Colégio' }
+            if (-not $ehAdmin) {
+                Write-Log -Message "Conta Colégio já não está nos administradores." -Type Debug
+            }
+            elseif ($PSCmdlet.ShouldProcess('Colégio', 'remover do grupo Administradores')) {
+                Remove-LocalGroupMember -SID 'S-1-5-32-544' -Member 'Colégio' -ErrorAction Stop
+                Write-Log -Message "Conta Colégio fora dos administradores (vale no próximo login)." -Type Success
+            }
+        }
+        catch { Write-Log -Message "ERRO ao tirar Colégio dos administradores: $($_.Exception.Message)" -Type Error }
     }
     else {
         Write-Log -Message "Para tirar Colégio dos administradores, entre com a conta Suporte e rode de novo." -Type Warning
@@ -4056,22 +4341,32 @@ function Install-NetworkPrinters {
         @{ Fila = 'U1 Samsung M4070';      Driver = 'Samsung M337x 387x 407x Series PCL6 Class Driver'; Ip = '172.16.40.40'; Pacote = 'Samsung'; Inf = 'prnsacl1.inf' }
         @{ Fila = 'U1 HP M506 Financeiro'; Driver = 'HP LaserJet M506 PCL 6';                          Ip = '172.16.40.61'; Pacote = 'HPM506';  Inf = '' }
     )
+    if (-not (Test-Path -LiteralPath $PastaDrivers)) {
+        Write-Log -Message "Pasta de drivers inacessível: $PastaDrivers. Só filas com driver já instalado serão configuradas." -Type Warning
+    }
     foreach ($i in $impressoras) {
         if (-not $PSCmdlet.ShouldProcess($i.Fila, 'instalar impressora')) { continue }
         try {
             if ($i.Driver -notin (Get-PrinterDriver).Name) {
+                # Sem INF informado e sem driver instalado (ex.: HP M506): não há o que instalar, pula a fila
+                if (-not $i.Inf) {
+                    Write-Log -Message "Fila '$($i.Fila)' pulada: driver '$($i.Driver)' não está instalado e não há INF configurado." -Type Warning
+                    continue
+                }
                 $inf = Join-Path $PastaDrivers "$($i.Pacote)\$($i.Inf)"
-                if (-not (Test-Path -LiteralPath $inf)) { Write-Log -Message "Pacote ausente: $inf (driver '$($i.Driver)' não instalado)." -Type Warning; continue }
-                pnputil /add-driver $inf /install | Out-Null
+                if (-not (Test-Path -LiteralPath $inf -PathType Leaf)) { Write-Log -Message "Pacote ausente: $inf (driver '$($i.Driver)' não instalado)." -Type Warning; continue }
+                $saida = pnputil /add-driver $inf /install 2>&1
+                # 0 = ok; 3010 = ok, exige reinício
+                if ($LASTEXITCODE -notin 0, 3010) { throw "pnputil falhou (código $LASTEXITCODE): $($saida | Select-Object -Last 1)" }
                 Add-PrinterDriver -Name $i.Driver -ErrorAction Stop
             }
             if (-not (Get-PrinterPort -Name $i.Ip -ErrorAction SilentlyContinue)) {
-                Add-PrinterPort -Name $i.Ip -PrinterHostAddress $i.Ip -PortNumber 9100
+                Add-PrinterPort -Name $i.Ip -PrinterHostAddress $i.Ip -PortNumber 9100 -ErrorAction Stop
             }
             if (Get-Printer -Name $i.Fila -ErrorAction SilentlyContinue) {
-                Set-Printer -Name $i.Fila -DriverName $i.Driver -PortName $i.Ip
+                Set-Printer -Name $i.Fila -DriverName $i.Driver -PortName $i.Ip -ErrorAction Stop
             } else {
-                Add-Printer -Name $i.Fila -DriverName $i.Driver -PortName $i.Ip
+                Add-Printer -Name $i.Fila -DriverName $i.Driver -PortName $i.Ip -ErrorAction Stop
             }
             Write-Log -Message "Impressora $($i.Fila) pronta em $($i.Ip)." -Type Success
         }
@@ -5916,35 +6211,29 @@ function Enable-TaskbarSeconds {
 }
 
 function Rename-Notebook {
-    # CORREÇÃO (GUI): $NovoNome opcional -- com ele, pula direto pro Rename-Computer
-    # (sem esperar teclado); sem ele, mantém o fluxo interativo de sempre (timeout 15s).
+    # -NovoNome opcional: com ele, valida e renomeia direto. Sem ele, só pergunta em console real
+    # (fora do runspace da GUI e de execução desatendida); fora disso, pula com Warning.
+    [CmdletBinding()]
     param([string]$NovoNome)
     if (-not $NovoNome) {
-        Write-Log "Deseja renomear este notebook? (S/N)" -Type Warning
-        $timeout = 15
-        $sw = [Diagnostics.Stopwatch]::StartNew()
-        $input = $null
-Write-Log "Digite o novo nome do notebook e pressione ENTER (ou aguarde $timeout segundos para cancelar):" -Type Info
-        while ($sw.Elapsed.TotalSeconds -lt $timeout -and !$input) {
-            if ([System.Console]::KeyAvailable) {
-                $input = Read-Host
-            } else {
-                Start-Sleep -Milliseconds 200
-            }
-        }
-        $sw.Stop()
-        if ([string]::IsNullOrWhiteSpace($input)) {
-            Write-Log "Tempo esgotado. Renomeação cancelada." -Type Error
-            Start-Sleep -Seconds 2
+        if (-not (Test-ConsoleInterativoSupremo)) {
+            Write-Log "Renomear notebook exige console interativo ou -NovoNome. Nada alterado." -Type Warning
             return
         }
-        $NovoNome = $input
+        $NovoNome = Read-Host "Novo nome do notebook (vazio cancela)"
+        if ([string]::IsNullOrWhiteSpace($NovoNome)) { Write-Log "Renomeação cancelada." -Type Warning; return }
+    }
+    $NovoNome = $NovoNome.Trim()
+    # 1 a 15 caracteres; letras, números, hífen e sublinhado (ex.: Jhully_Lenovo); sem ser só números
+    if ($NovoNome -notmatch '^[A-Za-z0-9_-]{1,15}$' -or $NovoNome -match '^\d+$') {
+        Write-Log "Nome inválido ('$NovoNome'): use de 1 a 15 letras, números, hífen ou sublinhado, sem acentos e sem ser só números." -Type Error
+        return
     }
     try {
-        Rename-Computer -NewName $NovoNome -Force
+        Rename-Computer -NewName $NovoNome -Force -ErrorAction Stop
         Write-Log "Nome do notebook alterado para: $NovoNome. Reinicie para aplicar." -Type Success
     } catch {
-        Write-Log "Erro ao renomear o notebook: $_" -Type Error
+        Write-Log "Erro ao renomear o notebook: $($_.Exception.Message)" -Type Error
     }
     Start-Sleep -Seconds 2
 }
