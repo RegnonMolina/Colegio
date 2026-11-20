@@ -4,6 +4,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
 ## [Não lançado] - GUI repaginada
 
+### Adicionado
+- `Invoke-UninstallReview` e categoria "Desinstalações" na GUI: lê apps da Store (todas as contas), programas que vêm com o notebook, programas instalados e programas do usuário atual, tudo com checkbox vazio; remove em modo silencioso só o que for marcado. Aceita `-SomenteRelatorio` e `-Itens`. Sem administrador, lista só a conta atual e avisa.
+- Categoria "Scripts externos" na GUI com Atualizar pela URL, Chris Titus Toolbox e Ativador get.activated.win. As funções e o menu de texto (J) continuam como estavam; só não apareciam no catálogo da GUI.
 ### Alterado (Gui.ps1)
 - Painel de status com cartões por rotina (Apps, Bloatware, Completa, Contas, Impressoras, Limpeza, Portáteis, Rede), guardado em `%APPDATA%\ScriptSupremo`.
 - Todas as listas começam com o checkbox vazio; "Executar" roda as marcadas em sequência e mostra ✓ verde ou ✗ vermelho conforme o resultado real (exceção, linha de erro no log ou código de saída diferente de 0; 3010 conta como sucesso).
