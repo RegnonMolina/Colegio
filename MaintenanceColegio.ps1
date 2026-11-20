@@ -3866,6 +3866,52 @@ function Invoke-ContasEscola {
     }
 }
 
+function Install-PortableApps {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    # Copia apps portáteis de uma pasta compartilhada para C:\Portateis e cria atalho no menu Iniciar.
+    # Cada subpasta com um .exe aparece na janela com checkbox; só os marcados são copiados.
+    param(
+        [string]$Origem = 'G:\Drives compartilhados\Tecnologia\Portateis',
+        [string]$Destino = 'C:\Portateis'
+    )
+    Write-Log -Message "Procurando apps portáteis em $Origem..." -Type Info
+    if (-not (Test-Path -LiteralPath $Origem)) { Write-Log -Message "Pasta de portáteis não encontrada: $Origem" -Type Warning; return }
+
+    $itens = @()
+    foreach ($pasta in (Get-ChildItem -LiteralPath $Origem -Directory)) {
+        $exe = Get-ChildItem -LiteralPath $pasta.FullName -Filter '*.exe' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch 'unins|setup|install|update|crash' } | Select-Object -First 1
+        if ($exe) {
+            $itens += [pscustomobject]@{
+                Texto   = "$($pasta.Name)  ($($exe.Name))"
+                Valor   = [pscustomobject]@{ Nome = $pasta.Name; Pasta = $pasta.FullName; Exe = $exe.Name }
+                Marcado = $false
+            }
+        }
+    }
+    if ($itens.Count -eq 0) { Write-Log -Message "Nenhum app portátil encontrado em $Origem." -Type Info; return }
+
+    $escolhidos = Show-CheckboxPicker -Titulo 'Apps portáteis (marque os que deseja instalar)' -Itens $itens
+    if (-not $escolhidos) { Write-Log -Message "Nenhum app portátil escolhido." -Type Info; return }
+
+    New-Item -ItemType Directory -Force -Path $Destino | Out-Null
+    $wsh = New-Object -ComObject WScript.Shell
+    foreach ($e in $escolhidos) {
+        $v = $e.Valor
+        if (-not $PSCmdlet.ShouldProcess($v.Nome, 'copiar app portátil')) { continue }
+        try {
+            $alvo = Join-Path $Destino $v.Nome
+            Copy-Item -LiteralPath $v.Pasta -Destination $alvo -Recurse -Force
+            $atalho = $wsh.CreateShortcut((Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "$($v.Nome).lnk"))
+            $atalho.TargetPath = Join-Path $alvo $v.Exe
+            $atalho.WorkingDirectory = $alvo
+            $atalho.Save()
+            Write-Log -Message "App portátil instalado: $($v.Nome)" -Type Success
+        }
+        catch { Write-Log -Message "ERRO ao instalar '$($v.Nome)': $($_.Exception.Message)" -Type Error }
+    }
+}
+
 function Show-CheckboxPicker {
     # Janela com checkbox, "Marcar todos" e "Desmarcar todos". Devolve os itens marcados ou $null.
     # Cada item: @{ Texto = '...'; Valor = <qualquer>; Marcado = $true/$false }
@@ -3998,7 +4044,7 @@ function Install-NetworkPrinters {
     [CmdletBinding(SupportsShouldProcess = $true)]
     # Filas da unidade 2: TCP/IP porta 9100, com os nomes que já existem nas máquinas da U2.
     # Os pacotes de driver (INF) ficam em $PastaDrivers, em subpastas L3250, C5810 e Samsung.
-    param([string]$PastaDrivers = 'G:\Drives compartilhados\MundoCOC\Tecnologia\Gerais\Drivers')
+    param([string]$PastaDrivers = 'G:\Drives compartilhados\Tecnologia\Drivers')
     Write-Log -Message "Instalando impressoras da unidade 2..." -Type Info
     $impressoras = @(
         @{ Fila = 'EPSON-MUNDO2';   Driver = 'EPSON WF-C5810 Series';                            Ip = '172.17.40.157'; Pacote = 'C5810';   Inf = 'E1WF1BQE.INF' }
@@ -6634,6 +6680,7 @@ Write-Log "=============================================" -Type Info
 Write-Log "Executando: Menu de Instalação de Programas (Opção 1 - Todas as Ferramentas)..." -Type Success
     # Chamando a função Install-Applications que está dentro de Show-InstallationMenu opção 1
     Install-Applications
+    Install-PortableApps
     # Se Show-InstallationMenu tivesse outras funções que não estivessem em Install-Applications,
     # ou uma opção de "Executar Todas" mais abrangente, chamaria essa opção aqui.
     Start-Sleep 2
