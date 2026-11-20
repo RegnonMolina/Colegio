@@ -4050,6 +4050,11 @@ function Install-NetworkPrinters {
         @{ Fila = 'EPSON-MUNDO2';   Driver = 'EPSON WF-C5810 Series';                            Ip = '172.17.40.157'; Pacote = 'C5810';   Inf = 'E1WF1BQE.INF' }
         @{ Fila = 'EpsonMundo2';    Driver = 'EPSON L3250 Series';                               Ip = '172.17.40.26';  Pacote = 'L3250';   Inf = 'e_wf1ywe.inf' }
         @{ Fila = 'Samsung Mundo2'; Driver = 'Samsung M337x 387x 407x Series PCL6 Class Driver'; Ip = '172.17.40.25';  Pacote = 'Samsung'; Inf = 'prnsacl1.inf' }
+        # Unidade 1 (padrão antigo dos notebooks da U1): mesmo critério, porta TCP/IP 9100 no IP
+        @{ Fila = 'U1 Epson L3250';        Driver = 'EPSON L3250 Series';                              Ip = '172.16.40.37'; Pacote = 'L3250';   Inf = 'e_wf1ywe.inf' }
+        @{ Fila = 'U1 Epson WF-C5810';     Driver = 'EPSON WF-C5810 Series';                           Ip = '172.16.40.67'; Pacote = 'C5810';   Inf = 'E1WF1BQE.INF' }
+        @{ Fila = 'U1 Samsung M4070';      Driver = 'Samsung M337x 387x 407x Series PCL6 Class Driver'; Ip = '172.16.40.40'; Pacote = 'Samsung'; Inf = 'prnsacl1.inf' }
+        @{ Fila = 'U1 HP M506 Financeiro'; Driver = 'HP LaserJet M506 PCL 6';                          Ip = '172.16.40.61'; Pacote = 'HPM506';  Inf = '' }
     )
     foreach ($i in $impressoras) {
         if (-not $PSCmdlet.ShouldProcess($i.Fila, 'instalar impressora')) { continue }
