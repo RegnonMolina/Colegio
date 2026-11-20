@@ -4241,12 +4241,19 @@ function Set-DnsGoogleCloudflare {
     if ($PSCmdlet.ShouldProcess("servidores DNS", "definir para Cloudflare e Google")) {
         try {
             Grant-WriteProgress -Activity $activity -Status "Obtendo adaptadores de rede..." -PercentComplete 20
-            # Adicionado .GetEnumerator() para garantir que a coleção seja tratada de forma consistente
-            $netIPConfigurations = @(Get-NetIPConfiguration | Where-Object {$_.IPv4Address -and $_.InterfaceAlias -notmatch "Loopback"})
+            # Só adaptador ativo (Up) com IPv4 e gateway, não virtual (Hyper-V, VPN, Bluetooth...) e fora de rede de domínio
+            $netIPConfigurations = @(Get-NetIPConfiguration | Where-Object {
+                $_.IPv4Address -and $_.IPv4DefaultGateway -and
+                $_.NetAdapter -and $_.NetAdapter.Status -eq 'Up' -and -not $_.NetAdapter.Virtual -and
+                $_.NetAdapter.InterfaceDescription -notmatch 'Hyper-V|VPN|TAP|Virtual|VMware|VirtualBox|Bluetooth' -and
+                $_.InterfaceAlias -notmatch 'Loopback|Bluetooth|vEthernet' -and
+                (-not $_.NetProfile -or $_.NetProfile.NetworkCategory -ne 'DomainAuthenticated')
+            })
             if (-not $netIPConfigurations) {
-                Write-Log "Nenhum adaptador de rede ativo com IPv4 encontrado para configurar DNS." -Type Warning
+                Write-Log "Nenhum adaptador físico ativo com gateway (fora de domínio) encontrado para configurar DNS." -Type Warning
                 return
             }
+            $bkpDns = "C:\ScriptsLogs\dns_backup.json"
 
             $totalAdapters = $netIPConfigurations.Count # Recalcular count após .GetEnumerator()
             $currentAdapter = 0
@@ -4265,8 +4272,16 @@ function Set-DnsGoogleCloudflare {
 
                 try {
                     if (-not $WhatIf) {
-                        # Aumentei a verbosidade e adicionei o -Verbose para Set-DnsClientServerAddress se for útil na depuração
-                        # Se você não usa -Verbose em PowerShell, pode remover.
+                        # Guarda o DNS atual (reversão: Set-DnsClientServerAddress -InterfaceAlias <nome> -ServerAddresses <antigos> ou -ResetServerAddresses)
+                        $dnsAtual = Get-DnsClientServerAddress -InterfaceAlias $config.InterfaceAlias -AddressFamily IPv4 -ErrorAction Stop
+                        if (-not (Test-Path -LiteralPath "C:\ScriptsLogs")) { New-Item -ItemType Directory -Path "C:\ScriptsLogs" -Force -ErrorAction Stop | Out-Null }
+                        $registroDns = [pscustomobject]@{
+                            Data           = (Get-Date).ToString('s')
+                            InterfaceAlias = $config.InterfaceAlias
+                            ServerAddresses = @($dnsAtual.ServerAddresses)
+                        }
+                        Add-Content -LiteralPath $bkpDns -Value ($registroDns | ConvertTo-Json -Compress) -Encoding UTF8 -ErrorAction Stop
+                        Write-Log "DNS anterior de $($config.InterfaceAlias) guardado em $bkpDns ($(@($dnsAtual.ServerAddresses) -join ', '))." -Type Info
                         Set-DnsClientServerAddress -InterfaceAlias $config.InterfaceAlias -ServerAddresses ("1.1.1.1","8.8.8.8") -ErrorAction Stop
                         Write-Log "DNS configurado com sucesso para $($config.InterfaceAlias)." -Type Success
                     } else {
@@ -4309,11 +4324,16 @@ function Test-InternetSpeed {
             if (-not (Get-Command speedtest -ErrorAction SilentlyContinue)) {
                 Write-Log "Speedtest CLI não encontrado. Tentando instalar via Winget..." -Type Info
                 if (-not $WhatIf) {
-                    Write-Log "Instalando Ookla.Speedtest..." -Type Info
-                    winget install --id Ookla.Speedtest -e --accept-package-agreements --accept-source-agreements -ErrorAction Stop | Out-Null
-                    Write-Log "Ookla.Speedtest instalado com sucesso." -Type Success
+                    Write-Log "Instalando Ookla.Speedtest.CLI..." -Type Info
+                    # Executável nativo: nunca passar -ErrorAction como argumento; checar $LASTEXITCODE
+                    winget install --id Ookla.Speedtest.CLI -e --accept-package-agreements --accept-source-agreements | Out-Null
+                    if ($LASTEXITCODE -ne 0) { throw "winget falhou ao instalar Ookla.Speedtest.CLI (código $LASTEXITCODE)." }
+                    # Atualiza o PATH da sessão para enxergar o speedtest recém-instalado
+                    $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+                    if (-not (Get-Command speedtest -ErrorAction SilentlyContinue)) { throw "Ookla.Speedtest.CLI instalado, mas 'speedtest' não foi encontrado no PATH." }
+                    Write-Log "Ookla.Speedtest.CLI instalado com sucesso." -Type Success
                 } else {
-                    Write-Log "Modo WhatIf: Ookla.Speedtest seria instalado via Winget." -Type Debug
+                    Write-Log "Modo WhatIf: Ookla.Speedtest.CLI seria instalado via Winget." -Type Debug
                 }
             } else {
                 Write-Log "Speedtest CLI já está instalado." -Type Info
@@ -4322,7 +4342,22 @@ function Test-InternetSpeed {
             Grant-WriteProgress -Activity $activity -Status "Executando teste de velocidade..." -PercentComplete 70
             Write-Log "Executando comando 'speedtest'. Isso pode demorar um pouco..." -Type Info
             if (-not $WhatIf) {
-                speedtest -ErrorAction Stop
+                # Roda como job com tempo limite de 180 s; licença e GDPR aceitas para não travar esperando entrada
+                $exeSpeed = (Get-Command speedtest -ErrorAction Stop).Source
+                $jobSpeed = Start-Job -ScriptBlock {
+                    param($exe)
+                    $o = & $exe --accept-license --accept-gdpr 2>&1
+                    [pscustomobject]@{ Saida = @($o | ForEach-Object { "$_" }); Codigo = $LASTEXITCODE }
+                } -ArgumentList $exeSpeed
+                if (-not (Wait-Job -Job $jobSpeed -Timeout 180)) {
+                    Stop-Job -Job $jobSpeed
+                    Remove-Job -Job $jobSpeed -Force
+                    throw "speedtest excedeu o tempo limite de 180 segundos."
+                }
+                $resSpeed = Receive-Job -Job $jobSpeed
+                Remove-Job -Job $jobSpeed -Force
+                foreach ($linhaSpeed in $resSpeed.Saida) { Write-Log "$linhaSpeed" -Type Info }
+                if ($resSpeed.Codigo -ne 0) { throw "speedtest terminou com código $($resSpeed.Codigo)." }
                 Write-Log "Teste de velocidade concluído." -Type Success
             } else {
                 Write-Log "Modo WhatIf: Comando 'speedtest' seria executado." -Type Debug
@@ -4344,20 +4379,7 @@ function Optimize-NetworkPerformance {
 
     if ($PSCmdlet.ShouldProcess("configurações de rede", "otimizar")) {
         try {
-            Grant-WriteProgress -Activity $activity -Status "Desabilitando Auto-Tuning de Recebimento TCP (pode melhorar algumas transferências)." -PercentComplete 10
-            Write-Log "Desabilitando Auto-Tuning de Recebimento TCP..." -Type Info
-            try {
-                if (-not $WhatIf) {
-                    & netsh int tcp set global autotuninglevel=disabled
-                    if ($LASTEXITCODE -ne 0) { throw "Falha ao desabilitar auto-tuning TCP." }
-                    Write-Log "Auto-Tuning de Recebimento TCP desabilitado." -Type Success
-                } else {
-                    Write-Log "Modo WhatIf: Auto-Tuning de Recebimento TCP seria desabilitado." -Type Debug
-                }
-            } catch {
-                Write-Log "Falha ao desabilitar Auto-Tuning de Recebimento TCP: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
-            }
-
+            # Auto-Tuning e provedor de congestionamento TCP ficam no padrão do Windows (não são alterados).
             Grant-WriteProgress -Activity $activity -Status "Habilitando RSS (Receive Side Scaling) para multi-core NICs." -PercentComplete 30
             Write-Log "Habilitando RSS (Receive Side Scaling)..." -Type Info
             try {
@@ -4372,73 +4394,45 @@ function Optimize-NetworkPerformance {
                 Write-Log "Falha ao habilitar RSS: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
             }
 
-            Grant-WriteProgress -Activity $activity -Status "Desabilitando o 'Compound TCP' (CUBIC) se necessário." -PercentComplete 50
-            Write-Log "Desabilitando 'Compound TCP' (CUBIC)..." -Type Info
-            try {
-                if (-not $WhatIf) {
-                    & netsh int tcp set global congestionprovider=none
-                    if ($LASTEXITCODE -ne 0) { throw "Falha ao desabilitar Compound TCP." }
-                    Write-Log "'Compound TCP' (CUBIC) desabilitado." -Type Success
-                } else {
-                    Write-Log "Modo WhatIf: 'Compound TCP' seria desabilitado." -Type Debug
-                }
-            } catch {
-                Write-Log "Falha ao desabilitar 'Compound TCP': $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
-            }
-
-            # Configurações de registro para otimização de rede
+            # Ajustes de registro que ainda têm efeito (erro visível; o log só diz sucesso se aplicou).
             Grant-WriteProgress -Activity $activity -Status "Aplicando ajustes de registro para otimização de rede..." -PercentComplete 70
             Write-Log "Aplicando ajustes de registro para otimização de rede..." -Type Info
-            try {
-                $networkRegTweaks = @{
-                    "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" = @{
-                        "TcpWindowSize" = 2097152; # Maior janela TCP
-                        "Tcp1323Opts" = 3;         # Habilita TimeStamps e Janela Escalável
-                        "GlobalMaxTcpWindowSize" = 16777216; # Janela global máxima
-                        "EnablePMTUDiscovery" = 1; # Habilita Descoberta de PMTU
-                        "DefaultTTL" = 64;         # Time To Live
-                    };
-                    "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" = @{
-                        "AllowCacheEncryption" = 0; # Desabilita criptografia de cache para SMB (desempenho)
-                        "DisableBandwidthThrottling" = 1; # Desabilita limitação de banda
-                    };
-                }
-
-                foreach ($path in $networkRegTweaks.Keys) {
-                    Write-Log "Processando chave de registro: $path" -Type Debug
-                    foreach ($name in $networkRegTweaks[$path].Keys) {
-                        $value = $networkRegTweaks[$path][$name]
-                        if (-not $WhatIf) {
-                            Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction SilentlyContinue
-                            Write-Log "Registro '$path\$name' definido para '$value'." -Type Debug
-                        } else {
-                            Write-Log "Modo WhatIf: Registro '$path\$name' seria definido para '$value'." -Type Debug
-                        }
+            $networkRegTweaks = @{
+                "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" = @{
+                    "EnablePMTUDiscovery" = 1; # Habilita Descoberta de PMTU
+                    "DefaultTTL" = 64;         # Time To Live
+                };
+                "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" = @{
+                    "DisableBandwidthThrottling" = 1; # Desabilita limitação de banda
+                };
+            }
+            $falhasReg = 0
+            $aplicadosReg = 0
+            foreach ($path in $networkRegTweaks.Keys) {
+                Write-Log "Processando chave de registro: $path" -Type Debug
+                foreach ($name in $networkRegTweaks[$path].Keys) {
+                    $value = $networkRegTweaks[$path][$name]
+                    if ($WhatIf) {
+                        Write-Log "Modo WhatIf: Registro '$path\$name' seria definido para '$value'." -Type Debug
+                        continue
+                    }
+                    try {
+                        if (-not (Test-Path -LiteralPath $path)) { New-Item -Path $path -Force -ErrorAction Stop | Out-Null }
+                        Set-ItemProperty -Path $path -Name $name -Value $value -Force -ErrorAction Stop
+                        $aplicadosReg++
+                        Write-Log "Registro '$path\$name' definido para '$value'." -Type Debug
+                    } catch {
+                        $falhasReg++
+                        Write-Log "Falha ao definir '$path\$name': $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
                     }
                 }
-                Write-Log "Ajustes de registro de rede aplicados." -Type Success
-            } catch {
-                Write-Log "Falha ao aplicar ajustes de registro de rede: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Warning
             }
-
-            Grant-WriteProgress -Activity $activity -Status "Verificando e desabilitando ECN Capability (Explicit Congestion Notification)." -PercentComplete 90
-            Write-Log "Verificando ECN Capability..." -Type Info
-            try {
-                if (-not $WhatIf) { # ECN é uma configuração TCP global, não por adaptador. Exemplo via netsh:
-                    # netsh int tcp set global ecncapability=disabled
-                    # Ou via Set-NetTCPSetting para perfis.
-                    # Por simplicidade, se for para desativar, um Set-NetTCPSetting seria mais PowerShell-idiomatic.
-                    # Mas se a intenção é via registro, é mais complexo.
-                    # Por agora, mantenho o exemplo globalmente via netsh para referencia,
-                    # mas não adiciono ao script para evitar dependências externas sem controle de erro do PowerShell.
-                    # A implementação atual no script original não faz essa parte.
-                    Write-Log "Capacidade ECN: A configuração global de ECN não é feita por este script." -Type Info
-                } else {
-                    Write-Log "Modo WhatIf: Capacidade ECN seria desabilitada (se implementado)." -Type Debug
-                }
-            } catch {
-                Write-Log "ERRO ao aplicar configurações globais de TCP/Registro: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
-                Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+            if ($WhatIf) {
+                Write-Log "Modo WhatIf: nenhum ajuste de registro foi aplicado." -Type Debug
+            } elseif ($falhasReg -eq 0) {
+                Write-Log "Ajustes de registro de rede aplicados ($aplicadosReg)." -Type Success
+            } else {
+                Write-Log "Ajustes de registro de rede: $aplicadosReg aplicado(s), $falhasReg falha(s)." -Type Warning
             }
             Write-Log "Otimização de desempenho da rede concluída." -Type Success
             Write-Log "Otimizações de rede aplicadas. Um reinício pode ser necessário para algumas alterações terem efeito completo." -Type Warning
@@ -4453,7 +4447,7 @@ function Optimize-NetworkPerformance {
 }
 
 function Disable-IPv6 {
-    [CmdletBinding(SupportsShouldProcess = $true)]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
     param(
     )
     Write-Log "Iniciando desabilitação do IPv6..." -Type Info
@@ -4463,8 +4457,20 @@ function Disable-IPv6 {
             Grant-WriteProgress -Activity $activity -Status "Criando/modificando entrada de registro para IPv6..." -PercentComplete 50
             Write-Log "Criando ou modificando a entrada de registro 'DisabledComponents' para desabilitar IPv6." -Type Info
             if (-not $WhatIf) {
+                $chaveIpv6 = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
+                # Guarda o valor anterior (ou AUSENTE) para o Restore-DefaultIPv6.
+                # Não sobrescreve um backup já existente, para não perder o original em execuções repetidas.
+                $bkpIpv6 = "C:\ScriptsLogs\ipv6_DisabledComponents.bak"
+                if (-not (Test-Path -LiteralPath $bkpIpv6)) {
+                    $propAnterior = Get-ItemProperty -Path $chaveIpv6 -Name "DisabledComponents" -ErrorAction SilentlyContinue
+                    $valorAnterior = 'AUSENTE'
+                    if ($propAnterior) { $valorAnterior = [string]$propAnterior.DisabledComponents }
+                    if (-not (Test-Path -LiteralPath "C:\ScriptsLogs")) { New-Item -ItemType Directory -Path "C:\ScriptsLogs" -Force -ErrorAction Stop | Out-Null }
+                    Set-Content -LiteralPath $bkpIpv6 -Value $valorAnterior -Encoding ASCII -ErrorAction Stop
+                    Write-Log "Valor anterior de DisabledComponents guardado em $bkpIpv6 ($valorAnterior)." -Type Info
+                }
                 # O valor 0xFF desabilita todos os componentes IPv6 (incluindo túnel)
-                New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Name "DisabledComponents" -PropertyType DWord -Value 0xFF -Force -ErrorAction Stop | Out-Null
+                New-ItemProperty -Path $chaveIpv6 -Name "DisabledComponents" -PropertyType DWord -Value 0xFF -Force -ErrorAction Stop | Out-Null
                 Write-Log "IPv6 desativado com sucesso. Um reinício é necessário para aplicar a alteração." -Type Success
             } else {
                 Write-Log "Modo WhatIf: IPv6 seria desativado via registro. Um reinício seria necessário." -Type Debug
@@ -6187,10 +6193,29 @@ Write-Log "Erro ao restaurar o UAC. Verifique o log." -Type Error
 }
 
 function Restore-DefaultIPv6 {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param()
     Write-Log "Reabilitando IPv6..." -Type Warning
+    if (-not $PSCmdlet.ShouldProcess("IPv6", "restaurar DisabledComponents anterior")) { return }
     try {
-        Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters" -Name "DisabledComponents" -ErrorAction SilentlyContinue
-        Write-Log "IPv6 reabilitado." -Type Success
+        $chave = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
+        $bkp = "C:\ScriptsLogs\ipv6_DisabledComponents.bak"
+        $anterior = $null
+        if (Test-Path -LiteralPath $bkp) {
+            $anterior = (Get-Content -LiteralPath $bkp -ErrorAction Stop | Select-Object -First 1)
+        }
+        if ($anterior -and $anterior -ne 'AUSENTE') {
+            # Restaura exatamente o valor que existia antes do Disable-IPv6
+            New-ItemProperty -Path $chave -Name "DisabledComponents" -PropertyType DWord -Value ([int]$anterior) -Force -ErrorAction Stop | Out-Null
+            Write-Log "IPv6: DisabledComponents restaurado para o valor anterior ($anterior)." -Type Success
+        } else {
+            # Sem backup ou valor antes ausente: remove a chave (padrão do Windows)
+            if (Get-ItemProperty -Path $chave -Name "DisabledComponents" -ErrorAction SilentlyContinue) {
+                Remove-ItemProperty -Path $chave -Name "DisabledComponents" -ErrorAction Stop
+            }
+            Write-Log "IPv6: DisabledComponents removido (padrão do Windows)." -Type Success
+        }
+        Write-Log "IPv6 reabilitado. Reinicie o computador para aplicar." -Type Success
     } catch { Write-Log "Erro ao reabilitar IPv6: $_" -Type Error }
 }
 
