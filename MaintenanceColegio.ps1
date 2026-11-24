@@ -1492,6 +1492,7 @@ function Compress-Videos {
 
             # --- Parâmetros de vídeo/áudio deste arquivo ---
             $audioK = 96
+            $dur = $null
             if ($TamanhoAlvoMB -gt 0) {
                 $dur = Get-VideoDurationSeconds -Path $origem
                 if (-not $dur) {
@@ -1529,6 +1530,7 @@ function Compress-Videos {
                     Write-Log "Comprimindo ($i/$total): '$nomeArquivo' ($(Format-VideoSize $tamOrigem))..." -Type Info
                     $ffmpegArgs = @(
                         '-nostdin', '-y', '-hide_banner', '-loglevel', 'error',
+                        '-progress', 'pipe:1', '-nostats',
                         '-i', $origem,
                         '-map', '0:v:0', '-map', '0:a:0?',
                         '-c:v', 'libx264', '-preset', 'medium'
@@ -1540,7 +1542,34 @@ function Compress-Videos {
                         $destino
                     )
                     try {
-                        $saida = & ffmpeg @ffmpegArgs 2>&1
+                        # Progresso: o ffmpeg informa o tempo já processado (-progress pipe:1); dividido pela
+                        # duração dá o percentual, que vai para a barra (Write-Progress) e para o log a cada 10%.
+                        $durProg = if ($dur) { $dur } else { Get-VideoDurationSeconds -Path $origem }
+                        $relogio = [System.Diagnostics.Stopwatch]::StartNew()
+                        $ultimoPct = -1
+                        $ultimoLog = -10
+                        $saida = New-Object System.Collections.Generic.List[string]
+                        & ffmpeg @ffmpegArgs 2>&1 | ForEach-Object {
+                            $linha = [string]$_
+                            if ($linha -match '^out_time_(?:us|ms)=(\d+)$') {
+                                if ($durProg -and $durProg -gt 0) {
+                                    $frac = [math]::Min(1.0, ([double]$Matches[1] / 1000000.0) / $durProg)
+                                    $pct = [int][math]::Floor($frac * 100)
+                                    if ($pct -ne $ultimoPct) {
+                                        $ultimoPct = $pct
+                                        $geral = [int][math]::Floor((($i - 1) + $frac) / $total * 100)
+                                        Grant-WriteProgress -Activity $activity -Status "Comprimindo ($i/$total): $nomeArquivo - $pct%" -PercentComplete ([math]::Min(99, $geral))
+                                        if ($pct -ge ($ultimoLog + 10)) {
+                                            $ultimoLog = $pct - ($pct % 10)
+                                            $eta = if ($frac -gt 0.02) { ' (faltam ~' + [TimeSpan]::FromSeconds([math]::Round($relogio.Elapsed.TotalSeconds * (1 - $frac) / $frac)).ToString('mm\:ss') + ')' } else { '' }
+                                            Write-Log "  $nomeArquivo : $pct%$eta" -Type Info
+                                        }
+                                    }
+                                }
+                            } elseif ($linha -notmatch '^(frame|fps|stream_[0-9_]+_q|bitrate|total_size|out_time\w*|dup_frames|drop_frames|speed|progress)=') {
+                                $saida.Add($linha)
+                            }
+                        }
                         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $destino)) {
                             $falhas++
                             Write-Log "ERRO: ffmpeg terminou com código $LASTEXITCODE ao comprimir '$origem'." -Type Error
