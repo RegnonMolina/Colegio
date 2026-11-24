@@ -648,7 +648,7 @@ $script:GuiXaml = @'
 
             <Button x:Name="BtnExecutar" Content="Executar" Style="{DynamicResource BotaoPrimario}" Height="42" IsEnabled="False" Margin="0,14,0,0"/>
             <Button x:Name="BtnVerComando" Content="Ver comando equivalente" Style="{DynamicResource BotaoSecundario}" Margin="0,6,0,0" HorizontalAlignment="Stretch"/>
-            <ProgressBar x:Name="PrgExec" Height="6" Margin="0,10,0,0" Visibility="Collapsed" IsIndeterminate="False"
+            <ProgressBar x:Name="PrgExec" Height="10" Margin="0,10,0,0" Visibility="Collapsed" IsIndeterminate="False"
                          Foreground="{DynamicResource Accent}" Background="{DynamicResource PanelDark}" BorderThickness="0"/>
             <TextBlock x:Name="TxtStatus" Margin="0,8,0,0" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
           </StackPanel>
@@ -2086,6 +2086,22 @@ function Invoke-MaintenanceGuiWindow {
         try {
         if ($st.Handle -and -not $st.Handle.IsCompleted -and $st.Cronometro) {
             $txtStatus.Text = $st.StatusBase + ' (' + $st.Cronometro.Elapsed.ToString('mm\:ss') + ')'
+            # Barra de progresso real: se a função emitiu Write-Progress (Grant-WriteProgress), usa o último
+            # percentual; sem progresso, a barra segue indeterminada (animada).
+            try {
+                $regs = $st.PS.Streams.Progress
+                if ($regs -and $regs.Count -gt 0) {
+                    $ult = $regs[$regs.Count - 1]
+                    $regs.Clear()
+                    $pctGui = [int]$ult.PercentComplete
+                    if ($pctGui -ge 0 -and $pctGui -le 100) {
+                        $prgExec.IsIndeterminate = $false
+                        $prgExec.Minimum = 0; $prgExec.Maximum = 100
+                        $prgExec.Value = $pctGui
+                        if ($ult.StatusDescription) { $txtStatus.Text = $st.StatusBase + ' - ' + $ult.StatusDescription + ' (' + $st.Cronometro.Elapsed.ToString('mm\:ss') + ')' }
+                    }
+                }
+            } catch { }
         }
 
         if ($st.Handle -and $st.Handle.IsCompleted) {
