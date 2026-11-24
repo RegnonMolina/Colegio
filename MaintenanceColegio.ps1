@@ -1239,6 +1239,21 @@ function Convert-IvmsCctvVideos {
         return $dest
     }
 
+    # Lê o codec de vídeo do arquivo (ffprobe; se não houver, o texto do ffmpeg -i). Devolve $null se não
+    # conseguir ler: nesse caso o comportamento antigo (tentar converter) é mantido.
+    function Get-VideoCodecName {
+        param([string]$Path)
+        try {
+            if (Test-CommandExists 'ffprobe') {
+                $c = (& ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of 'default=nw=1:nk=1' $Path 2>$null | Select-Object -First 1)
+                if ($c) { return ([string]$c).Trim().ToLowerInvariant() }
+            }
+            $info = (& ffmpeg -hide_banner -i $Path 2>&1 | Out-String)
+            if ($info -match 'Video:\s*([A-Za-z0-9_]+)') { return $Matches[1].ToLowerInvariant() }
+        } catch { }
+        return $null
+    }
+
     $activity = "Conversão de Vídeos iVMS-4200"
 
     if (-not (Test-CommandExists 'ffmpeg')) {
@@ -1266,13 +1281,29 @@ function Convert-IvmsCctvVideos {
         $total = $arquivosValidos.Count
         $processados = 0
         $falhas = 0
+        $ignorados = 0
         $i = 0
         foreach ($origem in $arquivosValidos) {
             $i++
             $nomeArquivo = Split-Path -Leaf $origem
             Grant-WriteProgress -Activity $activity -Status "Convertendo ($i/$total): $nomeArquivo" -PercentComplete ([math]::Round(($i / $total) * 100))
 
+            # O remux abaixo (hevc_metadata + tag hvc1) só vale para H.265/HEVC. Arquivo em outro codec
+            # (ex.: H.264, como os .mp4 do WhatsApp) não precisa de conversão e faria o ffmpeg falhar.
+            $codec = Get-VideoCodecName -Path $origem
+            if ($codec -and $codec -ne 'hevc') {
+                $ignorados++
+                Write-Log "Ignorado (o vídeo já é '$codec', não HEVC; nada a converter): '$nomeArquivo'" -Type Warning
+                continue
+            }
+
             $destino = if ($SobrescreverExistente) { Join-Path $DestFolder $nomeArquivo } else { Get-SafeVideoDestination -TargetDir $DestFolder -FileName $nomeArquivo }
+            # O ffmpeg não edita arquivo no lugar: se o destino for o próprio arquivo de origem (mesma pasta
+            # com "sobrescrever"), grava com nome alternativo em vez de falhar ("same as Input").
+            if ([string]::Equals([System.IO.Path]::GetFullPath($destino), [System.IO.Path]::GetFullPath($origem), [System.StringComparison]::OrdinalIgnoreCase)) {
+                $destino = Get-SafeVideoDestination -TargetDir $DestFolder -FileName $nomeArquivo
+                Write-Log "AVISO: o destino seria o próprio arquivo de origem; usando '$([System.IO.Path]::GetFileName($destino))'." -Type Warning
+            }
 
             if ($PSCmdlet.ShouldProcess($origem, "converter para '$destino'")) {
                 if (-not (Test-ModoSimulacao)) {
@@ -1315,9 +1346,239 @@ function Convert-IvmsCctvVideos {
             }
         }
 
-        Write-Log "Conversão concluída: $processados vídeo(s) convertido(s), $falhas falha(s)." -Type $(if ($falhas -eq 0) { 'Success' } else { 'Warning' })
+        Write-Log "Conversão concluída: $processados vídeo(s) convertido(s), $ignorados ignorado(s) (não eram HEVC), $falhas falha(s)." -Type $(if ($falhas -eq 0) { 'Success' } else { 'Warning' })
     } catch {
         Write-Log "ERRO GERAL na conversão de vídeos: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+        Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
+    } finally {
+        Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
+    }
+}
+
+function Compress-Videos {
+    <#
+    .SYNOPSIS
+        Comprime vídeos (qualquer formato que o ffmpeg leia) para MP4 H.264 menor,
+        pra enviar por WhatsApp/e-mail ou liberar espaço.
+    .DESCRIPTION
+        Recodifica cada arquivo de -SourceFiles com ffmpeg (libx264 + áudio AAC,
+        faststart) e salva como "<nome>_comprimido.mp4". O ORIGINAL NUNCA é
+        alterado nem apagado. Dois modos:
+
+        - Por perfil (padrão): -Perfil Leve (qualidade alta, até 1080p), Medio
+          (equilíbrio, até 720p, padrão) ou Forte (bem menor, até 480p). Nunca
+          aumenta a resolução; só reduz se o vídeo for maior que o teto do perfil.
+        - Por tamanho-alvo: -TamanhoAlvoMB 15 calcula o bitrate pela duração do
+          vídeo pra ficar em até ~15 MB (com 8% de margem) e escolhe a altura pela
+          taxa resultante. Quando informado, vale no lugar do perfil. Alvo
+          pequeno demais pra duração (menos de ~100 kbps de vídeo) é recusado.
+
+        Se o resultado não ficar menor que o original, o arquivo novo é descartado
+        e o original é mantido (aviso no log). Se já existir "<nome>_comprimido.mp4"
+        no destino, gera nome alternativo (-SobrescreverExistente força a troca).
+        Requer ffmpeg no PATH (winget install Gyan.FFmpeg); ffprobe, se houver,
+        agiliza a leitura da duração. Suporta -WhatIf/-Confirm.
+    .PARAMETER SourceFiles
+        Caminho(s) completo(s) do(s) vídeo(s) de origem.
+    .PARAMETER DestFolder
+        Pasta de destino (criada se não existir). Se omitida, usa a pasta do
+        próprio arquivo de origem.
+    .PARAMETER Perfil
+        Leve, Medio (padrão) ou Forte. Ignorado se -TamanhoAlvoMB for informado.
+    .PARAMETER TamanhoAlvoMB
+        Tamanho máximo desejado por arquivo, em MB (0 = desligado, usa o perfil).
+    .PARAMETER SobrescreverExistente
+        Se já existir o arquivo "_comprimido" no destino, sobrescreve em vez de
+        gerar nome alternativo.
+    .EXAMPLE
+        Compress-Videos -SourceFiles 'C:\Videos\aula.mp4' -Perfil Medio
+    .EXAMPLE
+        Compress-Videos -SourceFiles 'C:\Videos\aula.mp4' -TamanhoAlvoMB 15 -DestFolder 'C:\Videos\Menores'
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Low')]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$SourceFiles,
+
+        [string]$DestFolder,
+
+        [ValidateSet('Leve', 'Medio', 'Forte')]
+        [string]$Perfil = 'Medio',
+
+        [int]$TamanhoAlvoMB = 0,
+
+        [switch]$SobrescreverExistente
+    )
+
+    # --- Helpers locais (escopo só desta função) ---
+    function Get-SafeCompressedDestination {
+        param([string]$TargetDir, [string]$BaseName)
+        $dest = Join-Path $TargetDir ("{0}_comprimido.mp4" -f $BaseName)
+        $n = 2
+        while (Test-Path -LiteralPath $dest) {
+            $dest = Join-Path $TargetDir ("{0}_comprimido{1}.mp4" -f $BaseName, $n)
+            $n++
+        }
+        return $dest
+    }
+
+    # Duração em segundos (ffprobe; se não houver, texto do ffmpeg -i). $null se não conseguir ler.
+    function Get-VideoDurationSeconds {
+        param([string]$Path)
+        try {
+            if (Test-CommandExists 'ffprobe') {
+                $d = (& ffprobe -v error -show_entries format=duration -of 'default=nw=1:nk=1' $Path 2>$null | Select-Object -First 1)
+                $v = 0.0
+                if ($d -and [double]::TryParse(([string]$d).Trim(), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$v) -and $v -gt 0) { return $v }
+            }
+            $info = (& ffmpeg -hide_banner -i $Path 2>&1 | Out-String)
+            if ($info -match 'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)') {
+                return ([int]$Matches[1] * 3600) + ([int]$Matches[2] * 60) + [double]::Parse($Matches[3], [System.Globalization.CultureInfo]::InvariantCulture)
+            }
+        } catch { }
+        return $null
+    }
+
+    function Format-VideoSize {
+        param([double]$Bytes)
+        if ($Bytes -ge 1GB) { return ('{0:N2} GB' -f ($Bytes / 1GB)) }
+        return ('{0:N1} MB' -f ($Bytes / 1MB))
+    }
+
+    $activity = "Compressão de Vídeos"
+
+    if (-not (Test-CommandExists 'ffmpeg')) {
+        Write-Log "ffmpeg não encontrado no PATH. Instale com 'winget install Gyan.FFmpeg' e tente novamente." -Type Error
+        return
+    }
+
+    $arquivosValidos = @($SourceFiles | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -Unique)
+    $invalidos = @($SourceFiles | Where-Object { $_ -and -not (Test-Path -LiteralPath $_ -PathType Leaf) })
+    foreach ($inv in $invalidos) { Write-Log "AVISO: arquivo de origem não encontrado, ignorado: $inv" -Type Warning }
+    if ($arquivosValidos.Count -eq 0) {
+        Write-Log "Nenhum arquivo de origem válido informado. Nada a fazer." -Type Warning
+        return
+    }
+    if ($TamanhoAlvoMB -lt 0) {
+        Write-Log "TamanhoAlvoMB não pode ser negativo (use 0 para desligar)." -Type Error
+        return
+    }
+
+    # Perfis: CRF do x264 (menor = melhor qualidade), altura máxima e bitrate do áudio.
+    $perfis = @{
+        'Leve'  = @{ Crf = 23; Altura = 1080; AudioK = 128 }
+        'Medio' = @{ Crf = 27; Altura = 720;  AudioK = 96 }
+        'Forte' = @{ Crf = 31; Altura = 480;  AudioK = 64 }
+    }
+    $modo = if ($TamanhoAlvoMB -gt 0) { "tamanho-alvo de $TamanhoAlvoMB MB" } else { "perfil $Perfil" }
+    Write-Log "Iniciando compressão de $($arquivosValidos.Count) vídeo(s) ($modo)..." -Type Info
+
+    try {
+        $total = $arquivosValidos.Count
+        $processados = 0
+        $ignorados = 0
+        $falhas = 0
+        $bytesAntes = 0.0
+        $bytesDepois = 0.0
+        $i = 0
+        foreach ($origem in $arquivosValidos) {
+            $i++
+            $nomeArquivo = Split-Path -Leaf $origem
+            $baseNome = [System.IO.Path]::GetFileNameWithoutExtension($nomeArquivo)
+            Grant-WriteProgress -Activity $activity -Status "Comprimindo ($i/$total): $nomeArquivo" -PercentComplete ([math]::Round(($i / $total) * 100))
+
+            $pastaDestino = if ($DestFolder) { $DestFolder } else { Split-Path -Parent $origem }
+            $tamOrigem = (Get-Item -LiteralPath $origem).Length
+
+            # --- Parâmetros de vídeo/áudio deste arquivo ---
+            $audioK = 96
+            if ($TamanhoAlvoMB -gt 0) {
+                $dur = Get-VideoDurationSeconds -Path $origem
+                if (-not $dur) {
+                    $falhas++
+                    Write-Log "ERRO: não consegui ler a duração de '$nomeArquivo' (necessária para o tamanho-alvo). Use -Perfil." -Type Error
+                    continue
+                }
+                # 1 MB = 8388 kbit; 8% de margem pro container e variações do codificador.
+                $videoK = [int][math]::Floor(($TamanhoAlvoMB * 8388 * 0.92) / $dur - $audioK)
+                if ($videoK -lt 100) {
+                    $falhas++
+                    Write-Log "ERRO: $TamanhoAlvoMB MB é pequeno demais para '$nomeArquivo' ($([math]::Round($dur / 60, 1)) min). Aumente o alvo ou use -Perfil Forte." -Type Error
+                    continue
+                }
+                $altura = if ($videoK -ge 2500) { 1080 } elseif ($videoK -ge 1000) { 720 } elseif ($videoK -ge 400) { 480 } else { 360 }
+                $qualidade = @('-b:v', "${videoK}k", '-maxrate', "$([int]($videoK * 1.5))k", '-bufsize', "$($videoK * 3)k")
+            } else {
+                $p = $perfis[$Perfil]
+                $audioK = $p.AudioK
+                $altura = $p.Altura
+                $qualidade = @('-crf', [string]$p.Crf)
+            }
+
+            $destino = if ($SobrescreverExistente) { Join-Path $pastaDestino ("{0}_comprimido.mp4" -f $baseNome) } else { Get-SafeCompressedDestination -TargetDir $pastaDestino -BaseName $baseNome }
+            # O ffmpeg não edita arquivo no lugar: se o destino fosse o próprio original, usa nome alternativo.
+            if ([string]::Equals([System.IO.Path]::GetFullPath($destino), [System.IO.Path]::GetFullPath($origem), [System.StringComparison]::OrdinalIgnoreCase)) {
+                $destino = Get-SafeCompressedDestination -TargetDir $pastaDestino -BaseName $baseNome
+            }
+
+            if ($PSCmdlet.ShouldProcess($origem, "comprimir para '$destino'")) {
+                if (-not $WhatIf) {
+                    if (-not (Test-Path -LiteralPath $pastaDestino)) {
+                        New-Item -ItemType Directory -Path $pastaDestino -Force -ErrorAction Stop | Out-Null
+                    }
+                    Write-Log "Comprimindo ($i/$total): '$nomeArquivo' ($(Format-VideoSize $tamOrigem))..." -Type Info
+                    $ffmpegArgs = @(
+                        '-nostdin', '-y', '-hide_banner', '-loglevel', 'error',
+                        '-i', $origem,
+                        '-map', '0:v:0', '-map', '0:a:0?',
+                        '-c:v', 'libx264', '-preset', 'medium'
+                    ) + $qualidade + @(
+                        '-vf', "scale=-2:min($altura\,ih)",
+                        '-pix_fmt', 'yuv420p',
+                        '-c:a', 'aac', '-b:a', "${audioK}k",
+                        '-movflags', '+faststart',
+                        $destino
+                    )
+                    try {
+                        $saida = & ffmpeg @ffmpegArgs 2>&1
+                        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $destino)) {
+                            $falhas++
+                            Write-Log "ERRO: ffmpeg terminou com código $LASTEXITCODE ao comprimir '$origem'." -Type Error
+                            $saida | Select-Object -Last 15 | ForEach-Object { Write-Log "  ffmpeg: $_" -Type Debug }
+                            if (Test-Path -LiteralPath $destino) { Remove-Item -LiteralPath $destino -Force -ErrorAction SilentlyContinue }
+                        } else {
+                            $tamNovo = (Get-Item -LiteralPath $destino).Length
+                            if ($tamNovo -ge $tamOrigem) {
+                                # Não compensou: descarta o novo e mantém o original (nada foi alterado).
+                                Remove-Item -LiteralPath $destino -Force -ErrorAction SilentlyContinue
+                                $ignorados++
+                                Write-Log "Ignorado: '$nomeArquivo' já é bem compacto; o resultado ficaria com $(Format-VideoSize $tamNovo) (original $(Format-VideoSize $tamOrigem)). Original mantido." -Type Warning
+                            } else {
+                                $processados++
+                                $bytesAntes += $tamOrigem
+                                $bytesDepois += $tamNovo
+                                $economia = [math]::Round((1 - ($tamNovo / $tamOrigem)) * 100)
+                                Write-Log "Comprimido: '$nomeArquivo' $(Format-VideoSize $tamOrigem) -> $(Format-VideoSize $tamNovo) (-$economia%) em '$destino'" -Type Success
+                                if ($TamanhoAlvoMB -gt 0 -and $tamNovo -gt ($TamanhoAlvoMB * 1MB)) {
+                                    Write-Log "AVISO: ficou acima do alvo de $TamanhoAlvoMB MB (vídeos com muito movimento oscilam). Rode de novo com um alvo menor." -Type Warning
+                                }
+                            }
+                        }
+                    } catch {
+                        $falhas++
+                        Write-Log "ERRO ao comprimir '$origem': $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
+                    }
+                } else {
+                    Write-Log "Modo WhatIf: '$origem' seria comprimido para '$destino' ($modo)." -Type Debug
+                }
+            }
+        }
+
+        $resumo = "Compressão concluída: $processados comprimido(s), $ignorados ignorado(s), $falhas falha(s)."
+        if ($processados -gt 0) { $resumo += " Total: $(Format-VideoSize $bytesAntes) -> $(Format-VideoSize $bytesDepois)." }
+        Write-Log $resumo -Type $(if ($falhas -eq 0) { 'Success' } else { 'Warning' })
+    } catch {
+        Write-Log "ERRO GERAL na compressão de vídeos: $(Update-SystemErrorMessage $_.Exception.Message)" -Type Error
         Write-Log "Detalhes do Erro: $($_.Exception.ToString())" -Type Error
     } finally {
         Grant-WriteProgress -Activity $activity -Status "Concluído" -PercentComplete 100
